@@ -133,18 +133,18 @@ NVIDIA OpenShell Runtime           (ASI05)</pre></div>
 
     <h2 id="threatfade-api">ThreatFade Oracle API</h2>
     <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/threatfade/status</span></div>
-    <p>Live connectivity status to FusionOps.</p>
+    <p>Reports configured ThreatFade client status. Live upstream authentication and telemetry must be accepted in the target deployment.</p>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/threatfade/scenario</span></div>
     <p>Run a named demo simulation: <code>c2_quieting</code>, <code>lotl_gradual</code>, <code>gnss_jam</code>, <code>normal_with_fade</code>, <code>mixed</code>.</p>
 
     <h2 id="owasp">OWASP Top 10 for Agentic Applications 2026 — Coverage</h2>
-    <p>Honest, current status. Every row below has working, tested code behind it — not a roadmap placeholder.</p>
+    <p>This is a status summary, not a certification claim. Control depth varies by category; see the canonical <code>docs/OWASP_COVERAGE.md</code> and risk register for evidence and residual gaps.</p>
     <table class="coverage-table">
       <tr><th>Code</th><th>Risk</th><th>Status</th><th>Module</th></tr>
       <tr><td>ASI01</td><td>Agent Goal Hijack</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Context Integrity Guardian</td></tr>
       <tr><td>ASI02</td><td>Tool Misuse &amp; Exploitation</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Execution Gateway</td></tr>
-      <tr><td>ASI03</td><td>Agent Identity &amp; Privilege Abuse</td><td><span class="status-pill status-covered">Local implementation; gaps remain</span></td><td>Agent Identity Manager</td></tr>
-      <tr><td>ASI04</td><td>Agentic Supply Chain Compromise</td><td><span class="status-pill status-covered">Artifact verification local; gaps remain</span></td><td>Skill Vetting Service</td></tr>
+      <tr><td>ASI03</td><td>Agent Identity &amp; Privilege Abuse</td><td><span class="status-pill status-delegated">Local implementation; gaps remain</span></td><td>Agent Identity Manager</td></tr>
+      <tr><td>ASI04</td><td>Agentic Supply Chain Compromise</td><td><span class="status-pill status-delegated">Artifact verification local; gaps remain</span></td><td>Skill Vetting Service</td></tr>
       <tr><td>ASI05</td><td>Unexpected Code Execution</td><td><span class="status-pill status-delegated">Live assurance outstanding</span></td><td>NVIDIA OpenShell</td></tr>
       <tr><td>ASI06</td><td>Memory &amp; Context Poisoning</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Memory Poisoning Defender</td></tr>
       <tr><td>ASI07</td><td>Insecure Inter-Agent Communication</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Agent Message Bus</td></tr>
