@@ -25,6 +25,11 @@ class TrustPublisherRequest(BaseModel):
     publisher: str = Field(min_length=1, max_length=256)
     public_key: str = Field(min_length=1, max_length=128)
 
+
+class KnownSkillRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=128)
+
 @router.post("/vet")
 async def vet_skill(request: ManifestRequest) -> dict:
     try:
@@ -45,6 +50,15 @@ async def trust_publisher(request: TrustPublisherRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Invalid publisher key") from exc
     return {"trusted": True, "publisher": request.publisher, "key_type": "ed25519"}
+
+@router.post("/registry/known-skill", dependencies=[Depends(require_operator_key)])
+async def register_known_skill(request: KnownSkillRequest) -> dict:
+    name = request.name.strip()
+    if any(ord(char) < 32 or ord(char) == 127 for char in name):
+        raise HTTPException(status_code=422, detail="Invalid skill name")
+    get_vetting_service().known_skills.add(name)
+    return {"registered": True, "name": name}
+
 
 @router.get("/history")
 async def vetting_history(limit: int = Query(default=50, ge=1, le=500)) -> list[dict]:
