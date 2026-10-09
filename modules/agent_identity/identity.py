@@ -69,6 +69,10 @@ class AgentIdentityManager:
                 # An idempotent retry by the same owner is safe; silently
                 # accepting a different owner would create an identity
                 # ownership-confusion / takeover primitive.
+                logger.warning(
+                    "Rejected agent identity registration with conflicting owner",
+                    extra={"event": "identity_owner_conflict", "agent_id": agent_id},
+                )
                 raise PolicyViolation("identity_owner_conflict", agent_id)
             return existing
 
