@@ -1,5 +1,5 @@
 """Authenticated agent identity and privilege administration routes."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from core.exceptions import PolicyViolation
@@ -14,6 +14,10 @@ class RegisterRequest(BaseModel):
 class ScopeRequest(BaseModel):
     agent_id: str = Field(min_length=1, max_length=128)
     scope: str = Field(min_length=1, max_length=256)
+
+class RevokeTokenRequest(BaseModel):
+    token_id: str = Field(min_length=1, max_length=128)
+
 
 class DelegateRequest(BaseModel):
     delegator_agent_id: str = Field(min_length=1, max_length=128)
@@ -69,9 +73,21 @@ async def get_agent_identity(agent_id: str) -> dict:
             "created_at": identity.created_at.isoformat()}
 
 @router.get("/{agent_id}/authorized/{tool_name}")
-async def check_authorization(agent_id: str, tool_name: str) -> dict:
-    authorized = get_identity_manager().is_authorized(agent_id, tool_name)
+async def check_authorization(
+    agent_id: str,
+    tool_name: str,
+    identity_token: str | None = Header(default=None, alias="X-Agent-Identity-Token"),
+) -> dict:
+    authorized = get_identity_manager().is_authorized(
+        agent_id, tool_name, token_id=identity_token, require_token=True
+    )
     return {"agent_id": agent_id, "tool_name": tool_name, "authorized": authorized}
+
+@router.post("/token/revoke", dependencies=[Depends(require_operator_key)])
+async def revoke_agent_token(request: RevokeTokenRequest) -> dict:
+    get_identity_manager().revoke_token(request.token_id)
+    return {"revoked": True, "token_id": request.token_id}
+
 
 @router.post("/delegate", dependencies=[Depends(require_operator_key)])
 async def delegate_scopes(request: DelegateRequest) -> dict:
