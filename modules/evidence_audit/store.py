@@ -194,3 +194,18 @@ class EvidenceStore:
     async def verify(self) -> dict[str, Any]:
         await self.initialize()
         return await asyncio.to_thread(self._verify_sync)
+
+
+_default_store: EvidenceStore | None = None
+
+
+def get_evidence_store() -> EvidenceStore:
+    """Return the process-local store; SQLite serializes writes across processes."""
+    global _default_store
+    if _default_store is None:
+        _default_store = EvidenceStore()
+    return _default_store
+
+
+async def record_evidence(event_type: str, **kwargs: Any) -> dict[str, Any]:
+    return await get_evidence_store().append(event_type, **kwargs)
