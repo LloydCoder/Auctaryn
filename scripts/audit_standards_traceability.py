@@ -44,6 +44,7 @@ def validate_manifest(root: Path = ROOT, manifest_path: Path = MANIFEST_PATH) ->
         errors.append("duplicate standard id")
     known_standards = set(standard_ids)
     control_ids: list[str] = []
+    referenced_standards: set[str] = set()
 
     for index, control in enumerate(controls):
         label = f"controls[{index}]"
@@ -57,6 +58,8 @@ def validate_manifest(root: Path = ROOT, manifest_path: Path = MANIFEST_PATH) ->
         control_ids.append(control_id)
         if control.get("standard_id") not in known_standards:
             errors.append(f"{control_id}: unknown standard_id")
+        else:
+            referenced_standards.add(control["standard_id"])
         if control.get("status") not in VALID_STATUSES:
             errors.append(f"{control_id}: invalid status")
         if not isinstance(control.get("residual_risk"), str) or not control["residual_risk"].strip():
@@ -96,6 +99,8 @@ def validate_manifest(root: Path = ROOT, manifest_path: Path = MANIFEST_PATH) ->
         errors.append(f"missing AI RMF functions: {sorted(REQUIRED_AI_RMF - set(control_ids))}")
     if not any(item.startswith("SSDF-") for item in control_ids):
         errors.append("missing NIST SSDF controls")
+    if referenced_standards != known_standards:
+        errors.append(f"unreferenced standards: {sorted(known_standards - referenced_standards)}")
     return errors
 
 

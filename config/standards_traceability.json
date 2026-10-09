@@ -16,12 +16,6 @@
       "claim_limit": "Mapped implementation evidence does not assert organizational SSDF conformity or independent assessment."
     },
     {
-      "id": "NIST-SSDF-218A",
-      "name": "NIST SP 800-218A Secure Software Development Practices for Generative AI and Dual-Use Foundation Models",
-      "source_url": "https://csrc.nist.gov/pubs/sp/800/218/a/final",
-      "claim_limit": "Relevant practices are mapped selectively; this is not a conformance certification."
-    },
-    {
       "id": "NIST-AI-RMF-1.0",
       "name": "NIST AI Risk Management Framework 1.0",
       "source_url": "https://www.nist.gov/itl/ai-risk-management-framework",
@@ -478,6 +472,25 @@
         }
       ],
       "residual_risk": "Risk acceptance, external remediation verification and operational drills require human owners.",
+      "release_gate": true
+    },
+    {
+      "id": "MITRE-ATLAS-TACTIC-MAPPING",
+      "standard_id": "MITRE-ATLAS",
+      "title": "Tactic-level mapping for deterministic agentic red-team scenarios",
+      "status": "mapped-local-evidence",
+      "evidence_level": "benchmark-registry",
+      "implementation_paths": [
+        "security_benchmarks/agentic_redteam/manifest.json",
+        "docs/RED_TEAM_BENCHMARK.md"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_manifest_is_complete_and_every_scenario_has_a_test"
+        }
+      ],
+      "residual_risk": "Mappings are tactic-level only; no verified technique-level coverage or exhaustive attack-chain claim is made.",
       "release_gate": true
     }
   ]

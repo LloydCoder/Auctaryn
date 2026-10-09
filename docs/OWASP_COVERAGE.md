@@ -1,6 +1,6 @@
 # Auctaryn — OWASP Top 10 for Agentic Applications 2026 coverage
 
-This is an engineering assurance map, not a claim of OWASP certification. The machine-readable control-to-test registry is linked from STANDARDS_TRACEABILITY.md; the open risk register is SECURITY_RISK_REGISTER.md, and external review scope is defined in INDEPENDENT_ASSURANCE_PLAN.md. “Represented in code” means a module or control exists; it does not mean every attack in a category is prevented, every external execution path is mediated, or production controls have been independently verified.
+This is an engineering assurance map, not a claim of OWASP certification. The machine-readable control-to-test registry is linked from STANDARDS_TRACEABILITY.md; the open risk register is SECURITY_RISK_REGISTER.md, external review scope is defined in INDEPENDENT_ASSURANCE_PLAN.md, and the latest internal audit is PHASE-23-FORENSIC-AUDIT.md. “Represented in code” means a module or control exists; it does not mean every attack in a category is prevented, every external execution path is mediated, or production controls have been independently verified.
 
 ## Coverage and assurance status
 
