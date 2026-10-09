@@ -35,6 +35,7 @@ def reset_singletons(monkeypatch):
     from api.routes.memory import _defender
     _defender.store._entries.clear()
     _defender.store._last_known_good.clear()
+    _defender.store._total_chars = 0
     _defender._sessions.clear()
     yield
 
