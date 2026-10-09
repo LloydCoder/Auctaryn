@@ -19,6 +19,15 @@ _VERSION = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z
 _MAX_ARTIFACT_BYTES = 1024 * 1024
 _MAX_HISTORY = 500
 _REQUIRED = {"name", "version", "content_hash", "signature", "permissions", "publisher"}
+_KNOWN_PERMISSIONS = {
+    "read_file", "write_file", "list_files", "read_email", "list_email",
+    "send_email", "delete_email", "delete_emails", "read_credentials",
+    "read_secrets", "access_filesystem", "http_request", "webhook_call",
+    "network_access", "exfiltrate_data", "escalate_privileges", "modify_policy",
+    "modify_config", "disable_security", "disable_guard", "delete_database",
+    "shell_exec", "browser_control", "database_read", "database_write",
+    "memory:read", "memory:write",
+}
 
 
 def canonical_manifest(manifest: dict) -> bytes:
@@ -33,8 +42,19 @@ def valid_manifest(manifest: object) -> bool:
         return False
     if len(manifest["name"]) > 128 or len(manifest["publisher"]) > 256:
         return False
-    if not _VERSION.fullmatch(manifest["version"]) or not _HASH.fullmatch(manifest["content_hash"]):
+    version_match = _VERSION.fullmatch(manifest["version"])
+    if not version_match or not _HASH.fullmatch(manifest["content_hash"]):
         return False
+    prerelease = version_match.group(4)
+    if prerelease and any(
+        not part or (part.isdigit() and len(part) > 1 and part.startswith("0"))
+        for part in prerelease.split(".")
+    ):
+        return False
+    if "+" in manifest["version"]:
+        build = manifest["version"].split("+", 1)[1]
+        if not build or any(not part or not re.fullmatch(r"[0-9A-Za-z-]+", part) for part in build.split(".")):
+            return False
     permissions = manifest.get("permissions")
     return (
         isinstance(permissions, list)
@@ -125,6 +145,9 @@ class SecureSkillVettingService:
         permission_result: PermissionScanResult = scan_permissions(permissions)
         if permission_result.risk_level in ("high", "critical"):
             reasons.append(f"Permission risk {permission_result.risk_level}: {permission_result.reason}")
+        unknown_permissions = sorted(set(permissions) - _KNOWN_PERMISSIONS) if isinstance(permissions, list) else []
+        if unknown_permissions:
+            reasons.append("Unknown permissions require explicit registry approval: " + ", ".join(unknown_permissions))
         if self.known_skills:
             match = detect_typosquat(name, self.known_skills)
             if match:
