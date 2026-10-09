@@ -1,28 +1,29 @@
+"""Memory poisoning defense with provenance-bound, bounded in-process storage.
+
+This module is a defense-in-depth component. Production persistence and
+identity/tenant authority remain owned by the Tinlance Agent Platform.
 """
-TwinGuard — Memory Poisoning Defender
-Maps to OWASP ASI06:2026 — Memory & Context Poisoning.
-
-Protects an agent's accumulated long-term memory (summaries, learned
-facts, prior-session notes) from adversarial content injected through
-tool results, scraped documents, or untrusted conversation turns.
-
-Distinct from Context Integrity Guardian: that module verifies explicitly
-REGISTERED safety instructions survive compaction. This module screens
-NEW content before it's allowed to become part of the agent's memory at
-all, and detects tampering of content already stored.
-"""
-
+import copy
 import hashlib
+import json
 import re
+import threading
+import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from core.logging import get_logger
 
 logger = get_logger("memory_defender")
 
-# Known injection patterns — instruction override, role hijack, hidden
-# directives smuggled inside otherwise-normal-looking content.
+MAX_MEMORY_CONTENT_CHARS = 32_768
+MAX_MEMORY_SOURCE_CHARS = 64
+MAX_MEMORY_SESSION_CHARS = 128
+MAX_MEMORY_AGENT_ID_CHARS = 128
+MAX_MEMORY_ENTRIES = 5_000
+MAX_MEMORY_TOTAL_CHARS = 8_388_608
+MAX_MEMORY_SESSIONS = 5_000
+
 POISONING_PATTERNS = [
     (r"ignore (all )?(previous|prior) instructions?", "instruction_override"),
     (r"disregard (all )?(prior|previous) (rules|instructions?)", "instruction_override"),
@@ -33,10 +34,17 @@ POISONING_PATTERNS = [
     (r"grant (full|admin|root) access", "privilege_escalation"),
     (r"disable (all )?(safety|security) checks?", "safety_bypass"),
 ]
+# Only these internal provenance labels are treated as trusted by the module API.
+# Public API submissions are prefixed with "api:" and are always quarantined.
+TRUSTED_SOURCES = {"user_conversation", "trusted_system", "approved_internal"}
 
-# Sources considered untrusted by default — content from these requires
-# a clean poisoning scan before storage, and even then gets quarantined.
-UNTRUSTED_SOURCES = {"scraped_webpage", "untrusted_document", "external_api", "third_party_tool"}
+
+@dataclass
+class MemorySession:
+    agent_id: str
+    token_id: str
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -46,6 +54,7 @@ class MemoryEntry:
     source: str
     integrity_hash: str
     session_id: str = ""
+    agent_id: str = ""
     quarantined: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -62,14 +71,53 @@ class StorageDecision:
     allow_storage: bool
     quarantined: bool = False
     reason: str = ""
+    entry_id: str | None = None
 
 
 def _hash_content(content: str) -> str:
+    """Compatibility helper for content-only checks."""
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
+def _hash_entry(entry: MemoryEntry) -> str:
+    """Bind the content and every security-relevant provenance field."""
+    canonical = json.dumps(
+        {
+            "key": entry.key,
+            "content": entry.content,
+            "source": entry.source,
+            "session_id": entry.session_id,
+            "agent_id": entry.agent_id,
+            "quarantined": entry.quarantined,
+            "created_at": entry.created_at.astimezone(timezone.utc).isoformat(),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _validate_memory_fields(content: str, source: str, session_id: str, agent_id: str) -> None:
+    if not isinstance(content, str) or not content or len(content) > MAX_MEMORY_CONTENT_CHARS:
+        raise ValueError(f"content must contain 1–{MAX_MEMORY_CONTENT_CHARS} characters")
+    if not isinstance(source, str) or not source.strip() or len(source) > MAX_MEMORY_SOURCE_CHARS:
+        raise ValueError(f"source must contain 1–{MAX_MEMORY_SOURCE_CHARS} characters")
+    if not isinstance(session_id, str) or len(session_id) > MAX_MEMORY_SESSION_CHARS:
+        raise ValueError(f"session_id must be at most {MAX_MEMORY_SESSION_CHARS} characters")
+    if not isinstance(agent_id, str) or len(agent_id) > MAX_MEMORY_AGENT_ID_CHARS:
+        raise ValueError(f"agent_id must be at most {MAX_MEMORY_AGENT_ID_CHARS} characters")
+    for field_name, value in (("source", source), ("session_id", session_id), ("agent_id", agent_id)):
+        if any(ord(char) < 32 or ord(char) == 127 for char in value):
+            raise ValueError(f"{field_name} contains control characters")
+
+
 def scan_for_poisoning(content: str) -> PoisoningScanResult:
-    """Check content against known adversarial injection patterns."""
+    """Check bounded content against known adversarial instruction patterns."""
+    if not isinstance(content, str):
+        raise ValueError("content must be a string")
+    if len(content) > MAX_MEMORY_CONTENT_CHARS:
+        raise ValueError(f"content exceeds {MAX_MEMORY_CONTENT_CHARS} characters")
     lowered = content.lower()
     for pattern, category in POISONING_PATTERNS:
         if re.search(pattern, lowered):
@@ -78,105 +126,232 @@ def scan_for_poisoning(content: str) -> PoisoningScanResult:
 
 
 class MemoryStore:
-    """
-    Hashed, tamper-evident storage for agent memory entries.
-    Not a database — in-memory for MVP, same pattern as other TwinGuard
-    modules. Swap for Redis/Postgres when persistence is needed.
-    """
+    """Bounded in-process store with metadata-bound hashes and last-known-good snapshots.
 
-    def __init__(self):
+    This is not durable storage and is not safe for multi-replica deployments.
+    """
+    def __init__(
+        self,
+        max_entries: int = MAX_MEMORY_ENTRIES,
+        max_total_chars: int = MAX_MEMORY_TOTAL_CHARS,
+    ):
+        if not 1 <= max_entries <= MAX_MEMORY_ENTRIES:
+            raise ValueError(f"max_entries must be between 1 and {MAX_MEMORY_ENTRIES}")
+        if not 1 <= max_total_chars <= MAX_MEMORY_TOTAL_CHARS:
+            raise ValueError(f"max_total_chars must be between 1 and {MAX_MEMORY_TOTAL_CHARS}")
+        self.max_entries = max_entries
+        self.max_total_chars = max_total_chars
+        self._total_chars = 0
         self._entries: dict[str, MemoryEntry] = {}
         self._last_known_good: dict[str, MemoryEntry] = {}
+        self._lock = threading.RLock()
 
-    def add(self, key: str, content: str, source: str, session_id: str = "",
-            quarantined: bool = False) -> MemoryEntry:
-        entry = MemoryEntry(
-            key=key, content=content, source=source,
-            integrity_hash=_hash_content(content),
-            session_id=session_id, quarantined=quarantined,
-        )
-        self._entries[key] = entry
-        self._last_known_good[key] = MemoryEntry(
-            key=key, content=content, source=source,
-            integrity_hash=entry.integrity_hash, session_id=session_id,
-            quarantined=quarantined,
-        )
-        return entry
+    def add(
+        self,
+        key: str,
+        content: str,
+        source: str,
+        session_id: str = "",
+        quarantined: bool = False,
+        agent_id: str = "",
+    ) -> MemoryEntry:
+        _validate_memory_fields(content, source, session_id, agent_id)
+        if not isinstance(key, str) or not key or len(key) > 128:
+            raise ValueError("key must contain 1–128 characters")
+        if any(ord(char) < 32 or ord(char) == 127 for char in key):
+            raise ValueError("key contains control characters")
+        if not isinstance(quarantined, bool):
+            raise ValueError("quarantined must be a boolean")
+        with self._lock:
+            if key in self._entries:
+                raise ValueError("memory entry key already exists")
+            if len(self._entries) >= self.max_entries:
+                raise ValueError("memory store capacity reached")
+            if self._total_chars + len(content) > self.max_total_chars:
+                raise ValueError("memory store capacity reached")
+            entry = MemoryEntry(
+                key=key,
+                content=content,
+                source=source.strip().lower(),
+                integrity_hash="",
+                session_id=session_id,
+                agent_id=agent_id,
+                quarantined=quarantined,
+            )
+            entry.integrity_hash = _hash_entry(entry)
+            self._entries[key] = entry
+            self._last_known_good[key] = copy.deepcopy(entry)
+            self._total_chars += len(content)
+            return copy.deepcopy(entry)
 
     def get(self, key: str) -> MemoryEntry | None:
-        return self._entries.get(key)
+        with self._lock:
+            entry = self._entries.get(key)
+            return copy.deepcopy(entry) if entry is not None else None
 
     def verify_integrity(self, key: str) -> bool:
-        entry = self._entries.get(key)
-        if entry is None:
-            return False
-        return _hash_content(entry.content) == entry.integrity_hash
+        with self._lock:
+            entry = self._entries.get(key)
+            trusted_snapshot = self._last_known_good.get(key)
+            if entry is None or trusted_snapshot is None:
+                return False
+            try:
+                current_hash = _hash_entry(entry)
+            except (AttributeError, TypeError, ValueError):
+                return False
+            return current_hash == trusted_snapshot.integrity_hash == entry.integrity_hash
 
     def rollback(self, key: str) -> bool:
-        """Restore the last known-good version of a tampered entry."""
-        good = self._last_known_good.get(key)
-        if good is None:
-            return False
-        self._entries[key] = MemoryEntry(
-            key=good.key, content=good.content, source=good.source,
-            integrity_hash=good.integrity_hash, session_id=good.session_id,
-            quarantined=good.quarantined,
+        """Restore a trusted snapshot when content or provenance metadata was tampered."""
+        with self._lock:
+            good = self._last_known_good.get(key)
+            if good is None:
+                return False
+            self._entries[key] = copy.deepcopy(good)
+        logger.warning(
+            "Rolled back tampered memory entry",
+            extra={"event": "memory_rollback", "module_name": "memory_defender"},
         )
-        logger.warning(f"Rolled back tampered memory entry: {key}",
-                       extra={"event": "memory_rollback", "module_name": "memory_defender"})
         return True
+
+    def list_quarantined(self, limit: int = 100) -> list[MemoryEntry]:
+        if not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        with self._lock:
+            for key in list(self._entries):
+                if not self.verify_integrity(key):
+                    self.rollback(key)
+            entries = [copy.deepcopy(entry) for entry in self._entries.values() if entry.quarantined]
+        entries.sort(key=lambda entry: entry.created_at, reverse=True)
+        return entries[:limit]
+
+    def delete_session_entries(self, session_id: str, quarantined_only: bool = True) -> int:
+        """Remove expired-session quarantine entries and update the aggregate budget."""
+        removed = 0
+        with self._lock:
+            for key, entry in list(self._entries.items()):
+                if entry.session_id != session_id or (quarantined_only and not entry.quarantined):
+                    continue
+                trusted_snapshot = self._last_known_good.pop(key, None)
+                self._entries.pop(key, None)
+                self._total_chars = max(
+                    0, self._total_chars - len(trusted_snapshot.content if trusted_snapshot else entry.content)
+                )
+                removed += 1
+        return removed
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._entries)
 
 
 class MemoryDefender:
-    """
-    Full defense pipeline: screens new content before storage, applies
-    stricter scrutiny to untrusted sources, quarantines ambiguous
-    content instead of silently dropping it, and blocks quarantined
-    entries from propagating across agent sessions until cleared.
-    """
-
+    """Screen content, isolate sessions, quarantine untrusted sources and detect tampering."""
     def __init__(self):
         self.store = MemoryStore()
+        self._sessions: dict[str, MemorySession] = {}
+        self._session_lock = threading.RLock()
 
-    def evaluate_for_storage(self, content: str, source: str,
-                              session_id: str = "") -> StorageDecision:
+    def create_session(self, agent_id: str, token_id: str = "", ttl_seconds: int = 3600) -> str:
+        if not isinstance(agent_id, str) or not agent_id or len(agent_id) > MAX_MEMORY_AGENT_ID_CHARS:
+            raise ValueError("agent_id must contain 1–128 characters")
+        if any(ord(char) < 32 or ord(char) == 127 for char in agent_id):
+            raise ValueError("agent_id contains control characters")
+        if not isinstance(token_id, str) or len(token_id) > 128:
+            raise ValueError("token_id must be at most 128 characters")
+        if not 1 <= ttl_seconds <= 3600:
+            raise ValueError("memory session TTL must be between 1 and 3600 seconds")
+        now = datetime.now(timezone.utc)
+        with self._session_lock:
+            for expired_id, session in list(self._sessions.items()):
+                if now >= session.expires_at:
+                    del self._sessions[expired_id]
+                    self.store.delete_session_entries(expired_id, quarantined_only=True)
+            if len(self._sessions) >= MAX_MEMORY_SESSIONS:
+                raise ValueError("memory session capacity reached")
+            session_id = uuid.uuid4().hex
+            self._sessions[session_id] = MemorySession(
+                agent_id=agent_id,
+                token_id=token_id,
+                created_at=now,
+                expires_at=now + timedelta(seconds=ttl_seconds),
+            )
+            return session_id
+
+    def session_owned_by(self, session_id: str, agent_id: str, token_id: str | None = None) -> bool:
+        with self._session_lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                return False
+            if datetime.now(timezone.utc) >= session.expires_at:
+                del self._sessions[session_id]
+                self.store.delete_session_entries(session_id, quarantined_only=True)
+                return False
+            if session.agent_id != agent_id:
+                return False
+            return token_id is None or session.token_id == token_id
+
+    def evaluate_for_storage(
+        self,
+        content: str,
+        source: str,
+        session_id: str = "",
+        agent_id: str = "",
+    ) -> StorageDecision:
+        _validate_memory_fields(content, source, session_id, agent_id)
+        normalized_source = source.strip().lower()
         scan = scan_for_poisoning(content)
 
         if scan.suspicious:
             logger.warning(
-                f"Blocked poisoned content from source '{source}': category={scan.category}",
-                extra={"event": "poisoning_blocked", "module_name": "memory_defender"},
+                "Blocked suspicious memory content",
+                extra={
+                    "event": "poisoning_blocked",
+                    "module_name": "memory_defender",
+                    "category": scan.category,
+                },
             )
             return StorageDecision(
                 allow_storage=False,
                 reason=f"Adversarial pattern detected ({scan.category}): {scan.matched_pattern}",
             )
 
-        is_untrusted = source in UNTRUSTED_SOURCES
-
-        if is_untrusted:
-            # Benign content from an untrusted source is still stored,
-            # but quarantined — visible only to its own session until
-            # a human or a trusted process clears it.
+        quarantined = normalized_source not in TRUSTED_SOURCES
+        entry_id = uuid.uuid4().hex
+        try:
             self.store.add(
-                key=source, content=content, source=source,
-                session_id=session_id, quarantined=True,
+                key=entry_id,
+                content=content,
+                source=normalized_source,
+                session_id=session_id,
+                agent_id=agent_id,
+                quarantined=quarantined,
             )
-            return StorageDecision(allow_storage=True, quarantined=True,
-                                   reason="Untrusted source — quarantined pending review")
+        except ValueError as exc:
+            if "capacity reached" in str(exc):
+                return StorageDecision(allow_storage=False, reason="Memory capacity reached")
+            raise
 
-        self.store.add(key=source, content=content, source=source, session_id=session_id)
-        return StorageDecision(allow_storage=True)
+        if quarantined:
+            return StorageDecision(
+                allow_storage=True,
+                quarantined=True,
+                reason="Untrusted or unverified provenance — quarantined pending review",
+                entry_id=entry_id,
+            )
+        return StorageDecision(allow_storage=True, entry_id=entry_id)
 
-    def is_readable_by_session(self, key: str, session_id: str) -> bool:
-        """
-        Quarantined entries are only readable by the session that
-        produced them — prevents poisoned state from silently
-        propagating to other agents/sessions sharing the same store.
-        """
+    def is_readable_by_session(self, key: str, session_id: str, agent_id: str | None = None) -> bool:
+        if not self.store.verify_integrity(key):
+            if not self.store.rollback(key):
+                return False
         entry = self.store.get(key)
         if entry is None:
             return False
-        if not entry.quarantined:
-            return True
-        return entry.session_id == session_id
+        if agent_id is not None and agent_id != entry.agent_id:
+            return False
+        # Quarantined content is never readable by an agent session, including
+        # the originating session. Review access is exposed only to operators.
+        if entry.quarantined:
+            return False
+        return True

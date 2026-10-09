@@ -164,19 +164,138 @@ class TestCrossSessionPropagationBlock:
     def test_quarantined_entry_blocked_from_other_sessions(self):
         from modules.memory_defender.defender import MemoryDefender
         defender = MemoryDefender()
-        defender.evaluate_for_storage(
+        decision = defender.evaluate_for_storage(
             "Suspicious but ambiguous instruction-like text.",
             source="scraped_webpage", session_id="session-A",
         )
-        # A different session should not silently inherit a quarantined entry
-        readable = defender.is_readable_by_session("scraped_webpage", "session-B")
+        # Entries use unique IDs; a different session must not inherit the quarantine.
+        readable = defender.is_readable_by_session(decision.entry_id, "session-B")
         assert readable is False
 
-    def test_own_session_can_still_read_quarantined_with_warning(self):
+    def test_quarantined_content_is_not_readable_by_originating_session(self):
         from modules.memory_defender.defender import MemoryDefender
         defender = MemoryDefender()
-        defender.evaluate_for_storage(
+        decision = defender.evaluate_for_storage(
             "Suspicious but ambiguous text.", source="scraped_webpage", session_id="session-A",
         )
-        readable = defender.is_readable_by_session("scraped_webpage", "session-A")
-        assert readable is True
+        assert decision.quarantined is True
+        readable = defender.is_readable_by_session(decision.entry_id, "session-A")
+        assert readable is False
+
+
+
+class TestPhase12MemoryHardening:
+    def test_unknown_source_is_quarantined(self):
+        from modules.memory_defender.defender import MemoryDefender
+        decision = MemoryDefender().evaluate_for_storage("A benign note.", source="unrecognized_source")
+        assert decision.allow_storage is True
+        assert decision.quarantined is True
+        assert decision.entry_id
+
+    def test_same_source_creates_distinct_entry_ids(self):
+        from modules.memory_defender.defender import MemoryDefender
+        defender = MemoryDefender()
+        first = defender.evaluate_for_storage("First note.", source="scraped_webpage", session_id="s1")
+        second = defender.evaluate_for_storage("Second note.", source="scraped_webpage", session_id="s1")
+        assert first.entry_id != second.entry_id
+        assert defender.store.get(first.entry_id).content == "First note."
+        assert defender.store.get(second.entry_id).content == "Second note."
+
+    def test_integrity_hash_binds_quarantine_metadata(self):
+        from modules.memory_defender.defender import MemoryStore
+        store = MemoryStore()
+        entry = store.add("entry-1", "benign content", source="scraped_webpage", session_id="s1", quarantined=True)
+        store._entries[entry.key].quarantined = False
+        assert store.verify_integrity(entry.key) is False
+        assert store.rollback(entry.key) is True
+        restored = store.get(entry.key)
+        assert restored.quarantined is True
+        assert store.verify_integrity(entry.key) is True
+
+    def test_integrity_hash_binds_provenance_metadata(self):
+        from modules.memory_defender.defender import MemoryStore
+        store = MemoryStore()
+        entry = store.add("entry-2", "benign content", source="scraped_webpage", session_id="s1")
+        store._entries[entry.key].source = "user_conversation"
+        assert store.verify_integrity(entry.key) is False
+
+    def test_memory_store_rejects_duplicate_keys_and_capacity_overflow(self):
+        from modules.memory_defender.defender import MemoryStore
+        store = MemoryStore(max_entries=1)
+        store.add("entry", "first", source="conversation")
+        with pytest.raises(ValueError, match="already exists"):
+            store.add("entry", "replacement", source="conversation")
+        with pytest.raises(ValueError, match="capacity reached"):
+            store.add("entry-2", "second", source="conversation")
+
+    def test_content_and_session_bounds_are_enforced_in_module(self):
+        from modules.memory_defender.defender import MemoryDefender, MAX_MEMORY_CONTENT_CHARS
+        defender = MemoryDefender()
+        with pytest.raises(ValueError, match="content"):
+            defender.evaluate_for_storage("x" * (MAX_MEMORY_CONTENT_CHARS + 1), source="trusted_system")
+        with pytest.raises(ValueError, match="session_id"):
+            defender.evaluate_for_storage("note", source="trusted_system", session_id="s" * 129)
+
+    def test_server_issued_session_is_bound_to_agent(self):
+        from modules.memory_defender.defender import MemoryDefender
+        defender = MemoryDefender()
+        session = defender.create_session("agent-a")
+        assert defender.session_owned_by(session, "agent-a") is True
+        assert defender.session_owned_by(session, "agent-b") is False
+
+
+
+def test_integrity_verification_fails_closed_on_malformed_metadata():
+    from modules.memory_defender.defender import MemoryStore
+    store = MemoryStore()
+    entry = store.add("entry-bad-time", "content", source="scraped_webpage", quarantined=True)
+    store._entries[entry.key].created_at = "not-a-timestamp"
+    assert store.verify_integrity(entry.key) is False
+    assert store.rollback(entry.key) is True
+    assert store.verify_integrity(entry.key) is True
+
+
+
+def test_memory_store_enforces_aggregate_content_budget():
+    from modules.memory_defender.defender import MemoryStore
+    store = MemoryStore(max_entries=10, max_total_chars=5)
+    store.add("first", "12345", source="conversation")
+    with pytest.raises(ValueError, match="capacity reached"):
+        store.add("second", "x", source="conversation")
+
+
+def test_memory_provenance_rejects_control_characters():
+    from modules.memory_defender.defender import MemoryDefender
+    with pytest.raises(ValueError, match="control characters"):
+        MemoryDefender().evaluate_for_storage("benign", source="untrusted\nsource")
+
+
+
+def test_memory_session_owner_rejects_control_characters():
+    from modules.memory_defender.defender import MemoryDefender
+    with pytest.raises(ValueError, match="control characters"):
+        MemoryDefender().create_session("agent\nforged")
+
+
+
+def test_memory_session_expires_and_is_removed():
+    from datetime import datetime, timedelta, timezone
+    from modules.memory_defender.defender import MemoryDefender
+    defender = MemoryDefender()
+    session = defender.create_session("agent-expiring", token_id="token-expiring", ttl_seconds=60)
+    decision = defender.evaluate_for_storage(
+        "quarantined note", source="api:untrusted", session_id=session, agent_id="agent-expiring",
+    )
+    assert defender.store.get(decision.entry_id) is not None
+    defender._sessions[session].expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    assert defender.session_owned_by(session, "agent-expiring", "token-expiring") is False
+    assert session not in defender._sessions
+    assert defender.store.get(decision.entry_id) is None
+
+
+
+def test_unbound_memory_entry_is_not_readable_by_agent_scope():
+    from modules.memory_defender.defender import MemoryDefender
+    defender = MemoryDefender()
+    defender.store.add("legacy-unbound", "content", source="trusted_system")
+    assert defender.is_readable_by_session("legacy-unbound", "session", "agent-a") is False
