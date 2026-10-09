@@ -109,9 +109,11 @@ class OpenShellRuntimeAdapter:
         close_callback: Callable[[], None] | None = None,
         baseline_policy_sha256: str | None = None,
     ):
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", sandbox_name):
+        if not isinstance(sandbox_name, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", sandbox_name
+        ):
             raise ValueError("sandbox_name contains unsupported characters")
-        if not workspace.strip() or len(workspace) > 128:
+        if not isinstance(workspace, str) or not workspace.strip() or len(workspace) > 128:
             raise ValueError("workspace must be non-empty and at most 128 characters")
         if not 1 <= timeout_seconds <= 3600:
             raise ValueError("timeout_seconds must be between 1 and 3600")
