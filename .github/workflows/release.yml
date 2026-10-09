@@ -35,11 +35,27 @@ jobs:
           git merge-base --is-ancestor "$TESTED_COMMIT" "$GITHUB_SHA"
           git diff --quiet "$TESTED_COMMIT" "$GITHUB_SHA" -- . ':!release/release-evidence.json'
           for NAME in ci codeql supply_chain; do
+            case "$NAME" in
+              ci) EXPECTED_NAME="Auctaryn CI" ;;
+              codeql) EXPECTED_NAME="CodeQL security analysis" ;;
+              supply_chain) EXPECTED_NAME="Secure software supply chain" ;;
+              *) echo "Unknown required workflow: $NAME" >&2; exit 1 ;;
+            esac
             RUN_ID="$(jq -r --arg name "$NAME" '.workflow_runs[$name].run_id' release/release-evidence.json)"
-            RUN_SHA="$(gh run view "$RUN_ID" --json headSha --jq '.headSha')"
-            RUN_RESULT="$(gh run view "$RUN_ID" --json conclusion --jq '.conclusion')"
-            test "$RUN_SHA" = "$TESTED_COMMIT"
-            test "$RUN_RESULT" = "success"
+            EXPECTED_URL="$(jq -r --arg name "$NAME" '.workflow_runs[$name].url' release/release-evidence.json)"
+            RUN_JSON="$(gh run view "$RUN_ID" --json databaseId,workflowName,headBranch,headSha,event,conclusion,url)"
+            jq -e \
+              --argjson run_id "$RUN_ID" \
+              --arg expected_name "$EXPECTED_NAME" \
+              --arg tested_commit "$TESTED_COMMIT" \
+              --arg expected_url "$EXPECTED_URL" \
+              '.databaseId == $run_id and
+               .workflowName == $expected_name and
+               .headBranch == "main" and
+               .headSha == $tested_commit and
+               .event == "push" and
+               .conclusion == "success" and
+               .url == $expected_url' <<< "$RUN_JSON" >/dev/null
           done
 
   publish-release:
@@ -143,6 +159,8 @@ jobs:
           OBSERVED="$(docker buildx imagetools inspect "$IMAGE:$GITHUB_REF_NAME" --format '{{.Manifest.Digest}}')"
           test "$OBSERVED" = "${{ steps.build.outputs.digest }}"
           gh attestation verify "oci://$IMAGE:$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY"
+          gh attestation verify "oci://$IMAGE:$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --predicate-type https://spdx.dev/Document/v2.3
+          gh attestation verify auctaryn-source.spdx.json -R "$GITHUB_REPOSITORY"
           gh attestation verify release-manifest.json -R "$GITHUB_REPOSITORY"
       - name: Create GitHub release with SBOMs
         run: gh release create "$GITHUB_REF_NAME" release-manifest.json auctaryn-source.spdx.json auctaryn-container.spdx.json --generate-notes --verify-tag
