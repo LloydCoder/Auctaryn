@@ -53,7 +53,7 @@ def test_all_external_github_actions_are_pinned_to_full_commit_shas() -> None:
     failures = []
     for workflow in workflows:
         for line_number, line in enumerate(workflow.read_text().splitlines(), start=1):
-            match = re.match(r"^\s*uses:\s*([^\s]+)", line)
+            match = re.match(r"^\s*(?:-\s*)?uses:\s*([^\s]+)", line)
             if not match:
                 continue
             action_ref = match.group(1)
