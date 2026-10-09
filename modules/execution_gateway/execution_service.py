@@ -21,6 +21,10 @@ from modules.execution_gateway.runtime_adapter import (
 logger = logging.getLogger("execution_gateway.execution_service")
 
 
+class ActionIntentIntegrityError(RuntimeAdapterFailure):
+    """Raised when an approved decision no longer matches its recorded intent."""
+
+
 class ExecutionService:
     def __init__(self, gateway: ExecutionGateway, adapter: RuntimeAdapter | None = None):
         self.gateway = gateway
@@ -59,7 +63,7 @@ class ExecutionService:
             not decision.action_fingerprint
             or not hmac.compare_digest(decision.action_fingerprint, current_fingerprint)
         ):
-            raise RuntimeAdapterFailure(
+            raise ActionIntentIntegrityError(
                 "Action intent integrity check failed; execution was refused."
             )
         if decision.id in self._claimed_decisions:
