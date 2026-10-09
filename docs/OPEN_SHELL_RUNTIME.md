@@ -31,6 +31,12 @@ Production requires the four OpenShell OIDC service-credential settings consumed
 
 The adapter supports only `tool_name=openshell_exec`, `action=exec`, and a bounded `parameters.argv` string array. It does not accept a caller-selected sandbox or a shell command string. A supervisor runs inside the sandbox to bound command lifetime and stdout/stderr volume. Receipts include hashes and explicit truncation flags, never raw output.
 
+## Sensitive data and secrets
+
+Auctaryn's `SensitiveDataGuard` runs before identity/risk processing and before execution. It blocks obvious raw credentials in sensitive parameter fields, common token/key formats, and URLs containing embedded user credentials. Error responses report field paths only, never the detected value.
+
+Values such as `vault://...` and `secret://...` are accepted as opaque references; Auctaryn does not resolve them or inject the underlying secret. A production integration must resolve such references through Tinlance Agent Platform's governed secret mechanism or an OpenShell provider profile, with endpoint-bound access. Never place a raw credential in a tool-call payload, command-line argument, log, or sandbox policy. The guard is defense in depth, not a substitute for a secret broker or DLP system.
+
 ## Required production acceptance
 
 The repository's CI verifies the adapter contract with a fake client and executes the bounded supervisor wrapper in the CI runner. This is not proof that a live OpenShell gateway, sandbox image, credentials, and effective policy are correctly configured. Before production, run a live integration test against the intended gateway and verify:
