@@ -15,6 +15,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 from core.models import ToolCall
+from modules.execution_gateway.policy_validation import (
+    PolicyValidationError,
+    default_baseline_path,
+    load_and_validate_baseline,
+)
 from modules.execution_gateway.runtime_adapter import (
     AdapterExecutionResult,
     DuplicateExecution,
@@ -101,6 +106,7 @@ class OpenShellRuntimeAdapter:
         workspace: str,
         timeout_seconds: int = 60,
         close_callback: Callable[[], None] | None = None,
+        baseline_policy_sha256: str | None = None,
     ):
         if not sandbox_name.strip() or not workspace.strip():
             raise ValueError("sandbox_name and workspace must be non-empty")
@@ -111,6 +117,7 @@ class OpenShellRuntimeAdapter:
         self.workspace = workspace
         self.timeout_seconds = timeout_seconds
         self.close_callback = close_callback
+        self.baseline_policy_sha256 = baseline_policy_sha256
         self._seen_idempotency_keys: set[str] = set()
 
     @property
@@ -272,6 +279,13 @@ def create_openshell_adapter_from_environment() -> OpenShellRuntimeAdapter | Non
             "OPENSHELL_ALLOW_USER_CREDENTIALS=true and are intended only for local development."
         )
 
+    try:
+        _, baseline_policy_sha256 = load_and_validate_baseline(default_baseline_path())
+    except (OSError, PolicyValidationError) as exc:
+        raise RuntimeAdapterUnavailable(
+            "The checked-in OpenShell baseline policy is missing or failed security validation."
+        ) from exc
+
     client_context = None
     try:
         from openshell import ClientCredentialsAuth, SandboxClient
@@ -306,4 +320,5 @@ def create_openshell_adapter_from_environment() -> OpenShellRuntimeAdapter | Non
         workspace=workspace,
         timeout_seconds=timeout_seconds,
         close_callback=lambda: client_context.__exit__(None, None, None),
+        baseline_policy_sha256=baseline_policy_sha256,
     )
