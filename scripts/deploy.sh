@@ -82,11 +82,9 @@ ACTIVE_GATEWAY="$(tr -d '\r\n' < "$OPEN_SHELL_DIR/active_gateway")"
 [[ "$ACTIVE_GATEWAY" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || die "OpenShell active_gateway name is invalid."
 GATEWAY_METADATA="$OPEN_SHELL_DIR/gateways/$ACTIVE_GATEWAY/metadata.json"
 [[ -f "$GATEWAY_METADATA" ]] || die "OpenShell active gateway metadata is missing."
-jq -e 'type == "object"' "$GATEWAY_METADATA" >/dev/null || die "OpenShell gateway metadata is invalid JSON."
-grep -Eq '"endpoint"[[:space:]]*:[[:space:]]*"https://' "$GATEWAY_METADATA" || die "OpenShell system metadata must define a remote HTTPS endpoint."
-grep -Eq '"endpoint"[[:space:]]*:[[:space:]]*"http://(localhost|127\.0\.0\.1|0\.0\.0\.0)' "$GATEWAY_METADATA" && die "A container cannot use a host-loopback OpenShell endpoint."
+python3 "$REPO_DIR/scripts/verify_openshell_gateway_metadata.py" "$GATEWAY_METADATA" >/dev/null || die "OpenShell metadata must define a valid remote HTTPS gateway endpoint (gateway_endpoint)."
 
-for cmd in gh docker npm nginx certbot jq; do command -v "$cmd" >/dev/null 2>&1 || die "Required command is missing: $cmd"; done
+for cmd in gh docker npm nginx certbot jq python3; do command -v "$cmd" >/dev/null 2>&1 || die "Required command is missing: $cmd"; done
 gh auth status >/dev/null 2>&1 || die "Authenticate GitHub CLI with permission to verify attestations and download releases."
 
 echo "Verifying Auctaryn release $RELEASE_TAG for $DOMAIN"

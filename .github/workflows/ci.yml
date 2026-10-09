@@ -93,7 +93,7 @@ jobs:
           mkdir -p "$temp_dir/openshell/gateways/ci"
           printf '%064d\n' 0 > "$temp_dir/evidence-hmac.key"
           printf 'ci\n' > "$temp_dir/openshell/active_gateway"
-          printf '{"endpoint":"https://openshell.example.invalid"}\n' > "$temp_dir/openshell/gateways/ci/metadata.json"
+          printf '{"gateway_endpoint":"https://openshell.example.invalid"}\n' > "$temp_dir/openshell/gateways/ci/metadata.json"
           export AUCTARYN_IMAGE="ghcr.io/lloydcoder/auctaryn@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
           export AUCTARYN_EVIDENCE_HMAC_KEY_FILE="$temp_dir/evidence-hmac.key"
           export OPENSHELL_SYSTEM_GATEWAY_DIR="$temp_dir/openshell"
