@@ -10,6 +10,9 @@
 ## Decision and execution invariants
 
 1. Every protected call passes the local data guard and identity/circuit-breaker preflight before Oracle enrichment or risk classification.
+1a. When protected instructions are registered, gateway decisions require a session ID and a session-bound integrity check. Missing checks, degraded/compromised results, and quarantined sessions are denied by the supported gateway path.
+1b. A context violation quarantines the session until an administrator clears it. Clearing quarantine invalidates the previous check and requires a fresh clean session-bound check before gateway actions can proceed.
+1c. Compaction fingerprints represent the set of registered protected instructions present in the context, not a hash of the entire conversation. This allows the event to distinguish preserved protected instructions from dropped ones.
 2. An unrecognized tool/action is low-confidence and requires operator review.
 3. Oracle severity HIGH or CRITICAL can escalate an otherwise non-terminal decision to VETOED. Oracle timeout, invalid response, or unavailability preserves the conservative local decision; it never grants permission.
 4. A policy VETOED or DENIED decision is not a runtime failure signal. Circuit-breaker counters are updated only after an actual runtime execution result or runtime execution exception.
