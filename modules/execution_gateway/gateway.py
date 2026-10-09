@@ -13,6 +13,7 @@ from core.models import (
 from core.logging import get_logger
 from modules.execution_gateway.risk_classifier import RiskClassifier
 from modules.execution_gateway.veto_engine import VetoEngine
+from modules.execution_gateway.data_guard import SensitiveDataGuard
 
 logger = get_logger("execution_gateway")
 
@@ -24,6 +25,7 @@ class ExecutionGateway:
         if pending_ttl_seconds < 1:
             raise ValueError("pending_ttl_seconds must be positive")
         self.pending_ttl_seconds = pending_ttl_seconds
+        self.data_guard = SensitiveDataGuard()
         self.classifier = RiskClassifier()
         self.veto_engine = VetoEngine(auto_approve_safe=auto_approve_safe)
         self.history: list[GatewayDecision] = []
@@ -73,6 +75,7 @@ class ExecutionGateway:
 
     def evaluate(self, tool_call: ToolCall) -> GatewayDecision:
         """Evaluate a tool call using local policy without Oracle enrichment."""
+        self.data_guard.validate_tool_call(tool_call)
         preflight = self._check_identity_and_breaker(tool_call)
         if preflight is not None:
             return self._record_preflight_denial(preflight)
@@ -104,6 +107,7 @@ class ExecutionGateway:
 
     async def evaluate_with_oracle(self, tool_call: ToolCall) -> GatewayDecision:
         """Apply the same mandatory preflight checks before optional Oracle enrichment."""
+        self.data_guard.validate_tool_call(tool_call)
         preflight = self._check_identity_and_breaker(tool_call)
         if preflight is not None:
             return self._record_preflight_denial(preflight)
