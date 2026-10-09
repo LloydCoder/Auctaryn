@@ -48,4 +48,4 @@ Permission scanning rejects critical capabilities and high-risk private-data/net
 
 ## Registry operations
 
-Publisher trust and the canonical skill-name registry are administrator-only operations. Unknown permission names are rejected until explicitly reviewed. The registry is currently process-local; durable storage and audit-backed changes remain production requirements.
+Publisher trust and the canonical skill-name registry are administrator-only operations. Unknown permission names require an explicit code change before acceptance. The registry is currently process-local; durable storage and audit-backed changes remain production requirements.
