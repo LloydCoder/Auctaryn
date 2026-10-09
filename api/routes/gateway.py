@@ -12,12 +12,13 @@ from pydantic import BaseModel, Field
 from api.security import require_api_key, require_operator_key
 from api.routes.context import get_guardian
 
-from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision
+from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision, action_intent_fingerprint
 from modules.execution_gateway.gateway import ExecutionGateway, ApprovalIntentIntegrityError
 from modules.threatfade_oracle.oracle import ThreatFadeOracle
 from modules.agent_identity.identity import AgentIdentityManager
 from modules.inter_agent.circuit_breaker import AgentCircuitBreaker
 from modules.execution_gateway.execution_service import ExecutionService, ActionIntentIntegrityError
+from modules.evidence_audit.store import record_evidence, EvidenceStoreError
 from modules.execution_gateway.runtime_adapter import (
     DuplicateExecution,
     RuntimeAdapter,
