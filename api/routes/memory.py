@@ -16,7 +16,9 @@ def get_memory_defender() -> MemoryDefender:
     return _defender
 
 
-def _require_memory_scope(agent_id: str | None, identity_token: str | None, scope: str) -> str:
+def _require_memory_scope(
+    agent_id: str | None, identity_token: str | None, scope: str
+) -> tuple[str, str]:
     if not agent_id or not identity_token:
         raise HTTPException(status_code=403, detail="Scoped agent identity is required")
     authorized = get_identity_manager().is_authorized(
@@ -24,7 +26,7 @@ def _require_memory_scope(agent_id: str | None, identity_token: str | None, scop
     )
     if not authorized:
         raise HTTPException(status_code=403, detail="Agent token lacks required memory scope")
-    return agent_id
+    return agent_id, identity_token
 
 
 class StoreRequest(BaseModel):
@@ -39,9 +41,9 @@ async def create_memory_session(
     agent_id: str | None = Header(default=None, alias="X-Agent-ID"),
     identity_token: str | None = Header(default=None, alias="X-Agent-Identity-Token"),
 ) -> dict:
-    owner = _require_memory_scope(agent_id, identity_token, "memory:write")
+    owner, token_id = _require_memory_scope(agent_id, identity_token, "memory:write")
     try:
-        session_id = get_memory_defender().create_session(owner)
+        session_id = get_memory_defender().create_session(owner, token_id)
     except ValueError as exc:
         raise HTTPException(status_code=503, detail="Memory session capacity reached") from exc
     return {"session_id": session_id, "agent_id": owner}
@@ -55,7 +57,7 @@ async def evaluate_for_storage(
 ) -> dict:
     owner = _require_memory_scope(agent_id, identity_token, "memory:write")
     defender = get_memory_defender()
-    if not defender.session_owned_by(request.session_id, owner):
+    if not defender.session_owned_by(request.session_id, owner, token_id):
         raise HTTPException(status_code=404, detail="Memory session not found")
     # Public API input cannot assert trusted provenance. Prefix it so it is
     # always quarantined until a trusted, separately authenticated ingest path exists.
@@ -83,9 +85,9 @@ async def check_readability(
     agent_id: str | None = Header(default=None, alias="X-Agent-ID"),
     identity_token: str | None = Header(default=None, alias="X-Agent-Identity-Token"),
 ) -> dict:
-    owner = _require_memory_scope(agent_id, identity_token, "memory:read")
+    owner, token_id = _require_memory_scope(agent_id, identity_token, "memory:read")
     defender = get_memory_defender()
-    if not defender.session_owned_by(session_id, owner):
+    if not defender.session_owned_by(session_id, owner, token_id):
         raise HTTPException(status_code=404, detail="Memory session not found")
     entry = defender.store.get(key)
     if entry is None:
