@@ -24,21 +24,6 @@ services:
     networks:
       - auctaryn
 
-  dashboard:
-    build:
-      context: ./dashboard
-      dockerfile: Dockerfile
-    ports:
-      - "127.0.0.1:3000:3000"
-    environment:
-      - VITE_API_URL=http://localhost:8400
-      - VITE_WS_URL=ws://localhost:8400
-    depends_on:
-      - api
-    restart: unless-stopped
-    networks:
-      - auctaryn
-
 networks:
   auctaryn:
     driver: bridge
