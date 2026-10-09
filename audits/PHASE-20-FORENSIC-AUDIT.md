@@ -1,6 +1,6 @@
 # Phase 20 forensic audit — reliability, scale and disaster recovery
 
-**Status:** Pre-merge forensic review completed. Exact-head CI passed on `c100ce4d853b96b89f2f5985cdfbc91396a3821e`; merge and post-merge verification remain required before phase closure.  
+**Status:** Phase 20 implementation, forensic review, merge, and post-merge CI completed. Merged main commit: `64394df2adfc58964987d36ad010a0705f07c707`.  
 **Scope:** Safe local SQLite backup/verification/restore and concurrency regressions for the evidence and incident-control database.
 
 ## Threats and invariants reviewed
@@ -22,13 +22,14 @@
 
 ## CI acceptance evidence
 
-Exact PR-head workflow: [Auctaryn CI run 37957392659](https://github.com/LloydCoder/Auctaryn/actions/runs/37957392659) on `c100ce4d853b96b89f2f5985cdfbc91396a3821e`.
+- PR-head workflow: [Auctaryn CI run 37957625483](https://github.com/LloydCoder/Auctaryn/actions/runs/37957625483) on `9132b146f560dc1c4bc673eb24035e9f8b19e341`.
+- Post-merge main workflow: [Auctaryn CI run 37957858071](https://github.com/LloydCoder/Auctaryn/actions/runs/37957858071) on `64394df2adfc58964987d36ad010a0705f07c707`.
 
 - [x] Python 3.11: 487 tests passed; Ruff passed.
 - [x] Python 3.12: 487 tests passed; Ruff passed; `pip-audit` reported no known vulnerabilities.
 - [x] Dashboard production build and dependency audit passed.
 - [x] Deployment-script syntax, Compose validation, container build and API liveness passed.
-- [ ] Merge and verify the resulting main commit's full workflow before closing Phase 20.
+- [x] Merge completed and every required post-merge check passed.
 
 The Python 3.11 dependency-audit step is intentionally skipped by the workflow; the required dependency audit runs and passed on Python 3.12.
 
@@ -53,4 +54,4 @@ The Python 3.11 dependency-audit step is intentionally skipped by the workflow; 
 - Confirm restore never overwrites a target without explicit authorization.
 - Confirm HMAC-signed evidence is rejected as unauthenticated when the key is absent.
 - Confirm the roadmap and README do not overstate production readiness.
-- Close Phase 20 only after merge, a green post-merge main workflow, and a final exact-head audit of the merged files.
+- Phase 20 exit gate satisfied for the repository implementation. Live DR acceptance gates remain explicitly listed above and must be completed before production release.
