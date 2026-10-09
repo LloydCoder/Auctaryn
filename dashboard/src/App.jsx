@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Shield, Activity, Network, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
+import { Shield, Activity, Network, AlertTriangle, CheckCircle, XCircle, ShieldAlert, LogOut } from 'lucide-react'
 import ContextIntegrityPanel from './components/ContextIntegrityPanel'
 import ExecutionGatewayPanel from './components/ExecutionGatewayPanel'
 import ThreatFadePanel from './components/ThreatFadePanel'
 import SystemHealth from './components/SystemHealth'
 import AlertFeed from './components/AlertFeed'
+import IncidentEvidencePanel from './components/IncidentEvidencePanel'
 import { fetchHealth, setApiToken, validateAdminToken } from './utils/api'
 import { useWebSocket } from './hooks/useWebSocket'
 
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'context', label: 'Context Integrity', icon: Shield },
   { id: 'gateway', label: 'Execution Gateway', icon: AlertTriangle },
   { id: 'threatfade', label: 'ThreatFade', icon: Network },
+  { id: 'incidents', label: 'Incidents & Evidence', icon: ShieldAlert },
 ]
 
 export default function App() {
@@ -50,7 +52,7 @@ export default function App() {
     [actionsWs.messages]
   )
   const liveAlerts = useMemo(
-    () => alertsWs.messages.filter(m => m.type === 'alert'),
+    () => alertsWs.messages.filter(m => m.type === 'alert' || m.type === 'incident_alert'),
     [alertsWs.messages]
   )
 
@@ -59,6 +61,13 @@ export default function App() {
 
   const sendApproval = (decisionId, approved) => {
     actionsWs.send({ type: 'approve', decision_id: decisionId, approved })
+  }
+
+  const handleSignOut = () => {
+    setApiToken('')
+    setApiTokenState('')
+    setActiveTab('overview')
+    setAuthError('')
   }
 
   const handleAuthenticate = async (event) => {
@@ -143,21 +152,29 @@ export default function App() {
             <span className="text-xs text-gray-600 font-mono">
               v{health?.version || '0.1.0-alpha'}
             </span>
+            <button type="button" onClick={handleSignOut} className="inline-flex items-center gap-2 rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-300 hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400" aria-label="Sign out of Auctaryn administrator session">
+              <LogOut className="h-4 w-4" /> Sign out
+            </button>
           </div>
         </div>
       </header>
 
       {/* Navigation */}
-      <nav className="border-b border-gray-800/30 bg-[#0d1220]/40">
-        <div className="max-w-7xl mx-auto px-6 flex gap-1">
+      <nav aria-label="Administrator dashboard sections" className="border-b border-gray-800/30 bg-[#0d1220]/40">
+        <div role="tablist" aria-label="Auctaryn sections" className="max-w-7xl mx-auto px-6 flex gap-1 overflow-x-auto">
           {TABS.map(tab => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
             return (
               <button
                 key={tab.id}
+                id={`tab-${tab.id}`}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-controls="dashboard-tabpanel"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-400 ${
                   isActive
                     ? 'border-emerald-400 text-emerald-400'
                     : 'border-transparent text-gray-500 hover:text-gray-300'
@@ -172,7 +189,7 @@ export default function App() {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main id="dashboard-tabpanel" role="tabpanel" aria-labelledby={`tab-${activeTab}`} tabIndex={0} className="max-w-7xl mx-auto px-6 py-8 focus-visible:outline-none">
         {activeTab === 'overview' && (
           <div className="space-y-8">
             <SystemHealth health={health} connected={apiConnected} />
@@ -192,6 +209,7 @@ export default function App() {
           <ExecutionGatewayPanel liveDecisions={liveDecisions} onApprove={sendApproval} />
         )}
         {activeTab === 'threatfade' && <ThreatFadePanel />}
+        {activeTab === 'incidents' && <IncidentEvidencePanel />}
       </main>
 
       {/* Footer */}
