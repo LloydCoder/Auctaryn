@@ -59,7 +59,7 @@ jobs:
           cache-dependency-path: dashboard/package-lock.json
       - name: Install exact dashboard dependency graph
         working-directory: dashboard
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Audit dashboard dependencies including development tooling
         working-directory: dashboard
         run: npm audit --audit-level=high
