@@ -49,6 +49,10 @@ Auctaryn follows a serial 24-phase security and enterprise-readiness roadmap wit
 
 Auctaryn exposes the versioned advisory risk contract `POST /api/v1/risk/assess` (`auctaryn-risk-assessment.v1`). It returns risk signals only; it does not grant permission, approve an action, or execute tools. Tinlance Agent Platform remains authoritative for identity, tenant binding, policy, approvals, governed execution, secrets, and audit. A live Platform-side adapter and conformance tests are still required before claiming production integration. See [the integration boundary](docs/integration/TINLANCE_AGENT_PLATFORM.md).
 
+## Context-integrity trust boundary
+
+Auctaryn bounds protected-instruction inputs, verifies stored baseline hashes, and detects selected context/goal-hijack patterns. These checks are heuristic. Context submitted by an API caller is not proof of the exact context consumed by an external agent; do not treat a context finding as an execution guarantee until a trusted runtime/harness adapter binds authenticated context provenance to immutable execution intent. See [Context Integrity](docs/CONTEXT_INTEGRITY.md).
+
 ## Production
 
 The deployment scripts and domain configuration may still reference legacy TwinGuard infrastructure. Verify DNS, TLS, runtime integration, and authentication before exposing a deployment.
