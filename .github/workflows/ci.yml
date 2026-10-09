@@ -33,7 +33,7 @@ jobs:
       - name: Lint check
         run: |
           pip install ruff
-          ruff check core/ api/ modules/
+          ruff check --select E4,E7,E9,F core/ api/ modules/
 
   docker:
     runs-on: ubuntu-latest
