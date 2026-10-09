@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +51,7 @@ def validate_release_evidence(
         errors.append("workflow_runs must contain exactly ci, codeql and supply_chain")
         runs = {}
 
+    seen_run_ids: set[int] = set()
     for name in sorted(WORKFLOW_NAMES):
         run = runs.get(name, {})
         if not isinstance(run, dict):
@@ -58,6 +60,10 @@ def validate_release_evidence(
         run_id = run.get("run_id")
         if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id < 0:
             errors.append(f"workflow_runs.{name}.run_id must be a non-negative integer")
+        if isinstance(run_id, int) and not isinstance(run_id, bool) and run_id > 0:
+            if run_id in seen_run_ids:
+                errors.append("workflow run IDs must be distinct")
+            seen_run_ids.add(run_id)
         conclusion = run.get("conclusion")
         if conclusion not in {"pending", "success", "failure"}:
             errors.append(f"workflow_runs.{name}.conclusion is invalid")
@@ -69,6 +75,9 @@ def validate_release_evidence(
         url = run.get("url")
         if not isinstance(url, str) or (url and not WORKFLOW_URL_RE.fullmatch(url)):
             errors.append(f"workflow_runs.{name}.url must be a repository Actions run URL")
+        if url and isinstance(run_id, int) and not isinstance(run_id, bool) and run_id > 0:
+            if not url.endswith(f"/{run_id}"):
+                errors.append(f"workflow_runs.{name}.url must identify its run_id")
         if require_passed:
             if not isinstance(run_id, int) or isinstance(run_id, bool) or run_id <= 0:
                 errors.append(f"workflow_runs.{name} must reference a completed run")
@@ -93,6 +102,9 @@ def validate_release_evidence(
             if gate.get("status") == "passed":
                 if not isinstance(report_hash, str) or not REPORT_HASH_RE.fullmatch(report_hash):
                     errors.append("independent_assessment.report_sha256 must be a SHA-256 hex digest")
+                for field, value in (("critical_open", critical_open), ("high_open", high_open)):
+                    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                        errors.append(f"independent_assessment.{field} must be a non-negative integer")
                 if critical_open != 0 or high_open != 0:
                     errors.append("independent assessment must report zero open critical/high findings")
             if require_passed and gate.get("status") != "passed":
@@ -132,6 +144,14 @@ def _validate_gate(name: str, gate: Any, *, require_passed: bool) -> list[str]:
             value = gate.get(field)
             if not isinstance(value, str) or not value.strip():
                 errors.append(f"{name}.{field} is required when status is passed")
+        reviewed_at = gate.get("reviewed_at")
+        if isinstance(reviewed_at, str) and reviewed_at.strip():
+            try:
+                parsed = datetime.fromisoformat(reviewed_at.replace("Z", "+00:00"))
+                if parsed.tzinfo is None or parsed.utcoffset() is None:
+                    errors.append(f"{name}.reviewed_at must include a timezone")
+            except ValueError:
+                errors.append(f"{name}.reviewed_at must be an ISO-8601 timestamp")
     if require_passed and gate.get("status") != "passed":
         errors.append(f"{name} is not passed")
     return errors
