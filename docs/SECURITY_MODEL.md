@@ -7,6 +7,10 @@
 - **OpenShell** is the operating-system/runtime containment boundary for supported executions. Auctaryn must not weaken or replace the effective OpenShell policy.
 - **ThreatFade Oracle** contributes threat intelligence. It cannot override a denial or turn an unapproved destructive action into an approval.
 
+## Context-session enforcement
+
+When protected instructions are configured, gateway actions require a session ID and the latest intact context-check ID for that session. Each context check is single-use per action intent; replays for a different action are denied. Compromised or degraded sessions remain quarantined until an administrator clears them, after which a fresh clean check is mandatory. This binds a submitted local check to a gateway action but does not prove that the text is the exact context consumed by an external agent; trusted runtime/harness attestation remains necessary for that stronger claim.
+
 ## Decision and execution invariants
 
 1. Every protected call passes the local data guard and identity/circuit-breaker preflight before Oracle enrichment or risk classification.

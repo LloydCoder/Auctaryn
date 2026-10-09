@@ -3,7 +3,7 @@ TwinGuard — Context Integrity API Routes
 """
 
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
 from core.models import IntegrityCheckResult, IntegrityStatus, CompactionEvent
@@ -21,6 +21,7 @@ class RegisterRequest(BaseModel):
 
 class CheckRequest(BaseModel):
     context: str = Field(max_length=100000)
+    session_id: str = Field(default="", max_length=128)
 
 @router.get("/status")
 async def get_integrity_status() -> dict:
@@ -56,7 +57,7 @@ async def register_protected_instruction(request: RegisterRequest) -> dict:
 @router.post("/check")
 async def run_integrity_check(request: CheckRequest) -> IntegrityCheckResult:
     guardian = get_guardian()
-    result = guardian.check(request.context)
+    result = guardian.check(request.context, session_id=request.session_id or None)
 
     if result.status != IntegrityStatus.INTACT or result.blocked:
         alert = generate_alert(result)
@@ -96,6 +97,19 @@ async def list_protected_instructions() -> list[dict]:
          "content_preview": inst.content[:100] + ("..." if len(inst.content) > 100 else "")}
         for inst in get_guardian().registry.get_all()
     ]
+
+@router.post("/sessions/{session_id}/clear")
+async def clear_session_quarantine(session_id: str = Path(..., min_length=1, max_length=128)) -> dict:
+    """Clear session quarantine; a fresh clean check is required before action."""
+    guardian = get_guardian()
+    if not guardian.clear_session(session_id):
+        raise HTTPException(status_code=404, detail="No quarantined session found")
+    return {
+        "session_id": session_id,
+        "quarantine_cleared": True,
+        "fresh_integrity_check_required": guardian.registry.count() > 0,
+    }
+
 
 @router.delete("/instructions/{tag}")
 async def remove_protected_instruction(tag: str) -> dict:

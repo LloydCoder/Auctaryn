@@ -14,7 +14,10 @@ def reset_singletons(monkeypatch):
     _guardian.compaction_history.clear()
     _guardian.check_count = 0
     _guardian._last_token_count = 0
-    _guardian._last_combined_hash = ""
+    _guardian._last_protected_context_hash = ""
+    _guardian._session_results.clear()
+    _guardian._blocked_sessions.clear()
+    _guardian._consumed_checks.clear()
 
     from api.routes.gateway import _gateway, _oracle as gw_oracle, _identity_manager
     _identity_manager._identities.clear()

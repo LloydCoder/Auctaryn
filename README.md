@@ -54,6 +54,10 @@ Auctaryn exposes the versioned advisory risk contract `POST /api/v1/risk/assess`
 
 Skill vetting requires a trusted publisher's Ed25519 signature and the actual artifact bytes matching the signed SHA-256 digest. Publisher trust mutation requires the administrator credential. Version and manifest pins currently remain process-local; see [the supply-chain security contract](docs/SKILL_SUPPLY_CHAIN.md) before deployment.
 
+## Context-session enforcement
+
+When protected instructions are configured, gateway actions require a current session-bound context check. Compromised sessions are quarantined until an administrator clears them and a fresh clean check is supplied. This local binding is not a cryptographic attestation of the context consumed by an external agent.
+
 ## Context-integrity trust boundary
 
 Auctaryn bounds protected-instruction inputs, verifies stored baseline hashes, and detects selected context/goal-hijack patterns. These checks are heuristic. Context submitted by an API caller is not proof of the exact context consumed by an external agent; do not treat a context finding as an execution guarantee until a trusted runtime/harness adapter binds authenticated context provenance to immutable execution intent. See [Context Integrity](docs/CONTEXT_INTEGRITY.md).
