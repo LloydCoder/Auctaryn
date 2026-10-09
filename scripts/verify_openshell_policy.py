@@ -31,6 +31,7 @@ def verify_effective_policy(
             text=True,
             timeout=10,
             check=False,
+            shell=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError("Could not retrieve the effective OpenShell policy.") from exc
