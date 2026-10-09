@@ -79,7 +79,7 @@ def test_supply_chain_workflow_has_required_controls() -> None:
     assert "output-file: grype-full.json" in supply
     assert "audit_grype_report.py grype-full.json" in supply
     dockerfile = (ROOT / "Dockerfile").read_text()
-    assert "FROM python:3.12.15-alpine3.24" in dockerfile
+    assert "FROM python:3.12.15-alpine3.24@sha256:7a63cb93468d7ce5f24b1332a8f7a27f444b3221b0a3d6b5573036b78d937c78" in dockerfile
     assert "apt-get install -y --no-install-recommends" not in dockerfile
     assert "curl" not in dockerfile
     assert "fail-build: true" in supply

@@ -1,4 +1,5 @@
-FROM python:3.12.15-alpine3.24
+# Pin the multi-platform index digest; tags are labels, not immutable identities.
+FROM python:3.12.15-alpine3.24@sha256:7a63cb93468d7ce5f24b1332a8f7a27f444b3221b0a3d6b5573036b78d937c78
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
