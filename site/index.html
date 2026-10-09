@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Auctaryn — Stop AI Agents Before They Go Rogue</title>
-<meta name="description" content="Auctaryn intercepts every AI agent action, verifies context integrity, and blocks destructive actions in real time. Defense-in-depth for autonomous AI agents.">
+<meta name="description" content="Auctaryn provides context-integrity checks, risk-based action decisions, and a governed execution adapter for supported agent paths. Live runtime enforcement and production acceptance depend on deployment configuration and external validation.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/auctaryn.css">
@@ -124,32 +124,32 @@
       </div>
       <h1>Stop AI agents<br>before they <em>go<br>rogue</em><span class="red">.</span></h1>
       <p class="hero-sub">
-        Auctaryn intercepts every tool call, verifies context integrity, and blocks destructive actions — in real time. <strong>Defense-in-depth for autonomous AI agents.</strong>
+        Auctaryn evaluates actions routed through its supported gateway, adds context-integrity signals, and can hand approved actions to a configured OpenShell adapter. <strong>Coverage is limited to integrated paths; this repository is not a universal agent interceptor.</strong>
       </p>
       <div class="hero-actions">
         <a href="#cta" class="btn-hero">
           Start free
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
-        <a href="https://auctaryn.tinlance.com/dashboard" target="_blank" class="btn-demo">
+        <a href="https://github.com/LloydCoder/Auctaryn" target="_blank" class="btn-demo">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 4.5l4 2.5-4 2.5V4.5z" fill="currentColor"/></svg>
           Watch live demo
         </a>
       </div>
       <div class="hero-trust">
         <div class="trust-stat">
-          <span class="num">0%</span>
-          <span class="label">False positive rate<br>in production</span>
+          <span class="num">N/A</span>
+          <span class="label">Production false-positive rate<br>not independently measured</span>
         </div>
         <div style="width:1px;height:40px;background:var(--border)"></div>
         <div class="trust-stat">
-          <span class="num">232</span>
-          <span class="label">Tests passing<br>across all modules</span>
+          <span class="num">CI</span>
+          <span class="label">Automated test and<br>supply-chain workflows</span>
         </div>
         <div style="width:1px;height:40px;background:var(--border)"></div>
         <div class="trust-stat">
-          <span class="num">10/10</span>
-          <span class="label">OWASP ASI categories<br>represented in code</span>
+          <span class="num">10</span>
+          <span class="label">OWASP ASI categories mapped;<br>coverage depth varies</span>
         </div>
       </div>
     </div>
@@ -158,15 +158,15 @@
       <div class="terminal">
         <div class="terminal-bar">
           <div class="terminal-dots"><span></span><span></span><span></span></div>
-          <span class="terminal-title">Auctaryn · Execution Gateway · Live</span>
-          <span class="terminal-live"><span class="live-dot"></span>INTERCEPTING</span>
+          <span class="terminal-title">Auctaryn · Illustrative decision flow · Synthetic demo</span>
+          <span class="terminal-live"><span class="live-dot"></span>SIMULATED</span>
         </div>
         <div class="terminal-body" id="terminal"></div>
         <div class="terminal-footer">
-          <span class="tf-stat">Actions today: <span>847</span></span>
-          <span class="tf-stat">Vetoed: <span>3</span></span>
-          <span class="tf-stat">Integrity: <span>100%</span></span>
-          <span class="tf-stat">FusionOps: <span>online</span></span>
+          <span class="tf-stat">Data: <span>synthetic</span></span>
+          <span class="tf-stat">Runtime: <span>not connected</span></span>
+          <span class="tf-stat">Context: <span>heuristic</span></span>
+          <span class="tf-stat">ThreatFade: <span>not verified</span></span>
         </div>
       </div>
     </div>
@@ -175,13 +175,13 @@
 
 <div class="trust-bar">
   <div class="trust-bar-inner">
-    <span class="tb-label">VALIDATED AGAINST</span>
+    <span class="tb-label">DESIGN BOUNDARIES</span>
     <div class="tb-items">
-      <div class="tb-item">✓ Merlin QUIC C2 · z=14.76</div>
-      <div class="tb-item">✓ Cobalt Strike · z=7.01</div>
-      <div class="tb-item">✓ IcedID · z=3.89</div>
-      <div class="tb-item">✓ NVIDIA OpenShell runtime</div>
-      <div class="tb-item">✓ OWASP ASI Top 10 2026</div>
+      <div class="tb-item">Local policy evaluation</div>
+      <div class="tb-item">Context checks are heuristic</div>
+      <div class="tb-item">OpenShell sandbox required for execution</div>
+      <div class="tb-item">Platform integration pending</div>
+      <div class="tb-item">Independent assessment pending</div>
     </div>
   </div>
 </div>
@@ -222,21 +222,21 @@
             <div class="feature-icon">🔒</div>
             <div>
               <div class="feature-title">Context Integrity Guardian</div>
-              <div class="feature-desc">SHA-256 hashes your safety instructions before every compaction event. If even one instruction is missing — or actively contradicted — afterward, the agent is blocked.</div>
+              <div class="feature-desc">Checks registered instruction baselines against submitted context and flags selected missing or conflicting content. These are heuristic signals; blocking an external agent requires trusted context provenance and an integrated execution path.</div>
             </div>
           </div>
           <div class="feature-item">
             <div class="feature-icon">⛔</div>
             <div>
               <div class="feature-title">Execution Gateway + Veto Engine</div>
-              <div class="feature-desc">Every tool call is classified by risk level, checked against the agent's identity scopes, and verified against its circuit breaker status before it ever runs.</div>
+              <div class="feature-desc">Actions submitted through the supported gateway are evaluated against configured identity scopes, local risk policy and circuit-breaker state. Calls that bypass the gateway are outside this control.</div>
             </div>
           </div>
           <div class="feature-item">
             <div class="feature-icon">📡</div>
             <div>
               <div class="feature-title">ThreatFade Oracle</div>
-              <div class="feature-desc">Live network threat intelligence from FusionOps feeds severity scores into every gateway decision — the only agent security platform with built-in C2 detection.</div>
+              <div class="feature-desc">An optional ThreatFade integration can contribute advisory signals. Upstream authentication, telemetry quality and availability must be verified in the target deployment; an advisory signal never replaces Platform authorization.</div>
             </div>
           </div>
         </div>
@@ -249,7 +249,7 @@
   <div class="section-inner">
     <span class="section-tag">Architecture</span>
     <h2 class="section-h2">Defense-in-depth.<br>Not a single guardrail.</h2>
-    <p class="section-sub">Auctaryn layers independent security mechanisms across the full OWASP Top 10 for Agentic Applications 2026.</p>
+    <p class="section-sub">Auctaryn maps controls and tests to OWASP ASI01–ASI10; implementation depth varies and the mapping is not certification.</p>
     <div class="how-grid">
       <div class="how-card">
         <div class="how-num">01</div>
@@ -273,27 +273,27 @@
 <section class="stats-section">
   <div class="section-inner">
     <span class="section-tag">By the numbers</span>
-    <h2 class="section-h2">Production-validated.<br>Not theoretical.</h2>
+    <h2 class="section-h2">Implementation status.<br>Not a certification claim.</h2>
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-num">14.76</div>
-        <div class="stat-label">Z-score on Merlin QUIC<br>C2 malware detection</div>
-        <div class="stat-sub">Real PCAP · 490K packets</div>
+        <div class="stat-num">24</div>
+        <div class="stat-label">Phases in the serial<br>security roadmap</div>
+        <div class="stat-sub">Implementation and acceptance are distinct</div>
       </div>
       <div class="stat-card">
-        <div class="stat-num">0%</div>
-        <div class="stat-label">False positive rate across<br>100 production runs</div>
-        <div class="stat-sub">ThreatFade engine</div>
+        <div class="stat-num">N/A</div>
+        <div class="stat-label">Production false-positive rate<br>not independently measured</div>
+        <div class="stat-sub">No production claim is made</div>
       </div>
       <div class="stat-card">
-        <div class="stat-num">232</div>
-        <div class="stat-label">Tests passing across<br>all security modules</div>
-        <div class="stat-sub">TDD · Red-Green-Refactor</div>
+        <div class="stat-num">CI</div>
+        <div class="stat-label">Automated tests and<br>security workflows</div>
+        <div class="stat-sub">Check the repository for current results</div>
       </div>
       <div class="stat-card">
-        <div class="stat-num">10/10</div>
-        <div class="stat-label">OWASP ASI categories<br>with working code</div>
-        <div class="stat-sub">Top 10 for Agentic Apps 2026</div>
+        <div class="stat-num">10</div>
+        <div class="stat-label">OWASP ASI categories mapped;<br>coverage depth varies</div>
+        <div class="stat-sub">Not OWASP certification</div>
       </div>
     </div>
   </div>
@@ -302,14 +302,14 @@
 <section>
   <div class="section-inner">
     <span class="section-tag">Security Modules</span>
-    <h2 class="section-h2">Every OWASP ASI category.<br>Real, tested code.</h2>
+    <h2 class="section-h2">OWASP ASI01–ASI10 mapped.<br>Control depth varies.</h2>
     <div class="modules-grid">
       <div class="module-card">
         <div class="module-icon-wrap mod-teal">🔒</div>
         <div>
           <div class="module-title">Context Integrity Guardian</div>
           <div class="module-desc">Catches both instruction loss (compaction) and goal hijack (in-context override attempts). ASI01.</div>
-          <span class="module-tag">Live</span>
+          <span class="module-tag">Implemented in repository</span>
         </div>
       </div>
       <div class="module-card">
@@ -317,7 +317,7 @@
         <div>
           <div class="module-title">Execution Gateway + Veto Engine</div>
           <div class="module-desc">Risk classification, auto-approve/queue/block, identity + breaker enforcement. ASI02.</div>
-          <span class="module-tag">Live</span>
+          <span class="module-tag">Implemented in repository</span>
         </div>
       </div>
       <div class="module-card">
@@ -325,7 +325,7 @@
         <div>
           <div class="module-title">Agent Identity &amp; Privilege</div>
           <div class="module-desc">Scoped permissions, time-limited tokens, subset-constrained delegation. ASI03.</div>
-          <span class="module-tag">Live</span>
+          <span class="module-tag">Implemented in repository</span>
         </div>
       </div>
       <div class="module-card">
@@ -333,7 +333,7 @@
         <div>
           <div class="module-title">Skill / Dependency Vetting</div>
           <div class="module-desc">Signature verification, content-hash pinning, typosquat detection. ASI04.</div>
-          <span class="module-tag">Live</span>
+          <span class="module-tag">Implemented in repository</span>
         </div>
       </div>
       <div class="module-card">
@@ -341,7 +341,7 @@
         <div>
           <div class="module-title">Memory Poisoning Defender</div>
           <div class="module-desc">Adversarial pattern scanning, provenance trust, tamper-evident rollback. ASI06.</div>
-          <span class="module-tag">Live</span>
+          <span class="module-tag">Implemented in repository</span>
         </div>
       </div>
       <div class="module-card">
@@ -349,7 +349,7 @@
         <div>
           <div class="module-title">Signed Agent Messaging</div>
           <div class="module-desc">HMAC-signed inter-agent communication, impersonation rejection. ASI07.</div>
-          <span class="module-tag">Live</span>
+          <span class="module-tag">Implemented in repository</span>
         </div>
       </div>
       <div class="module-card">
@@ -357,7 +357,7 @@
         <div>
           <div class="module-title">Agent Circuit Breaker</div>
           <div class="module-desc">Per-agent failure isolation with dependency-aware cascade containment. ASI08.</div>
-          <span class="module-tag">Live</span>
+          <span class="module-tag">Implemented in repository</span>
         </div>
       </div>
       <div class="module-card">
@@ -365,7 +365,7 @@
         <div>
           <div class="module-title">ThreatFade Oracle</div>
           <div class="module-desc">Live C2 threat intelligence from FusionOps, MITRE TTP mapping. ASI10.</div>
-          <span class="module-tag">Live</span>
+          <span class="module-tag">Implemented in repository</span>
         </div>
       </div>
     </div>
@@ -376,9 +376,9 @@
   <div class="cta-inner">
     <span class="section-tag">Get started</span>
     <h2 class="section-h2">Your AI agents are running.<br>Are they contained?</h2>
-    <p class="section-sub" style="margin:0 auto;text-align:center">Deploy Auctaryn in under 10 minutes. Free tier includes the Context Integrity Guardian — the module that prevents the Summer Yue scenario.</p>
+    <p class="section-sub" style="margin:0 auto;text-align:center">Explore the source and deployment requirements. Context-integrity checks are heuristic and do not independently guarantee prevention of an external agent incident.</p>
     <div class="cta-actions">
-      <a href="https://github.com/Tinlance/auctaryn" target="_blank" class="btn-hero">Start free on GitHub</a>
+      <a href="https://github.com/LloydCoder/Auctaryn" target="_blank" class="btn-hero">View source on GitHub</a>
       <a href="mailto:hello@tinlance.com" class="btn-demo">Book a demo call</a>
     </div>
   </div>
