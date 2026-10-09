@@ -16,6 +16,13 @@ from modules.execution_gateway.gateway import ExecutionGateway
 from modules.threatfade_oracle.oracle import ThreatFadeOracle
 from modules.agent_identity.identity import AgentIdentityManager
 from modules.inter_agent.circuit_breaker import AgentCircuitBreaker
+from modules.execution_gateway.execution_service import ExecutionService
+from modules.execution_gateway.runtime_adapter import (
+    DuplicateExecution,
+    RuntimeAdapter,
+    RuntimeAdapterFailure,
+    RuntimeAdapterUnavailable,
+)
 
 async def require_api_key(authorization: str | None = Header(default=None)) -> None:
     role = token_role(extract_bearer(authorization))
@@ -47,6 +54,19 @@ _gateway = ExecutionGateway(
     identity_manager=_identity_manager,
     circuit_breaker=_circuit_breaker,
 )
+_execution_service = ExecutionService(_gateway)
+
+
+def get_execution_service() -> ExecutionService:
+    # Keep the service bound to the current gateway when tests or lifecycle
+    # management replace the gateway instance.
+    _execution_service.gateway = _gateway
+    return _execution_service
+
+
+def configure_runtime_adapter(adapter: RuntimeAdapter | None) -> None:
+    """Configure a trusted adapter from deployment/startup code, never via HTTP."""
+    _execution_service.adapter = adapter
 
 def get_gateway() -> ExecutionGateway:
     return _gateway
@@ -139,6 +159,49 @@ async def approve_action(request: ApprovalRequest) -> dict:
                 "timestamp": datetime.now(timezone.utc).isoformat()}
     except KeyError:
         raise HTTPException(status_code=404, detail="Pending decision not found")
+
+@router.post("/execute")
+async def execute_tool_call(request: ToolCallRequest) -> dict:
+    """Evaluate and execute through a trusted adapter; never execute in the API process."""
+    tc = ToolCall(tool_name=request.tool_name, action=request.action, parameters=request.parameters,
+                  target=request.target, agent_id=request.agent_id, session_id=request.session_id,
+                  identity_token=request.identity_token)
+    try:
+        decision, receipt = await get_execution_service().execute_tool_call(tc)
+    except RuntimeAdapterUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except DuplicateExecution as exc:
+        raise HTTPException(status_code=409, detail="Decision already claimed for execution") from exc
+    except RuntimeAdapterFailure as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "decision": decision.model_dump(mode="json"),
+        "execution": receipt.model_dump(mode="json") if receipt is not None else None,
+    }
+
+
+@router.post("/execute/approved/{decision_id}", dependencies=[Depends(require_operator_key)])
+async def execute_approved_decision(decision_id: str) -> dict:
+    """Execute the exact immutable decision after an administrator approved it."""
+    service = get_execution_service()
+    try:
+        service.require_adapter()
+    except RuntimeAdapterUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    decision = next((item for item in get_gateway().history if item.id == decision_id), None)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    if decision.decision != ActionDecision.APPROVED or decision.decided_by == "auto":
+        raise HTTPException(status_code=409, detail="Decision has not been explicitly approved by an operator")
+    try:
+        receipt = await service.execute_approved_decision(decision)
+    except DuplicateExecution as exc:
+        raise HTTPException(status_code=409, detail="Decision already claimed for execution") from exc
+    except RuntimeAdapterFailure as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"decision_id": decision.id, "execution": receipt.model_dump(mode="json")}
+
 
 @router.post("/intercept")
 async def intercept_action(request: ToolCallRequest) -> GatewayDecision:
