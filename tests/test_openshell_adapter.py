@@ -3,12 +3,14 @@
 import asyncio
 import base64
 import json
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
 
 from core.models import ToolCall
-from modules.execution_gateway.openshell_adapter import OpenShellRuntimeAdapter, create_openshell_adapter_from_environment
+from modules.execution_gateway.openshell_adapter import BOUNDED_EXEC_WRAPPER, MAX_OUTPUT_CHARS, OpenShellRuntimeAdapter, create_openshell_adapter_from_environment
 from modules.execution_gateway.runtime_adapter import DuplicateExecution, RuntimeAdapterFailure, RuntimeAdapterUnavailable
 
 
@@ -170,3 +172,40 @@ def test_enabled_adapter_rejects_partial_oidc_credentials(monkeypatch):
 
     with pytest.raises(RuntimeAdapterUnavailable, match="required together"):
         create_openshell_adapter_from_environment()
+
+def test_bounded_exec_wrapper_runs_argv_without_shell():
+    child_argv = [sys.executable, "-c", "print('bounded-ok')"]
+    completed = subprocess.run(
+        [sys.executable, "-c", BOUNDED_EXEC_WRAPPER, json.dumps(child_argv), "3", "1000"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    envelope = json.loads(completed.stdout)
+    output = base64.b64decode(envelope["stdout"]).decode("utf-8")
+
+    assert envelope["exit_code"] == 0
+    assert output.strip() == "bounded-ok"
+    assert envelope["stdout_truncated"] is False
+
+
+def test_bounded_exec_wrapper_caps_output_and_kills_timed_out_process():
+    child_argv = [
+        sys.executable,
+        "-c",
+        "import time; print('x' * 10000, flush=True); time.sleep(5)",
+    ]
+    completed = subprocess.run(
+        [sys.executable, "-c", BOUNDED_EXEC_WRAPPER, json.dumps(child_argv), "1", "100"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    envelope = json.loads(completed.stdout)
+    output = base64.b64decode(envelope["stdout"])
+
+    assert envelope["exit_code"] == 124
+    assert len(output) <= 100
+    assert envelope["stdout_truncated"] is True
