@@ -33,7 +33,7 @@ _circuit_breaker = AgentCircuitBreaker(failure_threshold=5, cooldown_seconds=60)
 
 def _context_integrity_preflight(tool_call: ToolCall) -> str | None:
     guardian = get_guardian()
-    if guardian.registry.count() == 0:
+    if guardian.registry.count() == 0 and not tool_call.context_check_id:
         return None
     return guardian.authorize_session_action(
         tool_call.session_id, tool_call.context_check_id, tool_call.id
