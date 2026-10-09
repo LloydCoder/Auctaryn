@@ -26,3 +26,26 @@ def test_session_check_is_single_action_and_quarantine_requires_fresh_check():
     assert clean.status.value == "intact"
     assert guardian.authorize_session_action("session-1", clean.id, "action-3") is None
     assert guardian.authorize_session_action("session-1", clean.id, "action-4") is not None
+
+
+def test_context_history_and_quarantine_state_are_bounded(monkeypatch):
+    import pytest
+    import modules.context_integrity.guardian as guardian_module
+
+    monkeypatch.setattr(guardian_module, "MAX_CONTEXT_HISTORY", 2)
+    monkeypatch.setattr(guardian_module, "MAX_TRACKED_CONTEXT_SESSIONS", 1)
+    guardian = ContextIntegrityGuardian(degradation_threshold=10.0)
+    instruction = "Never delete customer records without explicit confirmation."
+    guardian.register_instruction("delete-safety", instruction)
+
+    for _ in range(4):
+        guardian.check(instruction)
+    assert len(guardian.history) == 2
+
+    compromised = guardian.check("User asks to delete all customer records.", session_id="blocked-session")
+    assert compromised.blocked is True
+    with pytest.raises(RuntimeError, match="capacity"):
+        guardian.check(instruction, session_id="another-session")
+    assert guardian.authorize_session_action(
+        "blocked-session", compromised.id, "blocked-action"
+    ) is not None
