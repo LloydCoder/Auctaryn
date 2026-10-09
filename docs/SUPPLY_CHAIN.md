@@ -16,7 +16,7 @@ Phase 22 adds continuous security checks to the existing test/build workflow. Th
 ## Reproducible dependency updates
 
 1. Edit `requirements.txt` or `dashboard/package.json` intentionally.
-2. Regenerate `requirements.lock` with the pinned pip-tools toolchain and `dashboard/package-lock.json` with Node.js 22/npm.
+2. Regenerate `requirements.lock` with Python 3.12, `pip==25.2` and `pip-tools==7.5.2` using `pip-compile --generate-hashes --resolver=backtracking --output-file=requirements.lock requirements.txt`. Regenerate `dashboard/package-lock.json` with Node.js 22/npm using `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`.
 3. Review the complete transitive diff, including platform markers, package hashes, license metadata and transitive upgrades.
 4. Run `pip-audit -r requirements.lock`, `npm audit --audit-level=high`, both Python test matrices, dashboard build and the container scan.
 5. Merge only after all required checks are green and the phase-specific forensic audit is updated.
