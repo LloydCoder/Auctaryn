@@ -3,12 +3,17 @@ TwinGuard — ThreatFade Oracle API Routes
 Wired to the live FusionOps API at 13.50.16.19.
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query
 from pydantic import BaseModel
 
 from core.models import ThreatFadeResult, Severity
+from modules.threatfade_oracle.client import MAX_PCAP_BYTES
 from modules.threatfade_oracle.oracle import ThreatFadeOracle
+from core.exceptions import ThreatFadeConnectionError
 
+logger = logging.getLogger("api.routes.threatfade")
 router = APIRouter()
 _oracle = ThreatFadeOracle()
 
@@ -39,12 +44,21 @@ async def run_scenario(request: ScenarioRequest) -> ThreatFadeResult:
 @router.post("/analyze")
 async def analyze_pcap(file: UploadFile = File(...)) -> dict:
     """Upload a PCAP file for real threat analysis via FusionOps."""
-    content = await file.read()
+    content = await file.read(MAX_PCAP_BYTES + 1)
+    if len(content) > MAX_PCAP_BYTES:
+        raise HTTPException(status_code=413, detail="PCAP upload exceeds the 25 MiB limit")
+    if not content:
+        raise HTTPException(status_code=422, detail="PCAP upload must not be empty")
     try:
-        result = await get_oracle().client.detect_pcap(content, file.filename)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"FusionOps analysis failed: {e}")
+        return await get_oracle().client.detect_pcap(content, file.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ThreatFadeConnectionError as exc:
+        logger.warning("ThreatFade PCAP analysis unavailable", extra={"error_type": type(exc).__name__})
+        raise HTTPException(status_code=502, detail="ThreatFade analysis service unavailable") from exc
+    except Exception as exc:
+        logger.exception("Unexpected error during ThreatFade PCAP analysis")
+        raise HTTPException(status_code=502, detail="ThreatFade analysis failed") from exc
 
 
 @router.get("/results")
@@ -76,5 +90,6 @@ async def get_live_events(limit: int = Query(50, ge=1, le=200)) -> dict:
     """Proxy to FusionOps /events endpoint — live SOC dashboard feed."""
     try:
         return await get_oracle().client.get_events(limit)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"FusionOps unreachable: {e}")
+    except ThreatFadeConnectionError as exc:
+        logger.warning("ThreatFade events unavailable", extra={"error_type": type(exc).__name__})
+        raise HTTPException(status_code=502, detail="ThreatFade events service unavailable") from exc
