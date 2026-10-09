@@ -241,3 +241,14 @@ class TestPhase12MemoryHardening:
         session = defender.create_session("agent-a")
         assert defender.session_owned_by(session, "agent-a") is True
         assert defender.session_owned_by(session, "agent-b") is False
+
+
+
+def test_integrity_verification_fails_closed_on_malformed_metadata():
+    from modules.memory_defender.defender import MemoryStore
+    store = MemoryStore()
+    entry = store.add("entry-bad-time", "content", source="scraped_webpage", quarantined=True)
+    store._entries[entry.key].created_at = "not-a-timestamp"
+    assert store.verify_integrity(entry.key) is False
+    assert store.rollback(entry.key) is True
+    assert store.verify_integrity(entry.key) is True
