@@ -234,6 +234,7 @@ class ExecutionGateway:
         return resolved
 
     def get_status(self) -> dict:
+        self._expire_pending()
         return {
             "status": "active",
             "total_processed": self.total_processed,
