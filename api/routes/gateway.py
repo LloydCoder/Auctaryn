@@ -286,6 +286,7 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
         # already executed action. The prior execution.requested record remains
         # as a detectable incomplete chain event for operator investigation.
         evidence_status = "terminal_record_failed"
+    await _publish_decision_alert(decision)
     return {
         "decision": decision.model_dump(mode="json"),
         "execution": receipt.model_dump(mode="json") if receipt is not None else None,
@@ -347,6 +348,7 @@ async def execute_approved_decision(decision_id: str) -> dict:
         )
     except (EvidenceStoreError, ValueError):
         evidence_status = "terminal_record_failed"
+    await _publish_decision_alert(decision)
     return {"decision_id": decision.id, "execution": receipt.model_dump(mode="json"),
             "evidence_status": evidence_status}
 
