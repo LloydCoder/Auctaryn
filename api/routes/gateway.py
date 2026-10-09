@@ -5,12 +5,11 @@ controls and human approvals additionally require the operator bearer key.
 Deploy behind TLS; static keys are bootstrap controls, not a replacement for
 enterprise identity-provider integration.
 """
-import hmac
-import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from api.security import configured_for, extract_bearer, token_role
 
 from core.models import ToolCall, ActionClassification, GatewayDecision
 from modules.execution_gateway.gateway import ExecutionGateway
@@ -18,25 +17,22 @@ from modules.threatfade_oracle.oracle import ThreatFadeOracle
 from modules.agent_identity.identity import AgentIdentityManager
 from modules.inter_agent.circuit_breaker import AgentCircuitBreaker
 
-def _authorized(authorization: str | None, env_name: str) -> bool:
-    scheme, _, token = (authorization or "").partition(" ")
-    expected = os.getenv(env_name, "")
-    return scheme.lower() == "bearer" and bool(expected and token) and hmac.compare_digest(token, expected)
-
 async def require_api_key(authorization: str | None = Header(default=None)) -> None:
-    if _authorized(authorization, "AUCTARYN_API_KEY"):
+    role = token_role(extract_bearer(authorization))
+    if role in ("api", "admin"):
         return
-    if not os.getenv("AUCTARYN_API_KEY"):
-        raise HTTPException(status_code=503, detail="API authentication is not configured")
+    if not configured_for("api"):
+        raise HTTPException(status_code=503, detail="API authentication is not configured correctly")
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Valid bearer token required",
                         headers={"WWW-Authenticate": "Bearer"})
 
 async def require_operator_key(authorization: str | None = Header(default=None)) -> None:
-    if _authorized(authorization, "AUCTARYN_OPERATOR_API_KEY"):
+    role = token_role(extract_bearer(authorization))
+    if role == "admin":
         return
-    if not os.getenv("AUCTARYN_OPERATOR_API_KEY"):
-        raise HTTPException(status_code=503, detail="Operator authentication is not configured")
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Valid operator bearer token required",
+    if not configured_for("admin"):
+        raise HTTPException(status_code=503, detail="Administrator authentication is not configured correctly")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator bearer token required",
                         headers={"WWW-Authenticate": "Bearer"})
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
