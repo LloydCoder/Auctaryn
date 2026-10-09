@@ -42,6 +42,7 @@ class ScopedToken:
     issued_at: datetime
     expires_at: datetime
     revoked: bool = False
+    delegator_agent_id: str | None = None
 
 
 class AgentIdentityManager:
@@ -89,6 +90,11 @@ class AgentIdentityManager:
         identity = self._identities.get(agent_id)
         if identity is not None:
             identity.scopes.discard(scope)
+            for token in self._tokens.values():
+                if token.agent_id == agent_id or token.delegator_agent_id == agent_id:
+                    token.scopes.discard(scope)
+                    if not token.scopes:
+                        token.revoked = True
             logger.info(f"Revoked scope '{scope}' from {agent_id}",
                        extra={"event": "scope_revoked", "module_name": "agent_identity"})
 
@@ -190,6 +196,7 @@ class AgentIdentityManager:
             scopes=requested,
             issued_at=now,
             expires_at=now + timedelta(seconds=ttl_seconds),
+            delegator_agent_id=delegator_agent_id,
         )
         self._tokens[token.token_id] = token
 
