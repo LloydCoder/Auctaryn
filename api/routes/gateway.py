@@ -255,6 +255,8 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
         raise HTTPException(status_code=409, detail="Decision already claimed for execution") from exc
     except ActionIntentIntegrityError as exc:
         raise HTTPException(status_code=409, detail="Action intent integrity check failed; execution refused") from exc
+    except IncidentResponseBlocked as exc:
+        raise HTTPException(status_code=423, detail="Execution blocked by incident-response controls") from exc
     except RuntimeAdapterFailure as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     evidence_status = "complete"
@@ -329,6 +331,8 @@ async def execute_approved_decision(decision_id: str) -> dict:
         raise HTTPException(status_code=409, detail="Decision already claimed for execution") from exc
     except ActionIntentIntegrityError as exc:
         raise HTTPException(status_code=409, detail="Action intent integrity check failed; execution refused") from exc
+    except IncidentResponseBlocked as exc:
+        raise HTTPException(status_code=423, detail="Execution blocked by incident-response controls") from exc
     except RuntimeAdapterFailure as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     evidence_status = "complete"
