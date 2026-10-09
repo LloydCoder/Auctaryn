@@ -55,7 +55,7 @@ async def _evidence_check(path: Path, allow_unverified_hmac: bool) -> dict[str, 
     from modules.evidence_audit.store import EvidenceStore, EvidenceStoreError
 
     try:
-        result = await EvidenceStore(path).verify()
+        result = EvidenceStore(path)._verify_sync()
     except (EvidenceStoreError, ValueError) as exc:
         raise ValueError("Evidence-chain verification failed") from exc
     if not result.get("valid"):
