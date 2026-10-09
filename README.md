@@ -56,7 +56,7 @@ Skill vetting requires a trusted publisher's Ed25519 signature and the actual ar
 
 ## Context-session enforcement
 
-When protected instructions are configured, gateway actions require a current session-bound context check. Compromised sessions are quarantined until an administrator clears them and a fresh clean check is supplied. This local binding is not a cryptographic attestation of the context consumed by an external agent.
+When protected instructions are configured, gateway actions require a current session-bound context check; the check ID is bound into action intent and revalidated immediately before runtime execution. Compromised sessions remain quarantined until an administrator clears them and a fresh clean check is supplied. Session state is bounded and fail-closed. This local binding is not a cryptographic attestation of the context consumed by an external agent. See the [Phase 8 enforcement audit](audits/PHASE-08-SESSION-BOUND-ENFORCEMENT.md).
 
 ## Context-integrity trust boundary
 
