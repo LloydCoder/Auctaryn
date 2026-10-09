@@ -21,6 +21,7 @@ class PolicyValidationError(ValueError):
 
 class _UniqueKeyLoader(yaml.SafeLoader):
     def construct_mapping(self, node, deep=False):
+        self.flatten_mapping(node)
         mapping = {}
         for key_node, value_node in node.value:
             key = self.construct_object(key_node, deep=deep)
@@ -37,11 +38,15 @@ def validate_baseline_policy(policy: Any) -> list[str]:
         return ["policy root must be a mapping"]
     if policy.get("version") != 1:
         errors.append("policy version must be 1")
+    if set(policy) - {"version", "filesystem_policy", "landlock", "network_policies"}:
+        errors.append("policy contains an unreviewed top-level section")
 
     filesystem = policy.get("filesystem_policy")
     if not isinstance(filesystem, dict):
         errors.append("filesystem_policy must be a mapping")
     else:
+        if set(filesystem) - {"include_workdir", "read_only", "read_write"}:
+            errors.append("filesystem_policy contains an unreviewed setting")
         read_only = filesystem.get("read_only")
         read_write = filesystem.get("read_write")
         if not isinstance(read_only, list) or any(not isinstance(path, str) for path in read_only):
@@ -68,6 +73,8 @@ def validate_baseline_policy(policy: Any) -> list[str]:
     landlock = policy.get("landlock")
     if not isinstance(landlock, dict) or landlock.get("compatibility") != "hard_requirement":
         errors.append("landlock.compatibility must be hard_requirement")
+    elif set(landlock) - {"compatibility"}:
+        errors.append("landlock contains an unreviewed setting")
 
     network = policy.get("network_policies")
     if network != {}:
