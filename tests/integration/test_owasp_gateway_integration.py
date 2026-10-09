@@ -121,6 +121,20 @@ class TestSkillVettingAPI:
         )
         assert response.status_code == 403
 
+    def test_known_skill_registry_is_admin_only(self, client):
+        denied = client.post(
+            "/api/v1/skills/registry/known-skill",
+            headers={"Authorization": "Bearer test-service-secret"},
+            json={"name": "approved-tool"},
+        )
+        assert denied.status_code == 403
+        allowed = client.post(
+            "/api/v1/skills/registry/known-skill",
+            json={"name": "approved-tool"},
+        )
+        assert allowed.status_code == 200
+        assert allowed.json()["registered"] is True
+
     def test_vet_malicious_skill_rejected(self, client):
         import base64
         import hashlib
