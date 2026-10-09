@@ -79,3 +79,15 @@ def test_protected_baseline_change_invalidates_prior_context_check():
     assert guardian.authorize_session_action(
         "baseline-session", result.id, "action-after-change"
     ) is not None
+
+
+def test_removing_protected_baseline_invalidates_old_check():
+    guardian = ContextIntegrityGuardian()
+    instruction = "Never delete customer records without explicit confirmation."
+    guardian.register_instruction("delete-safety", instruction)
+    result = guardian.check(instruction, session_id="removed-baseline-session")
+    assert result.status.value == "intact"
+    assert guardian.registry.remove("delete-safety") is True
+    assert guardian.authorize_session_action(
+        "removed-baseline-session", result.id, "action-after-removal"
+    ) is not None
