@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from api.security import require_api_key, require_operator_key
 from api.routes.context import get_guardian
-from api.websockets.alerts import broadcast_alert
+from api.websockets import alerts as alerts_ws
 
 from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision, action_intent_fingerprint
 from modules.execution_gateway.gateway import ExecutionGateway, ApprovalIntentIntegrityError
@@ -115,7 +115,7 @@ async def _publish_decision_alert(decision: GatewayDecision) -> None:
         )
     except (EvidenceStoreError, ValueError):
         pass
-    await broadcast_alert({"type": "incident_alert", "alert": alert})
+    await alerts_ws.broadcast_alert({"type": "incident_alert", "alert": alert})
 
 
 async def _publish_runtime_failure_alert(agent_id: str, fingerprint: str, error_type: str,
@@ -139,7 +139,7 @@ async def _publish_runtime_failure_alert(agent_id: str, fingerprint: str, error_
         )
     except (EvidenceStoreError, ValueError):
         pass
-    await broadcast_alert({"type": "incident_alert", "alert": alert})
+    await alerts_ws.broadcast_alert({"type": "incident_alert", "alert": alert})
 
 
 async def _broadcast_decision(decision: GatewayDecision) -> None:
