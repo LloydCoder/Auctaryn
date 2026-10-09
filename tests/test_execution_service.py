@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import create_app
-from core.models import ActionDecision, GatewayDecision, RiskLevel, ToolCall
+from core.models import ActionDecision, GatewayDecision, RiskLevel, ToolCall, action_intent_fingerprint
 from modules.execution_gateway.execution_service import ExecutionService
 from modules.execution_gateway.gateway import ExecutionGateway
 from modules.execution_gateway.runtime_adapter import (
@@ -91,12 +91,16 @@ def test_approved_action_runs_only_through_adapter_and_receipt_redacts_output():
 def test_explicitly_approved_decision_is_at_most_once_per_service():
     adapter = FakeRuntimeAdapter()
     service = ExecutionService(ExecutionGateway(), adapter)
+    approved_call = ToolCall(
+        tool_name="delete_file", action="delete", agent_id="test-agent"
+    )
     decision = GatewayDecision(
         id="operator-approved-decision",
-        tool_call=ToolCall(tool_name="delete_file", action="delete", agent_id="test-agent"),
+        tool_call=approved_call,
         risk_level=RiskLevel.DESTRUCTIVE,
         decision=ActionDecision.APPROVED,
         decided_by="authenticated_operator",
+        action_fingerprint=action_intent_fingerprint(approved_call),
     )
 
     receipt = asyncio.run(service.execute_approved_decision(decision))
@@ -104,6 +108,26 @@ def test_explicitly_approved_decision_is_at_most_once_per_service():
     with pytest.raises(DuplicateExecution):
         asyncio.run(service.execute_approved_decision(decision))
     assert len(adapter.calls) == 1
+
+
+def test_mutated_approved_decision_is_rejected_before_runtime_call():
+    adapter = FakeRuntimeAdapter()
+    gateway = ExecutionGateway()
+    service = ExecutionService(gateway, adapter)
+    decision = gateway.evaluate(
+        ToolCall(
+            tool_name="read_file",
+            action="read",
+            parameters={"path": "/safe/file.txt"},
+            agent_id="test-agent",
+        )
+    )
+    assert decision.decision == ActionDecision.APPROVED
+    decision.tool_call.parameters["path"] = "/sensitive/other.txt"
+
+    with pytest.raises(RuntimeAdapterFailure, match="intent integrity"):
+        asyncio.run(service.execute_approved_decision(decision))
+    assert adapter.calls == []
 
 
 def test_non_approved_decision_cannot_be_executed():
