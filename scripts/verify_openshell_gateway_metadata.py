@@ -21,7 +21,7 @@ def validate_endpoint(metadata: object) -> str:
         endpoint = metadata.get("endpoint")  # Legacy metadata compatibility.
     if not isinstance(endpoint, str) or not endpoint or len(endpoint) > MAX_ENDPOINT_LENGTH:
         raise ValueError("gateway_endpoint must be a bounded URL string")
-    if any(char.isspace() or char == "\\\\" or ord(char) < 0x20 or ord(char) == 0x7F for char in endpoint):
+    if any(char.isspace() or ord(char) == 92 or ord(char) < 0x20 or ord(char) == 0x7F for char in endpoint):
         raise ValueError("gateway_endpoint contains whitespace, backslashes or control characters")
     try:
         parsed = urlsplit(endpoint)
