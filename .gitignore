@@ -36,3 +36,6 @@ Thumbs.db
 .pytest_cache/
 htmlcov/
 .coverage
+
+# Local deployment rollback metadata (immutable image IDs only)
+.deploy-state/
