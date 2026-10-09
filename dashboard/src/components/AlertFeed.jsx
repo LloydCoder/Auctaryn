@@ -18,8 +18,17 @@ const SEVERITY_COLORS = {
 }
 
 export default function AlertFeed({ liveAlerts = [] }) {
-  // Most recent first
-  const alerts = useMemo(() => [...liveAlerts].reverse(), [liveAlerts])
+  // Normalize both legacy action alerts and the persisted Phase 17 incident envelope.
+  const alerts = useMemo(() => [...liveAlerts].reverse().map((entry, index) => {
+    const alert = entry.alert || entry
+    return {
+      ...alert,
+      _key: alert.alert_id || `${alert.timestamp || alert.created_at || 'alert'}-${index}`,
+      _message: alert.summary || alert.message || 'No summary provided',
+      _category: alert.category || alert.module || 'security',
+      _timestamp: alert.created_at || alert.timestamp,
+    }
+  }), [liveAlerts])
 
   return (
     <div className="bg-[#111827] border border-gray-800/50 rounded-xl p-6">
@@ -46,13 +55,13 @@ export default function AlertFeed({ liveAlerts = [] }) {
             const Icon = SEVERITY_ICONS[alert.severity] || Bell
             const colorClass = SEVERITY_COLORS[alert.severity] || SEVERITY_COLORS.info
             return (
-              <div key={`${alert.timestamp}-${i}`} className={`flex items-start gap-3 p-3 rounded-lg border ${colorClass}`}>
+              <div key={alert._key || i} className={`flex items-start gap-3 p-3 rounded-lg border ${colorClass}`}>
                 <Icon className="w-4 h-4 mt-0.5 shrink-0" />
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-gray-200">{alert.title}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">{alert.message}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{alert._message}</div>
                   <div className="text-xs text-gray-600 mt-1">
-                    {alert.module} · {new Date(alert.timestamp).toLocaleTimeString()}
+                    {alert._category} · {alert._timestamp ? new Date(alert._timestamp).toLocaleTimeString() : 'time unavailable'}
                   </div>
                 </div>
               </div>

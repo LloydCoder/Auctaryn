@@ -3,6 +3,7 @@
 
 services:
   api:
+    image: ${AUCTARYN_IMAGE:-auctaryn:latest}
     build:
       context: .
       dockerfile: Dockerfile
