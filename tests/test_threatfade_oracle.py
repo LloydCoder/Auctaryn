@@ -109,8 +109,9 @@ SAMPLE_CRITICAL_RESULT = {
 class TestFusionOpsClient:
     """HTTP client for the live FusionOps API."""
 
-    def test_client_initialization(self):
+    def test_client_initialization(self, monkeypatch):
         from modules.threatfade_oracle.client import FusionOpsClient
+        monkeypatch.setenv("THREATFADE_API_KEY", "test-service-token")
         client = FusionOpsClient(base_url="https://fusionops.example.test")
         assert client.base_url == "https://fusionops.example.test"
 
@@ -120,6 +121,26 @@ class TestFusionOpsClient:
             FusionOpsClient(base_url="http://external.example.test")
         with pytest.raises(ValueError):
             FusionOpsClient(base_url="https://user:password@fusionops.example.test")
+
+    def test_remote_endpoint_requires_service_credential(self, monkeypatch):
+        from modules.threatfade_oracle.client import FusionOpsClient
+        monkeypatch.delenv("THREATFADE_API_KEY", raising=False)
+        with pytest.raises(ValueError, match="required for non-local"):
+            FusionOpsClient(base_url="https://fusionops.example.test")
+
+    @pytest.mark.asyncio
+    async def test_remote_endpoint_sends_bearer_service_credential(self, monkeypatch):
+        from modules.threatfade_oracle.client import FusionOpsClient
+        monkeypatch.setenv("THREATFADE_API_KEY", "test-service-token")
+        client = FusionOpsClient(base_url="https://fusionops.example.test")
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = {"status": "ok"}
+        with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=response)) as get:
+            await client.health_check()
+        assert get.await_args.kwargs["headers"] == {
+            "Authorization": "Bearer test-service-token"
+        }
 
     def test_client_default_url(self):
         from modules.threatfade_oracle.client import FusionOpsClient
