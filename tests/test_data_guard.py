@@ -108,3 +108,28 @@ def test_api_returns_422_with_paths_and_no_secret_value(monkeypatch):
     assert body["detail"]["code"] == "sensitive_data_blocked"
     assert "parameters.password" in body["detail"]["paths"]
     assert secret_value not in response.text
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/gateway/evaluate",
+        "/api/v1/gateway/intercept",
+        "/api/v1/gateway/intercept/full",
+    ],
+)
+def test_classification_routes_block_secrets_before_echoing(client, path):
+    secret_value = "never-return-this-classification-secret"
+    response = client.post(
+        path,
+        json={
+            "tool_name": "http_request",
+            "action": "send",
+            "parameters": {"password": secret_value},
+            "agent_id": "data-guard-agent",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "sensitive_data_blocked"
+    assert "parameters.password" in response.json()["detail"]["paths"]
+    assert secret_value not in response.text
