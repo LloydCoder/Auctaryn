@@ -87,5 +87,7 @@ class ExecutionService:
             exit_code=result.exit_code,
             stdout_sha256=hashlib.sha256(result.stdout.encode("utf-8")).hexdigest(),
             stderr_sha256=hashlib.sha256(result.stderr.encode("utf-8")).hexdigest(),
+            stdout_truncated=result.stdout_truncated,
+            stderr_truncated=result.stderr_truncated,
             finished_at=result.finished_at,
         )
