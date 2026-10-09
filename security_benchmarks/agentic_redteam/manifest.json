@@ -1,0 +1,117 @@
+{
+  "schema_version": "auctaryn-redteam-manifest.v1",
+  "purpose": "Repeatable deterministic regression scenarios for Auctaryn agent-security controls. This is not certification or proof of universal mediation.",
+  "taxonomy": {
+    "owasp": "OWASP Top 10 for Agentic Applications 2026",
+    "owasp_url": "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/",
+    "atlas": "MITRE ATLAS",
+    "atlas_url": "https://atlas.mitre.org/",
+    "atlas_mapping_level": "tactic-level; validate specific technique IDs separately"
+  },
+  "scenarios": [
+    {
+      "id": "ASI01:2026",
+      "name": "Agent Goal Hijack",
+      "test_function": "test_asi01_goal_hijack_is_detected",
+      "atlas_tactics": [
+        "Initial Access",
+        "Defense Evasion",
+        "Impact"
+      ],
+      "expected": "Conflicting override directive is detected by the context-integrity control."
+    },
+    {
+      "id": "ASI02:2026",
+      "name": "Tool Misuse and Exploitation",
+      "test_function": "test_asi02_unknown_tool_action_is_not_auto_approved",
+      "atlas_tactics": [
+        "Execution",
+        "Privilege Escalation",
+        "Impact"
+      ],
+      "expected": "Unrecognized tool/action remains pending and never auto-approved."
+    },
+    {
+      "id": "ASI03:2026",
+      "name": "Identity and Privilege Abuse",
+      "test_function": "test_asi03_token_cannot_exceed_granted_scope",
+      "atlas_tactics": [
+        "Credential Access",
+        "Privilege Escalation"
+      ],
+      "expected": "A scoped token cannot invoke a capability absent from its grant."
+    },
+    {
+      "id": "ASI04:2026",
+      "name": "Agentic Supply Chain Vulnerabilities",
+      "test_function": "test_asi04_signed_manifest_tampering_is_rejected",
+      "atlas_tactics": [
+        "Resource Development",
+        "Persistence",
+        "Execution"
+      ],
+      "expected": "Mutation of signed permissions invalidates publisher-signature verification."
+    },
+    {
+      "id": "ASI05:2026",
+      "name": "Unexpected Code Execution",
+      "test_function": "test_asi05_shell_command_string_is_rejected_by_runtime_adapter",
+      "atlas_tactics": [
+        "Execution",
+        "Impact"
+      ],
+      "expected": "Runtime adapter refuses a free-form shell command string instead of a bounded argv array."
+    },
+    {
+      "id": "ASI06:2026",
+      "name": "Memory and Context Poisoning",
+      "test_function": "test_asi06_poisoning_pattern_is_detected_and_quarantined",
+      "atlas_tactics": [
+        "Persistence",
+        "Defense Evasion",
+        "Impact"
+      ],
+      "expected": "Known instruction-override poisoning is detected and stored memory is explicitly quarantined."
+    },
+    {
+      "id": "ASI07:2026",
+      "name": "Insecure Inter-Agent Communication",
+      "test_function": "test_asi07_tampered_message_payload_is_rejected",
+      "atlas_tactics": [
+        "Lateral Movement",
+        "Command and Control"
+      ],
+      "expected": "HMAC verification rejects a message whose payload was changed after signing."
+    },
+    {
+      "id": "ASI08:2026",
+      "name": "Cascading Failures",
+      "test_function": "test_asi08_open_circuit_breaker_fails_closed",
+      "atlas_tactics": [
+        "Impact"
+      ],
+      "expected": "An agent with a tripped circuit breaker is blocked."
+    },
+    {
+      "id": "ASI09:2026",
+      "name": "Human-Agent Trust Exploitation",
+      "test_function": "test_asi09_step_up_challenge_is_single_use",
+      "atlas_tactics": [
+        "Initial Access",
+        "Privilege Escalation"
+      ],
+      "expected": "The local step-up contract rejects replay; actual IdP MFA integration remains an explicit production gap."
+    },
+    {
+      "id": "ASI10:2026",
+      "name": "Rogue Agents",
+      "test_function": "test_asi10_emergency_stop_blocks_agent_execution",
+      "atlas_tactics": [
+        "Defense Evasion",
+        "Persistence",
+        "Impact"
+      ],
+      "expected": "Persistent global emergency stop refuses execution checks."
+    }
+  ]
+}
