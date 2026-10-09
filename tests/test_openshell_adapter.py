@@ -213,6 +213,23 @@ def test_enabled_adapter_rejects_partial_oidc_credentials(monkeypatch):
     with pytest.raises(RuntimeAdapterUnavailable, match="required together"):
         create_openshell_adapter_from_environment()
 
+def test_enabled_adapter_fails_closed_when_baseline_policy_is_invalid(monkeypatch):
+    import modules.execution_gateway.openshell_adapter as adapter_module
+    from modules.execution_gateway.policy_validation import PolicyValidationError
+
+    monkeypatch.setenv("AUCTARYN_RUNTIME_ADAPTER", "openshell")
+    monkeypatch.setenv("OPENSHELL_SANDBOX_NAME", "sandbox")
+    monkeypatch.setenv("OPENSHELL_WORKSPACE", "default")
+    monkeypatch.setenv("OPENSHELL_ALLOW_USER_CREDENTIALS", "true")
+
+    def invalid_baseline(_path):
+        raise PolicyValidationError("unsafe baseline")
+
+    monkeypatch.setattr(adapter_module, "load_and_validate_baseline", invalid_baseline)
+    with pytest.raises(RuntimeAdapterUnavailable, match="baseline policy"):
+        create_openshell_adapter_from_environment()
+
+
 def test_bounded_exec_wrapper_runs_argv_without_shell():
     child_argv = [sys.executable, "-c", "print('bounded-ok')"]
     completed = subprocess.run(
