@@ -57,19 +57,19 @@ def enable_strict_identity_enforcement() -> None:
 
 
 class ToolCallRequest(BaseModel):
-    tool_name: str
-    action: str
-    parameters: dict = {}
-    target: str = ""
-    agent_id: str = ""
-    session_id: str = ""
+    tool_name: str = Field(min_length=1, max_length=128)
+    action: str = Field(min_length=1, max_length=256)
+    parameters: dict = Field(default_factory=dict)
+    target: str = Field(default="", max_length=512)
+    agent_id: str = Field(default="", max_length=128)
+    session_id: str = Field(default="", max_length=128)
     identity_token: str = Field(default="", max_length=128)
 
 
 class ApprovalRequest(BaseModel):
-    decision_id: str
+    decision_id: str = Field(min_length=1, max_length=64)
     approved: bool
-    reason: str = ""
+    reason: str = Field(default="", max_length=500)
 
 
 async def _broadcast_decision(decision: GatewayDecision) -> None:
