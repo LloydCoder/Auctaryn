@@ -83,3 +83,58 @@ class EvidenceStore:
     @staticmethod
     def _text(value: Any, limit: int = 256) -> str:
         return " ".join(str(value or "").split())[:limit]
+
+    def _append_sync(self, event_type: str, *, correlation_id: str = "", actor_id: str = "",
+                     tenant_id: str = "", decision_id: str = "", execution_id: str = "",
+                     outcome: str = "", details: dict[str, Any] | None = None) -> dict[str, Any]:
+        event_type = self._text(event_type, 96)
+        if not event_type or any(ord(ch) < 32 for ch in event_type):
+            raise ValueError("event_type must be a printable non-empty value")
+        details = details or {}
+        if not isinstance(details, dict) or len(details) > 32:
+            raise ValueError("details must be an object with at most 32 fields")
+        safe_details: dict[str, Any] = {}
+        for key, value in details.items():
+            safe_key = self._text(key, 64)
+            if not safe_key or not isinstance(value, (str, int, float, bool, type(None))):
+                raise ValueError("details must contain scalar values")
+            if isinstance(value, str):
+                safe_details[safe_key] = self._text(value, 512)
+            elif isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
+                raise ValueError("non-finite detail values are not allowed")
+            else:
+                safe_details[safe_key] = value
+        occurred_at = datetime.now(timezone.utc).isoformat()
+        payload = {
+            "schema": "auctaryn.evidence-record.v1", "record_id": uuid4().hex,
+            "occurred_at": occurred_at, "event_type": event_type,
+            "correlation_id": self._text(correlation_id), "actor_id": self._text(actor_id),
+            "tenant_id": self._text(tenant_id), "decision_id": self._text(decision_id),
+            "execution_id": self._text(execution_id), "outcome": self._text(outcome, 96),
+            "details": safe_details,
+            "provenance": {"producer": "auctaryn", "source": "application_event"},
+        }
+        serialized = canonical_json(payload).decode("utf-8")
+        try:
+            with self._connect() as db:
+                db.execute("BEGIN IMMEDIATE")
+                row = db.execute("SELECT record_hash FROM evidence_records ORDER BY sequence DESC LIMIT 1").fetchone()
+                previous_hash = row["record_hash"] if row else ZERO_HASH
+                digest = hashlib.sha256(previous_hash.encode("ascii") + b"\\n" + serialized.encode("utf-8")).hexdigest()
+                signature = self._signature(digest)
+                cursor = db.execute(
+                    """INSERT INTO evidence_records
+                    (record_id, occurred_at, event_type, payload_json, previous_hash, record_hash, hmac_signature)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (payload["record_id"], occurred_at, event_type, serialized, previous_hash, digest, signature),
+                )
+                sequence = int(cursor.lastrowid)
+                db.commit()
+            return {"sequence": sequence, **payload, "previous_hash": previous_hash,
+                    "record_hash": digest, "hmac_signature": signature, "integrity_mode": self.integrity_mode}
+        except (sqlite3.Error, OSError) as exc:
+            raise EvidenceStoreError("Evidence append failed") from exc
+
+    async def append(self, event_type: str, **kwargs: Any) -> dict[str, Any]:
+        await self.initialize()
+        return await asyncio.to_thread(self._append_sync, event_type, **kwargs)
