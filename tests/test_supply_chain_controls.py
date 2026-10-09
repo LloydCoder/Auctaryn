@@ -72,6 +72,10 @@ def test_supply_chain_workflow_has_required_controls() -> None:
     assert "anchore/scan-action@" in supply
     assert "severity-cutoff: high" in supply
     assert "only-fixed: true" in supply
+    inventory_step = supply.split("      - name: Record complete container vulnerability inventory", 1)[1]
+    inventory_step = inventory_step.split("      - name:", 1)[0]
+    assert "severity-cutoff: negligible" in inventory_step
+    assert "only-fixed: false" in inventory_step
     assert "output-file: grype-full.json" in supply
     assert "audit_grype_report.py grype-full.json" in supply
     assert "apt-get install -y --no-install-recommends" not in (ROOT / "Dockerfile").read_text()
@@ -83,3 +87,9 @@ def test_supply_chain_workflow_has_required_controls() -> None:
     assert "python,javascript-typescript" in codeql
     assert "audit_codeql_sarif.py --fail-severity high" in codeql
     assert "results/*.sarif" in codeql
+
+
+def test_deployment_uses_committed_npm_lockfile() -> None:
+    deploy = (ROOT / "scripts/deploy.sh").read_text()
+    assert "npm ci --no-audit --no-fund" in deploy
+    assert "npm install --silent" not in deploy
