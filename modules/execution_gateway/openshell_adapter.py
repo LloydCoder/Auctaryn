@@ -32,6 +32,7 @@ MAX_ARGV_COUNT = 128
 MAX_ARG_LENGTH = 8192
 MAX_TOTAL_ARG_LENGTH = 32768
 MAX_OUTPUT_CHARS = 1_000_000
+MAX_SEEN_IDEMPOTENCY_KEYS = 100_000
 
 # Output is bounded while being read inside the sandbox, not only after the SDK
 # has already buffered a child process's output. argv is JSON and shell=False.
@@ -174,6 +175,10 @@ class OpenShellRuntimeAdapter:
             raise RuntimeAdapterFailure("A bounded idempotency key is required.")
         if idempotency_key in self._seen_idempotency_keys:
             raise DuplicateExecution("OpenShell execution key has already been submitted.")
+        if len(self._seen_idempotency_keys) >= MAX_SEEN_IDEMPOTENCY_KEYS:
+            raise RuntimeAdapterUnavailable(
+                "OpenShell idempotency capacity reached; execution is refused until controlled maintenance."
+            )
 
         argv = self._validate_argv(tool_call)
         self._seen_idempotency_keys.add(idempotency_key)
