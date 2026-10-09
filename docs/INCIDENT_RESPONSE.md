@@ -26,6 +26,12 @@ This runbook follows the Detect → Respond → Recover → Improve lifecycle de
 - Disable the global stop with `POST /api/v1/incident/emergency-stop` and body `{"enabled":false,"reason":"<approved recovery rationale>"}` only after explicit operator review.
 - Confirm evidence verification, capture the alert and decision IDs, validate runtime health, and document lessons learned and follow-up work.
 
+## Direct-execution profile
+
+- The local `POST /api/v1/gateway/execute` and `/execute/approved/{decision_id}` routes return 503 unless `AUCTARYN_ALLOW_DIRECT_EXECUTION=true` (or `1` / `yes`) is explicitly set.
+- When enabled, these local execution routes require the distinct administrator credential. The service key cannot trigger local runtime side effects.
+- For the Platform-integrated production profile, leave direct execution disabled and route consequential operations through Tinlance Agent Platform. Enabling the local switch does not make Auctaryn the tenant or approval authority.
+
 ## Operational limitations
 
 - Emergency stop and quarantine state are persistent local SQLite controls, but identity/token state remains process-local. The Platform must independently revoke its own capabilities.

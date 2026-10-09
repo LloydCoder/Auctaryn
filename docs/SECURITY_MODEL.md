@@ -102,3 +102,8 @@ The execution service checks a persistent global emergency stop and per-agent qu
 ## Adversarial benchmark and assurance limits
 
 The ASI01–ASI10 red-team suite is a repeatable regression benchmark, not a certification. Each scenario links to a named automated test and a tactic-level MITRE ATLAS mapping; no technique-level mapping is claimed unless its identifier has been independently verified against the current ATLAS dataset. A passing unit test demonstrates the tested control path only. In particular, the step-up freshness contract is not a substitute for a real identity-provider MFA assertion, and local state does not prove multi-replica enforcement. See [the red-team benchmark](RED_TEAM_BENCHMARK.md), [OWASP coverage map](OWASP_COVERAGE.md), and [Phase 18 forensic audit](../audits/PHASE-18-FORENSIC-AUDIT.md).
+
+
+## Enterprise administrative boundary and direct-execution profile
+
+Decision history, pending approvals, protected-context history, compaction records, skill-vetting history, identity administration, evidence records and incident controls are administrator-only. The service credential is for advisory and bounded agent operations; it is not a human operator identity. Direct runtime execution through Auctaryn's local gateway is disabled unless `AUCTARYN_ALLOW_DIRECT_EXECUTION=true` (also accepts `1` or `yes`) and the caller presents the distinct administrator credential. Leave this setting unset in the Platform-integrated production profile: Tinlance Agent Platform remains the sole authority for tenant binding, approvals and consequential execution. See [API authorization matrix](API_AUTHORIZATION_MATRIX.md) and [Phase 19 forensic audit](../audits/PHASE-19-FORENSIC-AUDIT.md).

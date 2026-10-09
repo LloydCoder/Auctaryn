@@ -147,14 +147,19 @@ def _requires_admin(path: str) -> bool:
     if path in {
         "/api/v1/gateway/approve",
         "/api/v1/gateway/pending",
+        "/api/v1/gateway/execute",
         "/api/v1/gateway/identity-enforcement/enable",
         "/api/v1/context/register",
         "/api/v1/context/instructions",
+        "/api/v1/context/checks",
+        "/api/v1/context/compactions",
+        "/api/v1/skills/history",
     }:
         return True
     return (
-        path == "/api/v1/context/instructions"
+        path.startswith("/api/v1/gateway/execute/")
         or path.startswith("/api/v1/context/instructions/")
+        or path.startswith("/api/v1/context/checks/")
         or path.startswith("/api/v1/context/sessions/")
     )
 
