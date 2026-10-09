@@ -1,8 +1,8 @@
 """Memory-defender routes bound to scoped agent identity and server-issued sessions."""
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.routes.gateway import get_identity_manager
+from api.routes.gateway import get_identity_manager, require_operator_key
 from modules.memory_defender.defender import (
     MAX_MEMORY_CONTENT_CHARS,
     MemoryDefender,
@@ -181,4 +181,47 @@ async def get_memory_content(
         "content": entry.content,
         "quarantined": entry.quarantined,
         "integrity_ok": True,
+    }
+
+
+
+@router.get("/quarantine", dependencies=[Depends(require_operator_key)])
+async def list_quarantined_memory(limit: int = Query(100, ge=1, le=100)) -> dict:
+    entries = get_memory_defender().store.list_quarantined(limit)
+    return {
+        "count": len(entries),
+        "entries": [
+            {
+                "key": entry.key,
+                "source": entry.source,
+                "agent_id": entry.agent_id,
+                "session_id": entry.session_id,
+                "created_at": entry.created_at.isoformat(),
+            }
+            for entry in entries
+        ],
+    }
+
+
+@router.get("/quarantine/{key}", dependencies=[Depends(require_operator_key)])
+async def inspect_quarantined_memory(key: str) -> dict:
+    defender = get_memory_defender()
+    entry = defender.store.get(key)
+    if entry is None or not entry.quarantined:
+        raise HTTPException(status_code=404, detail="Quarantined memory entry not found")
+    if not defender.store.verify_integrity(key):
+        if not defender.store.rollback(key):
+            raise HTTPException(status_code=409, detail="Memory integrity could not be restored")
+        entry = defender.store.get(key)
+    if entry is None or not entry.quarantined:
+        raise HTTPException(status_code=409, detail="Memory quarantine state changed")
+    return {
+        "key": entry.key,
+        "source": entry.source,
+        "agent_id": entry.agent_id,
+        "session_id": entry.session_id,
+        "content": entry.content,
+        "quarantined": True,
+        "integrity_ok": True,
+        "created_at": entry.created_at.isoformat(),
     }
