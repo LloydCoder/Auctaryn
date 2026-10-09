@@ -87,6 +87,8 @@ jobs:
           only-fixed: false
           output-format: json
           output-file: grype-full.json
+      - name: Independently audit the full vulnerability inventory
+        run: python scripts/audit_grype_report.py grype-full.json
       - name: Export exact CI image for provenance
         run: docker save --output auctaryn-image.tar auctaryn:ci
       - name: Upload SBOMs and tested image
