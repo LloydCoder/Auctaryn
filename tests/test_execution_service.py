@@ -130,6 +130,42 @@ def test_mutated_approved_decision_is_rejected_before_runtime_call():
     assert adapter.calls == []
 
 
+def test_action_intent_fingerprint_is_stable_and_changes_with_parameters():
+    from core.models import action_intent_fingerprint
+
+    original = ToolCall(
+        tool_name="read_file",
+        action="read",
+        parameters={"path": "/safe/file.txt"},
+        target="workspace",
+        agent_id="agent-a",
+        session_id="session-a",
+    )
+    same_intent = ToolCall(
+        tool_name="read_file",
+        action="read",
+        parameters={"path": "/safe/file.txt"},
+        target="workspace",
+        agent_id="agent-a",
+        session_id="session-a",
+    )
+    changed_intent = same_intent.model_copy(
+        update={"parameters": {"path": "/different/file.txt"}}
+    )
+    assert action_intent_fingerprint(original) == action_intent_fingerprint(same_intent)
+    assert action_intent_fingerprint(original) != action_intent_fingerprint(changed_intent)
+
+
+def test_action_fingerprint_is_not_exposed_in_decision_serialization():
+    gateway = ExecutionGateway()
+    decision = gateway.evaluate(
+        ToolCall(tool_name="read_file", action="read", agent_id="test-agent")
+    )
+    assert decision.action_fingerprint
+    assert "action_fingerprint" not in decision.model_dump()
+    assert "action_fingerprint" not in decision.model_dump_json()
+
+
 def test_non_approved_decision_cannot_be_executed():
     adapter = FakeRuntimeAdapter()
     service = ExecutionService(ExecutionGateway(), adapter)
