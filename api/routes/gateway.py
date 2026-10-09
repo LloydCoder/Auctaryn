@@ -148,7 +148,7 @@ async def list_pending_approvals() -> list[GatewayDecision]:
 async def approve_action(request: ApprovalRequest) -> dict:
     try:
         resolved = get_gateway().resolve_pending(
-            request.decision_id, request.approved, request.reason
+            request.decision_id, request.approved, request.reason, operator="api_admin"
         )
         await _broadcast_decision(resolved)
         return {
