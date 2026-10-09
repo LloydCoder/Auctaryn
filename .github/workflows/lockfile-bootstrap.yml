@@ -1,0 +1,33 @@
+name: Temporary dashboard lockfile bootstrap
+
+on:
+  push:
+    branches: [phase-22-secure-software-supply-chain]
+
+permissions:
+  contents: read
+
+jobs:
+  generate-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22"
+      - name: Resolve dashboard dependencies and export lockfile for maintainer review
+        working-directory: dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          python - <<'PY'
+          import base64
+          from pathlib import Path
+          data = base64.b64encode(Path("package-lock.json").read_bytes()).decode("ascii")
+          print("LOCKFILE_SIZE=" + str(len(data)))
+          for offset in range(0, len(data), 3000):
+              print(f"LOCKFILE_B64_{offset // 3000:04d}=" + data[offset:offset + 3000])
+          PY
