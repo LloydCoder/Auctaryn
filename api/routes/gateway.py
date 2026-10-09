@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from api.security import require_api_key, require_operator_key
 
 from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision
-from modules.execution_gateway.gateway import ExecutionGateway
+from modules.execution_gateway.gateway import ExecutionGateway, ApprovalIntentIntegrityError
 from modules.threatfade_oracle.oracle import ThreatFadeOracle
 from modules.agent_identity.identity import AgentIdentityManager
 from modules.inter_agent.circuit_breaker import AgentCircuitBreaker
@@ -140,6 +140,8 @@ async def approve_action(request: ApprovalRequest) -> dict:
         await _broadcast_decision(resolved)
         return {"decision_id": resolved.id, "result": resolved.decision.value,
                 "timestamp": datetime.now(timezone.utc).isoformat()}
+    except ApprovalIntentIntegrityError as exc:
+        raise HTTPException(status_code=409, detail="Pending action intent changed; approval rejected") from exc
     except KeyError:
         raise HTTPException(status_code=404, detail="Pending decision not found")
 
