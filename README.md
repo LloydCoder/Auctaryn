@@ -176,3 +176,8 @@ Built by [Chinaemerem Nkwachukwu](https://github.com/LloydCoder)
 ---
 
 *Securing AI agents. Nigeria-1. World-0.* 💚
+
+
+## Secure software supply chain
+
+Auctaryn's supply-chain gates run through [CodeQL](.github/workflows/codeql.yml) and [the supply-chain workflow](.github/workflows/supply-chain.yml). Python direct dependencies are declared in `requirements.txt` and hash-locked in `requirements.lock`; dashboard dependencies are committed in `dashboard/package-lock.json`. CI installs the npm graph with `npm ci`, audits dependencies, scans secrets and the built container, generates SPDX SBOMs, and attests tested artifacts on pushes to `main`. See [the supply-chain policy](docs/SUPPLY_CHAIN.md) for scope, exception handling and the remaining production-release boundary.
