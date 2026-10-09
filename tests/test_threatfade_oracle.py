@@ -282,6 +282,30 @@ class TestFusionOpsClient:
         with pytest.raises(ValueError, match="JSON serializable"):
             await client.triage({"score": float("nan")})
 
+    def test_json_object_rejects_oversized_response_body(self):
+        from modules.threatfade_oracle.client import FusionOpsClient, MAX_RESPONSE_BYTES
+        from core.exceptions import ThreatFadeConnectionError
+        response = MagicMock()
+        response.content = b"x" * (MAX_RESPONSE_BYTES + 1)
+        with pytest.raises(ThreatFadeConnectionError, match="size limit"):
+            FusionOpsClient._json_object(response, "/test")
+
+    @pytest.mark.asyncio
+    async def test_pcap_rejects_oversized_content(self, monkeypatch):
+        import modules.threatfade_oracle.client as client_module
+        client = client_module.FusionOpsClient()
+        monkeypatch.setattr(client_module, "MAX_PCAP_BYTES", 4)
+        with pytest.raises(ValueError, match="PCAP content"):
+            await client.detect_pcap(b"12345", "sample.pcap")
+
+    @pytest.mark.asyncio
+    async def test_triage_rejects_oversized_payload(self, monkeypatch):
+        import modules.threatfade_oracle.client as client_module
+        client = client_module.FusionOpsClient()
+        monkeypatch.setattr(client_module, "MAX_TRIAGE_PAYLOAD_BYTES", 4)
+        with pytest.raises(ValueError, match="exceeds"):
+            await client.triage({"value": "too-large"})
+
     @pytest.mark.asyncio
     async def test_get_events(self):
         from modules.threatfade_oracle.client import FusionOpsClient
