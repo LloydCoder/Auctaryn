@@ -169,6 +169,7 @@ async def intercept_action(request: ToolCallRequest) -> GatewayDecision:
         tool_name=request.tool_name, action=request.action,
         parameters=request.parameters, target=request.target,
         agent_id=request.agent_id, session_id=request.session_id,
+        identity_token=request.identity_token,
     )
     decision = get_gateway().evaluate(tc)
     await _broadcast_decision(decision)
@@ -182,6 +183,7 @@ async def intercept_action_full(request: ToolCallRequest) -> GatewayDecision:
         tool_name=request.tool_name, action=request.action,
         parameters=request.parameters, target=request.target,
         agent_id=request.agent_id, session_id=request.session_id,
+        identity_token=request.identity_token,
     )
     decision = await get_gateway().evaluate_with_oracle(tc)
     await _broadcast_decision(decision)
