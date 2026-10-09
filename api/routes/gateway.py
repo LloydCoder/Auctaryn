@@ -118,6 +118,30 @@ async def _publish_decision_alert(decision: GatewayDecision) -> None:
     await broadcast_alert({"type": "incident_alert", "alert": alert})
 
 
+async def _publish_runtime_failure_alert(agent_id: str, fingerprint: str, error_type: str,
+                                         decision_id: str = "") -> None:
+    alert = get_incident_response_manager().create_alert(
+        severity="high",
+        category="runtime_failure",
+        title="Trusted runtime execution failure",
+        summary=f"failure_type={error_type}",
+        decision_id=decision_id,
+        actor_id=agent_id,
+    )
+    try:
+        await record_evidence(
+            "incident.runtime_failure",
+            correlation_id=fingerprint,
+            actor_id=agent_id,
+            decision_id=decision_id,
+            outcome=error_type,
+            details={"decision": "runtime_failure"},
+        )
+    except (EvidenceStoreError, ValueError):
+        pass
+    await broadcast_alert({"type": "incident_alert", "alert": alert})
+
+
 async def _broadcast_decision(decision: GatewayDecision) -> None:
     from api.websockets.actions import broadcast_action
     await broadcast_action({
