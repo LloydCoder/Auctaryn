@@ -26,6 +26,7 @@ class AdapterExecutionResult(BaseModel):
 class RuntimeExecutionReceipt(BaseModel):
     """Safe, bounded receipt exposed to API clients; never includes raw output."""
 
+    decision_id: str
     execution_id: str
     adapter: str
     status: Literal["succeeded", "failed", "timed_out"]
