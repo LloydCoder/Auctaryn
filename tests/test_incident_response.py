@@ -124,7 +124,7 @@ def test_websocket_acknowledgement_is_admin_only_and_persistent(client):
         assert websocket.receive_json()["type"] == "authenticated"
         websocket.send_json({"type": "acknowledge", "alert_id": alert["alert_id"]})
         assert websocket.receive_json()["type"] == "error"
-    assert get_incident_response_manager().list_alerts(status="open")
+    assert any(item["alert_id"] == alert["alert_id"] for item in get_incident_response_manager().list_alerts(status="open"))
     with client.websocket_connect("/ws/alerts") as websocket:
         websocket.send_json({"type": "authenticate", "token": "test-admin-secret"})
         assert websocket.receive_json()["type"] == "authenticated"
