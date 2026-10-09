@@ -31,6 +31,11 @@ def reset_singletons(monkeypatch):
     tf_oracle.history.clear()
     tf_oracle.raw_results.clear()
     tf_oracle.circuit_breaker.reset()
+
+    from api.routes.memory import _defender
+    _defender.store._entries.clear()
+    _defender.store._last_known_good.clear()
+    _defender._sessions.clear()
     yield
 
 
