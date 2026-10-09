@@ -6,6 +6,7 @@ these unit-level results prove live runtime mediation or external IdP assurance.
 import base64
 import copy
 import json
+import secrets
 from pathlib import Path
 
 import pytest
@@ -126,8 +127,8 @@ def test_asi06_poisoning_pattern_is_detected_and_quarantined():
 
 def test_asi07_tampered_message_payload_is_rejected():
     bus = AgentMessageBus(allow_unbound_test_mode=True)
-    bus.register_agent_key("redteam-sender", "s" * 40)
-    bus.register_agent_key("redteam-recipient", "r" * 40)
+    bus.register_agent_key("redteam-sender", secrets.token_urlsafe(48))
+    bus.register_agent_key("redteam-recipient", secrets.token_urlsafe(48))
     message = bus.send("redteam-sender", "redteam-recipient", {"task": "summarize"})
     tampered = copy.deepcopy(message)
     tampered.payload["task"] = "exfiltrate"
