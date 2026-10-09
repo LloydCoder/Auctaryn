@@ -79,6 +79,8 @@ class ExecutionService:
             raise ActionIntentIntegrityError(
                 "Action intent integrity check failed; execution was refused."
             )
+        # Recheck after all preflight work, as close as possible to adapter invocation.
+        get_incident_response_manager().assert_execution_allowed(decision.tool_call.agent_id)
         if decision.id in self._claimed_decisions:
             raise DuplicateExecution("This decision has already been claimed for execution.")
 
