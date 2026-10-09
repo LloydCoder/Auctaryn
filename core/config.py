@@ -5,7 +5,6 @@ Loads from YAML + environment variable overrides.
 
 import os
 from pathlib import Path
-from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
@@ -82,14 +81,14 @@ def _deep_merge(base: dict, override: dict) -> dict:
 def _apply_env_overrides(raw: dict) -> dict:
     """Override config values with environment variables where set."""
     env_map = {
-        "AUCTARYN_HOST": ("server", "host"),
         "TWINGUARD_HOST": ("server", "host"),
-        "AUCTARYN_PORT": ("server", "port"),
+        "AUCTARYN_HOST": ("server", "host"),
         "TWINGUARD_PORT": ("server", "port"),
-        "AUCTARYN_DEBUG": ("server", "debug"),
+        "AUCTARYN_PORT": ("server", "port"),
         "TWINGUARD_DEBUG": ("server", "debug"),
-        "AUCTARYN_DB_PATH": ("database", "path"),
+        "AUCTARYN_DEBUG": ("server", "debug"),
         "TWINGUARD_DB_PATH": ("database", "path"),
+        "AUCTARYN_DB_PATH": ("database", "path"),
         "THREATFADE_SERVICE_URL": ("modules", "threatfade_oracle", "service_url"),
         "LOG_LEVEL": ("logging", "level"),
     }
