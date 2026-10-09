@@ -29,7 +29,7 @@ startup_time: float = 0.0
 
 
 class RequestBodyLimitExceeded(Exception):
-    """Raised when a bounded PCAP request exceeds its ingress body limit."""
+    """Raised when a bounded API request exceeds its ingress body limit."""
 
 
 class APIRequestBodyLimitMiddleware:
