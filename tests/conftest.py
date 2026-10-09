@@ -16,7 +16,9 @@ def reset_singletons():
     _guardian._last_token_count = 0
     _guardian._last_combined_hash = ""
 
-    from api.routes.gateway import _gateway, _oracle as gw_oracle
+    from api.routes.gateway import _gateway, _oracle as gw_oracle, _identity_manager
+    _identity_manager._identities.clear()
+    _identity_manager._tokens.clear()
     _gateway.history.clear()
     _gateway._pending.clear()
     _gateway.total_processed = 0
