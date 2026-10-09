@@ -30,7 +30,7 @@ chmod 600 .env
 
 env_value() {
     local key="$1"
-    grep -E "^\${key}=" .env | tail -n1 | cut -d= -f2- || true
+    grep -E "^${key}=" .env | tail -n1 | cut -d= -f2- || true
 }
 
 DOMAIN="${DOMAIN_INPUT:-$(env_value AUCTARYN_DOMAIN)}"
