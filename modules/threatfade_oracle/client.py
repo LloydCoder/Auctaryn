@@ -43,9 +43,13 @@ class FusionOpsClient:
         self.timeout = timeout
         self._headers = {"Accept": "application/json"}
         service_token = os.getenv("THREATFADE_SERVICE_TOKEN", "").strip()
+        if service_token and (
+            len(service_token) > 4096 or any(ord(char) < 33 or ord(char) > 126 for char in service_token)
+        ):
+            raise ValueError("THREATFADE_SERVICE_TOKEN contains invalid characters")
+        if parsed.scheme == "https" and not service_token:
+            raise ValueError("THREATFADE_SERVICE_TOKEN is required for external HTTPS ThreatFade endpoints")
         if service_token:
-            if len(service_token) > 4096 or any(ord(char) < 33 or ord(char) > 126 for char in service_token):
-                raise ValueError("THREATFADE_SERVICE_TOKEN contains invalid characters")
             self._headers["Authorization"] = f"Bearer {service_token}"
 
     @staticmethod
