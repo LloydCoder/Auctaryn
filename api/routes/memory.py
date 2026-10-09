@@ -55,7 +55,7 @@ async def evaluate_for_storage(
     agent_id: str | None = Header(default=None, alias="X-Agent-ID"),
     identity_token: str | None = Header(default=None, alias="X-Agent-Identity-Token"),
 ) -> dict:
-    owner = _require_memory_scope(agent_id, identity_token, "memory:write")
+    owner, token_id = _require_memory_scope(agent_id, identity_token, "memory:write")
     defender = get_memory_defender()
     if not defender.session_owned_by(request.session_id, owner, token_id):
         raise HTTPException(status_code=404, detail="Memory session not found")
@@ -106,7 +106,7 @@ async def get_entry(
     agent_id: str | None = Header(default=None, alias="X-Agent-ID"),
     identity_token: str | None = Header(default=None, alias="X-Agent-Identity-Token"),
 ) -> dict:
-    owner = _require_memory_scope(agent_id, identity_token, "memory:read")
+    owner, token_id = _require_memory_scope(agent_id, identity_token, "memory:read")
     defender = get_memory_defender()
     entry = defender.store.get(key)
     if entry is None:
@@ -145,7 +145,7 @@ async def get_memory_content(
 ) -> dict:
     owner = _require_memory_scope(agent_id, identity_token, "memory:read")
     defender = get_memory_defender()
-    if not defender.session_owned_by(session_id, owner):
+    if not defender.session_owned_by(session_id, owner, token_id)
         raise HTTPException(status_code=404, detail="Memory session not found")
     entry = defender.store.get(key)
     if entry is None:
