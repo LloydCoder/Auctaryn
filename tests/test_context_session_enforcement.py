@@ -60,3 +60,22 @@ def test_protected_instruction_registry_is_bounded(monkeypatch):
     guardian.register_instruction("first", "Protect the first instruction.")
     with pytest.raises(ValueError, match="registry capacity"):
         guardian.register_instruction("second", "Protect the second instruction.")
+
+
+def test_protected_baseline_change_invalidates_prior_context_check():
+    guardian = ContextIntegrityGuardian()
+    first = "Never delete customer records without explicit confirmation."
+    guardian.register_instruction("delete-safety", first)
+    result = guardian.check(first, session_id="baseline-session")
+    assert result.status.value == "intact"
+    assert guardian.authorize_session_action(
+        "baseline-session", result.id, "action-before-change"
+    ) is None
+
+    guardian.register_instruction(
+        "delete-safety",
+        "Never export customer records without explicit confirmation.",
+    )
+    assert guardian.authorize_session_action(
+        "baseline-session", result.id, "action-after-change"
+    ) is not None
