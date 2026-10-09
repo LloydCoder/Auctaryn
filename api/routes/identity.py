@@ -10,11 +10,10 @@ from modules.agent_identity.identity import AgentIdentityManager
 from core.exceptions import PolicyViolation
 
 router = APIRouter()
-_manager = AgentIdentityManager()
-
-
 def get_identity_manager() -> AgentIdentityManager:
-    return _manager
+    """Return the same identity manager enforced by the production gateway."""
+    from api.routes.gateway import get_identity_manager as get_gateway_identity_manager
+    return get_gateway_identity_manager()
 
 
 class RegisterRequest(BaseModel):
