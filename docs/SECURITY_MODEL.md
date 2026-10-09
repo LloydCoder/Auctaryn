@@ -21,7 +21,7 @@ When protected instructions are configured, gateway actions require a session ID
 6. The OpenShell adapter uses a server-configured sandbox and workspace, accepts a bounded argv array, and does not invoke a host shell. A bounded supervisor runs inside the sandbox to cap runtime and captured output.
 7. Runtime receipts correlate to the decision ID and expose output hashes plus truncation indicators, not raw stdout/stderr.
 8. Pending approvals expire after 15 minutes by default and can be resolved once. The canonical action-intent fingerprint is rechecked when a pending action is approved and immediately before runtime execution; a changed intent is denied and never forwarded.
-9. The fingerprint is an internal mutation-detection binding, not a signature or durable audit record. Approval state, identities, tokens, and execution deduplication remain in process memory in the current repository; they are not durable or multi-replica safe.
+9. The fingerprint is an internal mutation-detection binding, not a signature or durable audit record. Approval state, identities, tokens, and execution deduplication remain in process memory in the current repository; they are not durable or multi-replica safe. Local identity/token/scope, gateway history/pending-approval, and runtime idempotency collections are bounded and fail closed at capacity; production still requires durable, transactional Platform-backed state.
 
 ## Context-integrity trust boundary
 
@@ -33,7 +33,7 @@ When protected instructions are configured, gateway actions require a session ID
 
 ## Sensitive data
 
-SensitiveDataGuard rejects raw credentials in sensitive parameter fields and known token/key formats before risk analysis or execution. It returns paths only. It is heuristic defense in depth and cannot detect every possible secret.
+API request bodies are capped at 2 MiB before JSON/multipart parsing, except the PCAP route, which has a separate bounded allowance for the configured 10 MiB file limit plus multipart overhead. This prevents unbounded request allocation but is not a substitute for upstream connection/rate limiting. SensitiveDataGuard rejects raw credentials in sensitive parameter fields and known token/key formats before risk analysis or execution. It returns paths only. It is heuristic defense in depth and cannot detect every possible secret.
 
 Recognized secret references (for example vault://...) are treated as opaque identifiers. Auctaryn does not resolve them. Production use must route resolution and injection through Tinlance Agent Platform's governed secret mechanism or a separately approved OpenShell provider profile. Never place raw credentials in tool-call arguments, logs, source files, or sandbox policy files.
 
