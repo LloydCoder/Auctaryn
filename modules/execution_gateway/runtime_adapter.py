@@ -20,6 +20,8 @@ class AdapterExecutionResult(BaseModel):
     exit_code: int | None = None
     stdout: str = Field(default="", max_length=1_000_000, repr=False)
     stderr: str = Field(default="", max_length=1_000_000, repr=False)
+    stdout_truncated: bool = False
+    stderr_truncated: bool = False
     finished_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -33,6 +35,8 @@ class RuntimeExecutionReceipt(BaseModel):
     exit_code: int | None = None
     stdout_sha256: str
     stderr_sha256: str
+    stdout_truncated: bool = False
+    stderr_truncated: bool = False
     finished_at: datetime
 
 
