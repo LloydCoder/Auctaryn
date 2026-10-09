@@ -21,9 +21,18 @@ logger = get_logger("context_integrity")
 # Phrases that signal an attempt to override/contradict a prior directive —
 # ASI01 active goal-hijack pattern, distinct from passive instruction loss.
 HIJACK_OVERRIDE_PATTERNS = [
-    r"\boverride\b", r"\bignore (the )?above\b", r"\bnew (system )?directive\b",
-    r"\bno confirmation needed\b", r"\bwithout asking\b", r"\bimmediately\b.{0,20}\bno\b",
-    r"\bdisregard\b",
+    r"\boverride\b",
+    r"\bignore (all )?(previous|prior|the above|above) instructions?\b",
+    r"\bnew (system )?directive\b",
+    r"\bno confirmation needed\b",
+    r"\bwithout asking\b",
+    r"\bdo not ask for confirmation\b",
+    r"\bdisregard (all )?(previous|prior|the above|above) instructions?\b",
+    r"\bbypass (the )?(safety|security|approval) (rules|checks|controls|process)\b",
+    r"\bdisable (the )?(safety|security) (rules|checks|controls)\b",
+    r"\bapprove all (actions|requests|operations)\b",
+    r"\breveal (all )?(secrets|credentials|system prompt)\b",
+    r"\bimmediately\b.{0,20}\bno\b",
 ]
 
 
@@ -50,8 +59,19 @@ def detect_goal_hijack(registered_instruction: str, new_content: str) -> GoalHij
     # Override language alone isn't enough — it must also semantically
     # target the same domain as the registered instruction (share key
     # terms) to avoid false positives on unrelated override-sounding text.
-    registered_terms = set(re.findall(r"\b\w{4,}\b", registered_instruction.lower()))
-    new_terms = set(re.findall(r"\b\w{4,}\b", lowered_new))
+    stop_words = {
+        "about", "after", "before", "being", "from", "have", "into", "must",
+        "never", "only", "should", "that", "their", "there", "these", "they",
+        "this", "those", "user", "when", "with", "without", "would", "your",
+    }
+    registered_terms = {
+        term for term in re.findall(r"\b\w{5,}\b", registered_instruction.lower())
+        if term not in stop_words
+    }
+    new_terms = {
+        term for term in re.findall(r"\b\w{5,}\b", lowered_new)
+        if term not in stop_words
+    }
     overlap = registered_terms & new_terms
 
     if overlap:
@@ -72,6 +92,12 @@ class InstructionRegistry:
         self._instructions: dict[str, ProtectedInstruction] = {}
 
     def register(self, tag: str, content: str) -> ProtectedInstruction:
+        """Register bounded, non-empty policy text and preserve its content hash."""
+        if not isinstance(tag, str) or not tag.strip() or len(tag) > 128:
+            raise ValueError("Instruction tag must be 1–128 non-whitespace characters")
+        if not isinstance(content, str) or not content.strip() or len(content) > 32768:
+            raise ValueError("Instruction content must be 1–32768 non-whitespace characters")
+        tag = tag.strip()
         instruction = ProtectedInstruction(
             tag=tag, content=content, hash=hash_instruction(content),
             registered_at=datetime.now(timezone.utc),
@@ -123,7 +149,14 @@ def verify_integrity(
     degraded_count = 0
     details = []
 
+    tampered_count = 0
     for inst in instructions:
+        # Detect corruption of the stored baseline before trusting it for comparison.
+        if hash_instruction(inst.content) != inst.hash:
+            tampered_count += 1
+            degraded_count += 1
+            details.append({"tag": inst.tag, "status": "baseline_tampered"})
+            continue
         present = inst.content in current_context
         if present:
             intact_count += 1
@@ -142,8 +175,9 @@ def verify_integrity(
         status = IntegrityStatus.DEGRADED
 
     should_block = degraded_count > 0 and degradation_pct >= degradation_threshold
-    if status == IntegrityStatus.COMPROMISED:
+    if status == IntegrityStatus.COMPROMISED or tampered_count:
         should_block = True
+        status = IntegrityStatus.COMPROMISED
 
     result = IntegrityCheckResult(
         id=_gen_id(), status=status,
