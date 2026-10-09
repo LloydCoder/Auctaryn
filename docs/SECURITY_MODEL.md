@@ -18,6 +18,14 @@
 7. Runtime receipts correlate to the decision ID and expose output hashes plus truncation indicators, not raw stdout/stderr.
 8. Pending approvals expire after 15 minutes by default and can be resolved once. Approval state, identities, tokens, and execution deduplication remain in process memory in the current repository; they are not durable or multi-replica safe.
 
+## Context-integrity trust boundary
+
+- Protected instruction baselines are bounded and content-hashed; each check recomputes the stored content hash before trusting the baseline.
+- Goal-hijack heuristics compare override-bearing sentences with protected instruction terms and produce a compromised/blocked finding when a relevant override is detected.
+- Context text supplied to the API is caller-provided evidence. It is not proof of the actual runtime context unless it comes from a separately authenticated and trusted harness integration.
+- Context findings and alerts are detection evidence. They must not be presented as proof that every external tool call is blocked. Phase 9 must bind trusted runtime context observations to immutable execution intent and the authoritative execution boundary.
+- Heuristic prompt-injection detection is not complete semantic understanding and can have false negatives. Treat high-impact operations conservatively and retain independent policy, identity, approval, and runtime controls.
+
 ## Sensitive data
 
 SensitiveDataGuard rejects raw credentials in sensitive parameter fields and known token/key formats before risk analysis or execution. It returns paths only. It is heuristic defense in depth and cannot detect every possible secret.
