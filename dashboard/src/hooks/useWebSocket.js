@@ -45,6 +45,8 @@ export function useWebSocket(path, { maxMessages = 100, token = '' } = {}) {
     return () => {
       clearTimeout(reconnectTimer.current)
       wsRef.current?.close()
+      setConnected(false)
+      setMessages([])
     }
   }, [connect])
 
