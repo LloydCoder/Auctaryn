@@ -37,7 +37,7 @@ The adapter supports only `tool_name=openshell_exec`, `action=exec`, and a bound
 
 ## Live readiness probe
 
-The OpenShell adapter exposes an asynchronous health probe that calls the active authenticated gateway's health endpoint with a five-second timeout. The readiness endpoint reports OpenShell as connected only when this probe succeeds and returns a non-empty version string. Adapter construction alone is not evidence of connectivity. Probe exceptions, missing versions, and timeouts leave readiness false; /health remains a liveness-only endpoint.
+The OpenShell adapter exposes an asynchronous health probe that calls the active authenticated gateway's health endpoint with a five-second timeout. Both `/health/ready` and `/health/detailed` use the same bounded probe; detailed health reports the OpenShell module as healthy only when it succeeds and returns a non-empty version string. Aggregate detailed health remains degraded while other enabled modules lack registered live probes. Adapter construction alone is not evidence of connectivity. Probe exceptions, missing versions, and timeouts leave readiness false; /health remains a liveness-only endpoint.
 
 CI tests the probe contract with fake clients. It does not prove connectivity to a live deployment. Before production, run the acceptance checks below against the intended OpenShell gateway and sandbox.
 
