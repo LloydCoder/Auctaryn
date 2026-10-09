@@ -39,7 +39,7 @@ export AUCTARYN_DOMAIN="${DOMAIN}"
 echo "Building dashboard assets..."
 (cd dashboard && VITE_API_URL="https://${DOMAIN}" VITE_WS_URL="wss://${DOMAIN}" npm install --silent && VITE_API_URL="https://${DOMAIN}" VITE_WS_URL="wss://${DOMAIN}" npm run build -- --base=/dashboard/)
 
-# 4. Build and start the API and internal-only ThreatFade service.
+# 4. Build and start the API with the configured external ThreatFade client.
 echo "Building containers..."
 THREATFADE_URL=$(grep -E '^THREATFADE_SERVICE_URL=' .env | head -n1 | cut -d= -f2- || true)
 if [[ "$THREATFADE_URL" != https://* ]] || [[ "$THREATFADE_URL" == *replace-with* ]]; then
