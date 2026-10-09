@@ -91,3 +91,25 @@ def test_removing_protected_baseline_invalidates_old_check():
     assert guardian.authorize_session_action(
         "removed-baseline-session", result.id, "action-after-removal"
     ) is not None
+
+
+def test_gateway_preflight_rejects_stale_check_after_final_instruction_removed():
+    from api.routes.context import get_guardian
+    from api.routes.gateway import _context_integrity_preflight
+    from core.models import ToolCall
+
+    guardian = get_guardian()
+    instruction = "Never delete customer records without explicit confirmation."
+    guardian.register_instruction("delete-safety", instruction)
+    result = guardian.check(instruction, session_id="gateway-baseline-session")
+    tool_call = ToolCall(
+        id="gateway-action-1",
+        tool_name="read_file",
+        action="read",
+        parameters={"path": "/safe/file.txt"},
+        session_id="gateway-baseline-session",
+        context_check_id=result.id,
+    )
+    assert _context_integrity_preflight(tool_call) is None
+    assert guardian.registry.remove("delete-safety") is True
+    assert _context_integrity_preflight(tool_call) is not None
