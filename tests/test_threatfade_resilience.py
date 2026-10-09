@@ -108,3 +108,12 @@ def test_pcap_api_rejects_oversized_upload_before_forwarding(client, monkeypatch
         files={"file": ("capture.pcap", b"four", "application/octet-stream")},
     )
     assert response.status_code == 413
+
+
+
+def test_invalid_scenario_does_not_trip_upstream_circuit_breaker(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_THREATFADE_ALLOW_SYNTHETIC_SIGNAL", "true")
+    oracle = ThreatFadeOracle()
+    with pytest.raises(ValueError, match="Invalid ThreatFade scenario"):
+        asyncio.run(oracle.run_scenario("not-a-real-scenario"))
+    assert oracle.circuit_breaker._failures == 0
