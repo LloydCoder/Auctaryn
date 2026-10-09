@@ -185,7 +185,7 @@ def generate_alert(result: IntegrityCheckResult) -> Optional[Alert]:
     missing_tags = [d["tag"] for d in result.details if d.get("status") == "missing"]
     if result.status == IntegrityStatus.INTACT and not hijack_tags and not result.blocked:
         return None
-    if result.status == IntegrityStatus.COMPROMISED or hijack_tags or result.blocked:
+    if result.status == IntegrityStatus.COMPROMISED or hijack_tags:
         severity = Severity.CRITICAL
     elif result.degradation_percent >= 20:
         severity = Severity.HIGH
@@ -276,12 +276,16 @@ class ContextIntegrityGuardian:
                     break
 
         result.session_id = session_id or ""
+        if session_id and result.status != IntegrityStatus.INTACT:
+            # Session-bound enforcement is stricter than the global alert threshold:
+            # any degraded or compromised session is quarantined until operator reset.
+            result.blocked = True
         self.history.append(result)
         self.check_count += 1
 
         if session_id:
             self._session_results[session_id] = result
-            if result.blocked:
+            if result.blocked or result.status != IntegrityStatus.INTACT:
                 self._blocked_sessions[session_id] = result.id
 
         estimated_tokens = len(current_context.split())
