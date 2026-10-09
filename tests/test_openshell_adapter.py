@@ -230,6 +230,47 @@ def test_enabled_adapter_fails_closed_when_baseline_policy_is_invalid(monkeypatc
         create_openshell_adapter_from_environment()
 
 
+def test_enabled_adapter_validates_baseline_and_retains_source_digest(monkeypatch):
+    import sys
+    import types
+    import modules.execution_gateway.openshell_adapter as adapter_module
+
+    class FakeCredentials:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    class FakeClientContext:
+        def __enter__(self):
+            return FakeOpenShellClient()
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    class FakeSandboxClient:
+        @staticmethod
+        def from_active_cluster(*, client_credentials):
+            assert isinstance(client_credentials, FakeCredentials)
+            return FakeClientContext()
+
+    fake_sdk = types.ModuleType("openshell")
+    fake_sdk.ClientCredentialsAuth = FakeCredentials
+    fake_sdk.SandboxClient = FakeSandboxClient
+    monkeypatch.setitem(sys.modules, "openshell", fake_sdk)
+
+    monkeypatch.setenv("AUCTARYN_RUNTIME_ADAPTER", "openshell")
+    monkeypatch.setenv("OPENSHELL_SANDBOX_NAME", "sandbox")
+    monkeypatch.setenv("OPENSHELL_WORKSPACE", "default")
+    monkeypatch.setenv("OPENSHELL_OIDC_ISSUER", "https://issuer.example")
+    monkeypatch.setenv("OPENSHELL_OIDC_CLIENT_ID", "service-client")
+    monkeypatch.setenv("OPENSHELL_OIDC_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("OPENSHELL_OIDC_AUDIENCE", "openshell-api")
+
+    adapter = adapter_module.create_openshell_adapter_from_environment()
+    assert adapter is not None
+    assert len(adapter.baseline_policy_sha256) == 64
+    adapter.close()
+
+
 def test_bounded_exec_wrapper_runs_argv_without_shell():
     child_argv = [sys.executable, "-c", "print('bounded-ok')"]
     completed = subprocess.run(
