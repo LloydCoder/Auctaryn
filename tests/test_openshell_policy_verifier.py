@@ -54,3 +54,17 @@ def test_effective_policy_verifier_requires_reviewed_hash_before_cli_call():
     with pytest.raises(ValueError, match="reviewed 64-character"):
         verify_effective_policy("prod-sandbox", "", runner=runner)
     assert called is False
+
+
+
+def test_effective_policy_verifier_rejects_cli_option_as_sandbox_name():
+    called = False
+
+    def runner(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("CLI must not run for an invalid sandbox name")
+
+    with pytest.raises(ValueError, match="unsupported characters"):
+        verify_effective_policy("--help", "a" * 64, runner=runner)
+    assert called is False
