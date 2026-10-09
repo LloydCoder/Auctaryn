@@ -53,8 +53,8 @@ This path is for **local evaluation**, not production. It requires Docker Engine
 
    When running, open the API schema at [http://localhost:8400/docs](http://localhost:8400/docs).
 
-[!WARNING]
-The default local evaluation configuration does **not** establish a trusted OpenShell runtime integration. A healthy liveness endpoint is not production readiness; `/health/ready` should remain false until required runtime and deployment settings are verified. Do not connect real mailboxes, customer data, or production agents during the demo.
+> [!WARNING]
+> The default local evaluation configuration does **not** establish a trusted OpenShell runtime integration. A healthy liveness endpoint is not production readiness; `/health/ready` should remain false until required runtime and deployment settings are verified. Do not connect real mailboxes, customer data, or production agents during the demo.
 
 ## Installation
 
