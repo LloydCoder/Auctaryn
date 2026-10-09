@@ -19,6 +19,10 @@ from core.logging import get_logger
 
 logger = get_logger("context_integrity")
 
+MAX_TRACKED_CONTEXT_SESSIONS = 10000
+MAX_CONTEXT_HISTORY = 5000
+MAX_COMPACTION_HISTORY = 5000
+
 # Phrases that signal an attempt to override/contradict a prior directive —
 # ASI01 active goal-hijack pattern, distinct from passive instruction loss.
 HIJACK_OVERRIDE_PATTERNS = [
@@ -310,7 +314,7 @@ class ContextIntegrityGuardian:
             previous = self._session_results.pop(session_id, None)
             if previous is not None:
                 self._consumed_checks.pop(previous.id, None)
-            return was_blocked
+            return was_blocked or previous is not None
 
     def check(self, current_context: str, session_id: str | None = None) -> IntegrityCheckResult:
         result = verify_integrity(
@@ -340,11 +344,24 @@ class ContextIntegrityGuardian:
         result.session_id = session_id or ""
         if session_id:
             with self._session_lock:
+                if session_id not in self._session_results and len(self._session_results) >= MAX_TRACKED_CONTEXT_SESSIONS:
+                    # Evict only non-quarantined state. If all slots are quarantined, fail closed.
+                    for stale_session in list(self._session_results):
+                        if stale_session not in self._blocked_sessions:
+                            stale_result = self._session_results.pop(stale_session)
+                            self._consumed_checks.pop(stale_result.id, None)
+                            break
+                    if len(self._session_results) >= MAX_TRACKED_CONTEXT_SESSIONS:
+                        raise RuntimeError("context session state capacity reached; all sessions are quarantined")
+                previous = self._session_results.get(session_id)
+                if previous is not None:
+                    self._consumed_checks.pop(previous.id, None)
                 self._session_results[session_id] = result
                 if result.blocked or result.status != IntegrityStatus.INTACT:
                     self._blocked_sessions[session_id] = result.id
 
         self.history.append(result)
+        del self.history[:-MAX_CONTEXT_HISTORY]
         self.check_count += 1
 
         estimated_tokens = len(current_context.split())
@@ -356,6 +373,7 @@ class ContextIntegrityGuardian:
             )
             if compaction:
                 self.compaction_history.append(compaction)
+                del self.compaction_history[:-MAX_COMPACTION_HISTORY]
 
         self._last_token_count = estimated_tokens
         self._last_protected_context_hash = protected_hash
