@@ -371,6 +371,7 @@ async def intercept_action(request: ToolCallRequest) -> GatewayDecision:
             "action_fingerprint": action_intent_fingerprint(decision.tool_call),
         },
     )
+    await _publish_decision_alert(decision)
     await _broadcast_decision(decision)
     return decision
 
@@ -382,5 +383,6 @@ async def intercept_action_full(request: ToolCallRequest) -> GatewayDecision:
                   identity_token=request.identity_token)
     get_gateway().data_guard.validate_tool_call(tc)
     decision = await get_gateway().evaluate_with_oracle(tc)
+    await _publish_decision_alert(decision)
     await _broadcast_decision(decision)
     return decision
