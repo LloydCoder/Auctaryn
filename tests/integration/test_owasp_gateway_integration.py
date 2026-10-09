@@ -37,9 +37,12 @@ class TestAgentIdentityAPI:
         })
         assert r.status_code == 200
         assert "read_file" in r.json()["scopes"]
-        assert client.get("/api/v1/identity/sub/authorized/read_file", headers={"X-Agent-Identity-Token": token_id}).json()["authorized"] is True
-        from api.routes.gateway import get_gateway
         token_id = r.json()["token_id"]
+        assert client.get(
+            "/api/v1/identity/sub/authorized/read_file",
+            headers={"X-Agent-Identity-Token": token_id},
+        ).json()["authorized"] is True
+        from api.routes.gateway import get_gateway
         assert get_gateway().identity_manager.is_authorized(
             "sub", "read_file", token_id=token_id, require_token=True
         ) is True
