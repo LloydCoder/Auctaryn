@@ -1,6 +1,6 @@
 # Phase 20 forensic audit — reliability, scale and disaster recovery
 
-**Status:** Implementation submitted for exact-head CI and review; this is a pre-merge audit, not a completion claim.  
+**Status:** Pre-merge forensic review completed. Exact-head CI passed on `c100ce4d853b96b89f2f5985cdfbc91396a3821e`; merge and post-merge verification remain required before phase closure.  
 **Scope:** Safe local SQLite backup/verification/restore and concurrency regressions for the evidence and incident-control database.
 
 ## Threats and invariants reviewed
@@ -20,13 +20,17 @@
 - Added `docs/DATABASE_RECOVERY.md` with operational backup/restore instructions, HMAC exception handling and explicit RPO/RTO ownership.
 - Updated roadmap and README to describe capability and limitations without implying multi-replica or off-site DR is solved.
 
-## CI acceptance required
+## CI acceptance evidence
 
-- [ ] Python 3.11 test matrix passes, including Ruff.
-- [ ] Python 3.12 test matrix passes, including Ruff and dependency audit.
-- [ ] Dashboard build and production dependency audit pass.
-- [ ] Deployment-script syntax, Compose validation, container build and API liveness pass.
-- [ ] All checks are green on the final PR head, then post-merge mainline.
+Exact PR-head workflow: [Auctaryn CI run 37957392659](https://github.com/LloydCoder/Auctaryn/actions/runs/37957392659) on `c100ce4d853b96b89f2f5985cdfbc91396a3821e`.
+
+- [x] Python 3.11: 487 tests passed; Ruff passed.
+- [x] Python 3.12: 487 tests passed; Ruff passed; `pip-audit` reported no known vulnerabilities.
+- [x] Dashboard production build and dependency audit passed.
+- [x] Deployment-script syntax, Compose validation, container build and API liveness passed.
+- [ ] Merge and verify the resulting main commit's full workflow before closing Phase 20.
+
+The Python 3.11 dependency-audit step is intentionally skipped by the workflow; the required dependency audit runs and passed on Python 3.12.
 
 ## Production limitations intentionally not marked complete
 
@@ -49,4 +53,4 @@
 - Confirm restore never overwrites a target without explicit authorization.
 - Confirm HMAC-signed evidence is rejected as unauthenticated when the key is absent.
 - Confirm the roadmap and README do not overstate production readiness.
-- Only after exact-head CI and post-merge CI pass should this audit be updated to completed.
+- Close Phase 20 only after merge, a green post-merge main workflow, and a final exact-head audit of the merged files.
