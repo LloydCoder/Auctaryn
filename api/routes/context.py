@@ -57,7 +57,13 @@ async def register_protected_instruction(request: RegisterRequest) -> dict:
 @router.post("/check")
 async def run_integrity_check(request: CheckRequest) -> IntegrityCheckResult:
     guardian = get_guardian()
-    result = guardian.check(request.context, session_id=request.session_id or None)
+    try:
+        result = guardian.check(request.context, session_id=request.session_id or None)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Context session capacity reached; gateway actions remain fail-closed",
+        ) from exc
 
     if result.status != IntegrityStatus.INTACT or result.blocked:
         alert = generate_alert(result)
