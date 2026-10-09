@@ -5,11 +5,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Minimal system dependency for liveness checks and diagnostics.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser
+# Create the non-root runtime identity without adding an unused network client.
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser
 
 # Python deps
 COPY requirements.txt .
