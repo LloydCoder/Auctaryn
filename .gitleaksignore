@@ -1,0 +1,3 @@
+# Exact false positive in the original Phase 24 squash commit; this is prose, not a credential.
+# The wording was corrected in the follow-up commit. Keep the exception scoped to this immutable fingerprint.
+2638a3cca366abf2fb11ed35c5b0e123c16090b7:audits/FINAL-REPOSITORY-FORENSIC-AUDIT.md:generic-api-key:61
