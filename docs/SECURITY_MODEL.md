@@ -65,3 +65,6 @@ The Oracle circuit breaker opens after repeated upstream failures and permits on
 - Integrity verification compares the live entry with a separately held last-known-good snapshot. API metadata reads detect tampering and attempt rollback before returning the result; memory content is not returned by the metadata endpoint.
 - Poisoning detection is heuristic and cannot detect every semantic prompt injection. Quarantine is a containment state, not a guarantee that content is benign.
 - The store, session ownership map and last-known-good snapshots are process-local. They are not durable, distributed, or cryptographically tamper-proof against a compromised process. Production persistence and authoritative identity/tenant binding remain platform integration work.
+
+
+Quarantined memory is not readable by any agent session, including the originating session. An operator-authenticated review endpoint exposes quarantined content for investigation; there is no API route that promotes quarantine to trusted memory in this phase. The quarantine queue and inspection route verify entry integrity and restore last-known-good metadata before using the quarantine flag.
