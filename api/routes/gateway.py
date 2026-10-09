@@ -7,9 +7,9 @@ enterprise identity-provider integration.
 """
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from api.security import configured_for, extract_bearer, token_role
+from api.security import require_api_key, require_operator_key
 
 from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision
 from modules.execution_gateway.gateway import ExecutionGateway
@@ -23,24 +23,6 @@ from modules.execution_gateway.runtime_adapter import (
     RuntimeAdapterFailure,
     RuntimeAdapterUnavailable,
 )
-
-async def require_api_key(authorization: str | None = Header(default=None)) -> None:
-    role = token_role(extract_bearer(authorization))
-    if role in ("api", "admin"):
-        return
-    if not configured_for("api"):
-        raise HTTPException(status_code=503, detail="API authentication is not configured correctly")
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Valid bearer token required",
-                        headers={"WWW-Authenticate": "Bearer"})
-
-async def require_operator_key(authorization: str | None = Header(default=None)) -> None:
-    role = token_role(extract_bearer(authorization))
-    if role == "admin":
-        return
-    if not configured_for("admin"):
-        raise HTTPException(status_code=503, detail="Administrator authentication is not configured correctly")
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator bearer token required",
-                        headers={"WWW-Authenticate": "Bearer"})
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
 _oracle = ThreatFadeOracle()
