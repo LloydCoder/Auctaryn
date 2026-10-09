@@ -114,10 +114,14 @@ class ThreatFadeOracle:
             self.circuit_breaker.record_success()
             self._remember(result, full_result)
             return result
+        except ValueError:
+            # Invalid caller input is not an upstream health failure.
+            raise
+        except ThreatFadeConnectionError:
+            self.circuit_breaker.record_failure()
+            raise
         except Exception as exc:
             self.circuit_breaker.record_failure()
-            if isinstance(exc, (ValueError, ThreatFadeConnectionError)):
-                raise
             raise ThreatFadeConnectionError("ThreatFade scenario response was invalid") from exc
 
     async def get_status(self) -> dict:
