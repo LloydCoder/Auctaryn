@@ -53,6 +53,12 @@ def test_baseline_rejects_network_allow_rules_by_default():
     assert any("network_policies must be empty" in error for error in validate_baseline_policy(policy))
 
 
+def test_baseline_rejects_unreviewed_policy_sections():
+    policy, _ = load_and_validate_baseline(POLICY_PATH)
+    policy["custom_network_override"] = {"allow_all": True}
+    assert any("unreviewed top-level section" in error for error in validate_baseline_policy(policy))
+
+
 def test_baseline_rejects_non_mapping_document():
     assert validate_baseline_policy(["not", "a", "mapping"]) == ["policy root must be a mapping"]
 
