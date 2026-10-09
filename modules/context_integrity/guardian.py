@@ -68,18 +68,20 @@ def detect_goal_hijack(registered_instruction: str, new_content: str) -> GoalHij
         term for term in re.findall(r"\b\w{5,}\b", registered_instruction.lower())
         if term not in stop_words
     }
-    # Compare only the sentence containing the override phrase. Comparing the
-    # whole context would always overlap with a protected instruction that is
-    # still present, producing false positives for unrelated quoted content.
-    for match in re.finditer("|".join(f"(?:{pattern})" for pattern in HIJACK_OVERRIDE_PATTERNS), lowered_new):
-        left_candidates = [lowered_new.rfind(mark, 0, match.start()) for mark in (".", "!", "?", "\n")]
+    # Remove one exact copy of the protected baseline before comparing terms;
+    # otherwise its presence would create a guaranteed, misleading overlap.
+    analysis_content = lowered_new.replace(registered_instruction.lower(), "", 1)
+    # Compare only the sentence containing the override phrase to reduce false
+    # positives from unrelated override-sounding text elsewhere in the context.
+    for match in re.finditer("|".join(f"(?:{pattern})" for pattern in HIJACK_OVERRIDE_PATTERNS), analysis_content):
+        left_candidates = [analysis_content.rfind(mark, 0, match.start()) for mark in (".", "!", "?", "\n")]
         start = max(left_candidates) + 1
         right_candidates = [
             position for mark in (".", "!", "?", "\n")
-            if (position := lowered_new.find(mark, match.end())) >= 0
+            if (position := analysis_content.find(mark, match.end())) >= 0
         ]
-        end = min(right_candidates) if right_candidates else len(lowered_new)
-        candidate = lowered_new[start:end]
+        end = min(right_candidates) if right_candidates else len(analysis_content)
+        candidate = analysis_content[start:end]
         candidate_terms = {
             term for term in re.findall(r"\b\w{5,}\b", candidate)
             if term not in stop_words
