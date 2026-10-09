@@ -144,6 +144,12 @@ def create_openshell_adapter_from_environment() -> OpenShellRuntimeAdapter | Non
         raise RuntimeAdapterUnavailable(
             "OPENSHELL_EXECUTION_TIMEOUT_SECONDS must be an integer."
         ) from exc
+    if not 1 <= timeout_seconds <= 3600:
+        raise RuntimeAdapterUnavailable(
+            "OPENSHELL_EXECUTION_TIMEOUT_SECONDS must be between 1 and 3600."
+        )
+    if not workspace:
+        raise RuntimeAdapterUnavailable("OPENSHELL_WORKSPACE must be non-empty.")
 
     try:
         from openshell import SandboxClient
