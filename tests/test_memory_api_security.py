@@ -32,9 +32,10 @@ def test_memory_routes_require_scoped_agent_token(client):
     assert response.status_code == 403
 
 
-def test_memory_session_creation_requires_write_scope(client):
+def test_read_scope_can_create_session_but_cannot_write_memory(client):
     headers = _agent_token(client, "agent-read-only", scopes=("memory:read",))
-    response = client.post("/api/v1/memory/sessions", headers=headers)
+    session_id = _session(client, headers)
+    response = _store(client, headers, session_id)
     assert response.status_code == 403
 
 
