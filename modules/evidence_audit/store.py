@@ -138,3 +138,28 @@ class EvidenceStore:
     async def append(self, event_type: str, **kwargs: Any) -> dict[str, Any]:
         await self.initialize()
         return await asyncio.to_thread(self._append_sync, event_type, **kwargs)
+
+    def _list_sync(self, limit: int) -> list[dict[str, Any]]:
+        if not 1 <= limit <= MAX_PAGE_SIZE:
+            raise ValueError("limit outside supported bounds")
+        try:
+            with self._connect() as db:
+                rows = db.execute(
+                    "SELECT * FROM evidence_records ORDER BY sequence DESC LIMIT ?", (limit,)
+                ).fetchall()
+            records = []
+            for row in reversed(rows):
+                payload = json.loads(row["payload_json"])
+                payload.update({
+                    "sequence": row["sequence"], "previous_hash": row["previous_hash"],
+                    "record_hash": row["record_hash"], "hmac_signature": row["hmac_signature"],
+                    "integrity_mode": self.integrity_mode,
+                })
+                records.append(payload)
+            return records
+        except (sqlite3.Error, OSError, json.JSONDecodeError) as exc:
+            raise EvidenceStoreError("Evidence query failed") from exc
+
+    async def list_records(self, limit: int = 100) -> list[dict[str, Any]]:
+        await self.initialize()
+        return await asyncio.to_thread(self._list_sync, limit)
