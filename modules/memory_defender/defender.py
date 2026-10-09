@@ -218,6 +218,9 @@ class MemoryStore:
         if not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
         with self._lock:
+            for key in list(self._entries):
+                if not self.verify_integrity(key):
+                    self.rollback(key)
             entries = [copy.deepcopy(entry) for entry in self._entries.values() if entry.quarantined]
         entries.sort(key=lambda entry: entry.created_at, reverse=True)
         return entries[:limit]
