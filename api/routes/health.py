@@ -59,8 +59,9 @@ async def detailed_health() -> SystemHealth:
 
 @router.get("/health/ready")
 async def readiness_check() -> dict:
-    """Fail readiness until credentials and the required runtime boundary are verified."""
-    from api.routes.gateway import get_gateway
+    """Readiness requires distinct credentials, identity enforcement, and a live runtime probe."""
+    import inspect
+    from api.routes.gateway import get_execution_service, get_gateway
 
     credentials_ready = bool(
         os.getenv("AUCTARYN_API_KEY")
@@ -68,11 +69,29 @@ async def readiness_check() -> dict:
         and credentials_are_distinct()
     )
     identity_ready = get_gateway().identity_manager is not None
-    # OpenShell integration is not yet wired to a real connectivity probe.
-    openshell_ready = False
+    adapter = get_execution_service().adapter
+    adapter_configured = adapter is not None
+    probe = getattr(adapter, "health_check", None) if adapter is not None else None
+    probe_available = callable(probe)
+    runtime_probe_passed = False
+    if probe_available:
+        try:
+            result = probe()
+            if inspect.isawaitable(result):
+                result = await result
+            runtime_probe_passed = result is True
+        except Exception:
+            runtime_probe_passed = False
+    openshell_ready = bool(
+        runtime_probe_passed
+        and getattr(adapter, "runtime_name", "") == "openshell"
+    )
     checks = {
         "api_credentials_configured": credentials_ready,
         "identity_enforcement_enabled": identity_ready,
+        "trusted_runtime_adapter_configured": adapter_configured,
+        "runtime_health_probe_available": probe_available,
+        "runtime_health_probe_passed": runtime_probe_passed,
         "openshell_connected": openshell_ready,
     }
     return {
