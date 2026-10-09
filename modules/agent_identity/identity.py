@@ -64,7 +64,13 @@ class AgentIdentityManager:
     def register(self, agent_id: str, owner: str) -> AgentIdentity:
         """Register a new agent with its own managed identity. Idempotent."""
         if agent_id in self._identities:
-            return self._identities[agent_id]
+            existing = self._identities[agent_id]
+            if existing.owner != owner:
+                # An idempotent retry by the same owner is safe; silently
+                # accepting a different owner would create an identity
+                # ownership-confusion / takeover primitive.
+                raise PolicyViolation("identity_owner_conflict", agent_id)
+            return existing
 
         identity = AgentIdentity(
             agent_id=agent_id,
