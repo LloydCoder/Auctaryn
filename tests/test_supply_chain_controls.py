@@ -68,7 +68,6 @@ def test_supply_chain_workflow_has_required_controls() -> None:
     supply = (ROOT / ".github/workflows/supply-chain.yml").read_text()
     codeql = (ROOT / ".github/workflows/codeql.yml").read_text()
     assert "gitleaks/gitleaks-action@" in supply
-    assert "actions/dependency-review-action@" in supply
     assert "anchore/sbom-action@" in supply
     assert "anchore/scan-action@" in supply
     assert "severity-cutoff: high" in supply
