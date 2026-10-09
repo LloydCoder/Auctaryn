@@ -29,6 +29,10 @@ _SECRET_VALUE_PATTERNS = (
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{16,}\b", re.IGNORECASE),
     re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\b"),
     re.compile(r"\b[^\s/@:]+:[^\s/@]+@[^\s/]+"),
+    re.compile(
+        r"\b(?:password|passwd|secret|api[_-]?key|access[_-]?token|client[_-]?secret|authorization)\s*[:=]\s*[^\s]+",
+        re.IGNORECASE,
+    ),
 )
 _MAX_REPORTED_PATHS = 50
 
