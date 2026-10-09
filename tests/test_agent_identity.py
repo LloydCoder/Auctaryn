@@ -1,5 +1,5 @@
 """
-TwinGuard — Agent Identity & Privilege Module Tests (TDD)
+Auctaryn — Agent Identity & Privilege Module Tests (TDD)
 Maps to OWASP ASI03:2026 — Agent Identity & Privilege Abuse.
 
 Core principle (OWASP "Least Agency"): agents must have their own
@@ -258,3 +258,42 @@ class TestGatewayIntegration:
 
         tc = ToolCall(tool_name="read_file", action="read", agent_id="rogue-unregistered-agent")
         assert mgr.is_authorized(tc.agent_id, tc.tool_name) is False
+
+
+def test_identity_manager_fails_closed_at_identity_capacity(monkeypatch):
+    import modules.agent_identity.identity as identity_module
+    from core.exceptions import PolicyViolation
+
+    monkeypatch.setattr(identity_module, "MAX_AGENT_IDENTITIES", 1)
+    manager = identity_module.AgentIdentityManager()
+    manager.register("capacity-agent-1", "tenant-a")
+    with pytest.raises(PolicyViolation, match="identity_capacity_exhausted"):
+        manager.register("capacity-agent-2", "tenant-a")
+
+
+def test_identity_manager_prunes_expired_tokens_before_capacity_check(monkeypatch):
+    import modules.agent_identity.identity as identity_module
+
+    monkeypatch.setattr(identity_module, "MAX_AGENT_TOKENS", 1)
+    manager = identity_module.AgentIdentityManager()
+    manager.register("token-capacity-agent", "tenant-a")
+    manager.grant_scope("token-capacity-agent", "read_file")
+    first = manager.issue_token("token-capacity-agent")
+    first.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+    second = manager.issue_token("token-capacity-agent")
+    assert second.token_id != first.token_id
+    assert manager.validate_token(first.token_id) is False
+    assert manager.validate_token(second.token_id) is True
+
+
+def test_identity_manager_bounds_scope_count(monkeypatch):
+    import modules.agent_identity.identity as identity_module
+    from core.exceptions import PolicyViolation
+
+    monkeypatch.setattr(identity_module, "MAX_SCOPES_PER_IDENTITY", 1)
+    manager = identity_module.AgentIdentityManager()
+    manager.register("scope-capacity-agent", "tenant-a")
+    manager.grant_scope("scope-capacity-agent", "read_file")
+    with pytest.raises(PolicyViolation, match="scope_capacity_exhausted"):
+        manager.grant_scope("scope-capacity-agent", "write_file")

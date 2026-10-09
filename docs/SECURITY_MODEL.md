@@ -7,6 +7,10 @@
 - **OpenShell** is the operating-system/runtime containment boundary for supported executions. Auctaryn must not weaken or replace the effective OpenShell policy.
 - **ThreatFade Oracle** contributes threat intelligence. It cannot override a denial or turn an unapproved destructive action into an approval.
 
+## Agent Control Standard interoperability boundary
+
+Auctaryn's current public contract is its versioned REST API; it does not implement the OWASP GenAI Security Project's [Agent Control Standard (ACS) v0.1.0](https://github.com/GenAI-Security-Project/agent-control-standard) JSON-RPC wire envelopes, handshake/capability negotiation or hook taxonomy. No ACS conformance claim is made. ACS is a runtime-control wire specification, not an additional ASI risk category. If interoperability becomes a product requirement, implement a separate adapter with schema validation, authenticated request/replay handling, explicit disposition mapping and live end-to-end mediation tests. Do not infer conformance from Auctaryn's existing REST endpoints or local gateway tests.
+
 ## Context-session enforcement
 
 When protected instructions are configured, gateway actions require a session ID and the latest intact context-check ID for that session. The check ID participates in the action-intent fingerprint, and context integrity is revalidated immediately before the runtime adapter is invoked. Each check is bound to one action intent; replay for a different action is denied. Compromised sessions remain quarantined until an administrator clears them, after which a fresh clean check is mandatory. Tracked sessions are capped at 10,000, protected instructions at 1,000, and check/compaction histories at 5,000 each; capacity exhaustion fails closed. These controls are process-local, not durable or multi-replica safe. A submitted local check does not prove that the external agent consumed that exact context; trusted runtime/harness attestation remains necessary. See the [Phase 8 enforcement audit](../audits/PHASE-08-SESSION-BOUND-ENFORCEMENT.md).
@@ -21,7 +25,7 @@ When protected instructions are configured, gateway actions require a session ID
 6. The OpenShell adapter uses a server-configured sandbox and workspace, accepts a bounded argv array, and does not invoke a host shell. A bounded supervisor runs inside the sandbox to cap runtime and captured output.
 7. Runtime receipts correlate to the decision ID and expose output hashes plus truncation indicators, not raw stdout/stderr.
 8. Pending approvals expire after 15 minutes by default and can be resolved once. The canonical action-intent fingerprint is rechecked when a pending action is approved and immediately before runtime execution; a changed intent is denied and never forwarded.
-9. The fingerprint is an internal mutation-detection binding, not a signature or durable audit record. Approval state, identities, tokens, and execution deduplication remain in process memory in the current repository; they are not durable or multi-replica safe.
+9. The fingerprint is an internal mutation-detection binding, not a signature or durable audit record. Approval state, identities, tokens, and execution deduplication remain in process memory in the current repository; they are not durable or multi-replica safe. Local identity/token/scope, gateway history/pending-approval, and runtime idempotency collections are bounded and fail closed at capacity; production still requires durable, transactional Platform-backed state.
 
 ## Context-integrity trust boundary
 
@@ -33,7 +37,7 @@ When protected instructions are configured, gateway actions require a session ID
 
 ## Sensitive data
 
-SensitiveDataGuard rejects raw credentials in sensitive parameter fields and known token/key formats before risk analysis or execution. It returns paths only. It is heuristic defense in depth and cannot detect every possible secret.
+API authentication requires distinct service/admin Bearer credentials. Strong-key mode is enabled by default and rejects keys shorter than 32 characters or obvious placeholders; only explicit test fixtures disable it. Production Compose forces strong-key mode. API request bodies are capped at 2 MiB before JSON/multipart parsing, except the PCAP route, which has a separate bounded allowance for the configured 10 MiB file limit plus multipart overhead. This prevents unbounded request allocation but is not a substitute for upstream connection/rate limiting. SensitiveDataGuard rejects raw credentials in sensitive parameter fields and known token/key formats before risk analysis or execution. It returns paths only. It is heuristic defense in depth and cannot detect every possible secret.
 
 Recognized secret references (for example vault://...) are treated as opaque identifiers. Auctaryn does not resolve them. Production use must route resolution and injection through Tinlance Agent Platform's governed secret mechanism or a separately approved OpenShell provider profile. Never place raw credentials in tool-call arguments, logs, source files, or sandbox policy files.
 
@@ -41,7 +45,7 @@ Recognized secret references (for example vault://...) are treated as opaque ide
 
 - If no runtime adapter is configured, governed execution returns HTTP 503 before evaluating or forwarding the tool call.
 - If OpenShell initialization, authentication, or health verification fails, the application starts with governed execution disabled.
-- Readiness requires a bounded live OpenShell gateway health probe with a non-empty version response; adapter construction or environment configuration alone does not establish readiness. The probe is tested with fake clients in CI, while production connectivity still requires live-environment acceptance.
+- Readiness and detailed health share a bounded live OpenShell gateway health probe with a non-empty version response; adapter construction or environment configuration alone does not establish readiness. Detailed health reports the runtime module separately and keeps aggregate health degraded while other enabled modules lack live probes. The probe is tested with fake clients in CI, while production connectivity still requires live-environment acceptance.
 - If the OpenShell execution envelope is malformed or the remote completion state is unknown, Auctaryn returns an execution failure and does not claim success.
 - If a required authorization, policy, or runtime dependency is unavailable, no alternate direct execution path is permitted.
 

@@ -320,3 +320,17 @@ def test_bounded_exec_wrapper_caps_output_and_kills_timed_out_process():
     assert envelope["exit_code"] == 124
     assert len(output) <= 100
     assert envelope["stdout_truncated"] is True
+
+
+def test_adapter_fails_closed_when_idempotency_capacity_is_reached(monkeypatch):
+    import modules.execution_gateway.openshell_adapter as adapter_module
+
+    monkeypatch.setattr(adapter_module, "MAX_SEEN_IDEMPOTENCY_KEYS", 1)
+    client = FakeOpenShellClient()
+    adapter = OpenShellRuntimeAdapter(client, sandbox_name="s", workspace="w")
+    asyncio.run(adapter.execute(_tool_call(), idempotency_key="capacity-1"))
+
+    with pytest.raises(RuntimeAdapterUnavailable, match="idempotency capacity reached"):
+        asyncio.run(adapter.execute(_tool_call(), idempotency_key="capacity-2"))
+
+    assert len(client.calls) == 1

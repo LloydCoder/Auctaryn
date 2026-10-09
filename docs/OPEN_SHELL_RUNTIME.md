@@ -2,6 +2,8 @@
 
 Auctaryn's runtime adapter is opt-in. It is not a replacement for OpenShell's policy enforcement: Auctaryn authorizes and risk-checks a tool call; OpenShell enforces sandbox filesystem, process, and network restrictions.
 
+Production gateway registration metadata follows NVIDIA OpenShell's current SDK/CLI contract: `gateway_endpoint` in `metadata.json` under the active gateway. See the [Python SDK guide](https://docs.nvidia.com/openshell/dev/sdk/python) and [OpenShell gateway registration script](https://github.com/NVIDIA/OpenShell/blob/main/tasks/scripts/gateway.sh). The production deploy helper accepts the legacy `endpoint` key for compatibility, but requires a valid remote HTTPS URL and rejects localhost, loopback and unspecified addresses. This validates configuration shape only; it does not prove that the live gateway is reachable or enforcing the intended effective policy.
+
 ## Restrictive baseline
 
 When the OpenShell adapter is enabled through environment configuration, Auctaryn validates the repository-owned baseline YAML before initializing the SDK client. Startup fails closed if the policy is missing or malformed, Landlock is not set to `hard_requirement`, read/write paths exceed the explicit allowlists, required read-only system paths are missing, or the baseline introduces network rules. The validated source SHA-256 is retained on the adapter for diagnostics.
@@ -37,7 +39,7 @@ The adapter supports only `tool_name=openshell_exec`, `action=exec`, and a bound
 
 ## Live readiness probe
 
-The OpenShell adapter exposes an asynchronous health probe that calls the active authenticated gateway's health endpoint with a five-second timeout. The readiness endpoint reports OpenShell as connected only when this probe succeeds and returns a non-empty version string. Adapter construction alone is not evidence of connectivity. Probe exceptions, missing versions, and timeouts leave readiness false; /health remains a liveness-only endpoint.
+The OpenShell adapter exposes an asynchronous health probe that calls the active authenticated gateway's health endpoint with a five-second timeout. Both `/health/ready` and `/health/detailed` use the same bounded probe; detailed health reports the OpenShell module as healthy only when it succeeds and returns a non-empty version string. Aggregate detailed health remains degraded while other enabled modules lack registered live probes. Adapter construction alone is not evidence of connectivity. Probe exceptions, missing versions, and timeouts leave readiness false; /health remains a liveness-only endpoint.
 
 CI tests the probe contract with fake clients. It does not prove connectivity to a live deployment. Before production, run the acceptance checks below against the intended OpenShell gateway and sandbox.
 

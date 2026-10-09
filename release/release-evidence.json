@@ -1,0 +1,75 @@
+{
+  "schema_version": "auctaryn-release-evidence.v1",
+  "tested_commit": "PENDING",
+  "workflow_runs": {
+    "ci": {
+      "run_id": 0,
+      "head_sha": "PENDING",
+      "conclusion": "pending",
+      "url": ""
+    },
+    "codeql": {
+      "run_id": 0,
+      "head_sha": "PENDING",
+      "conclusion": "pending",
+      "url": ""
+    },
+    "supply_chain": {
+      "run_id": 0,
+      "head_sha": "PENDING",
+      "conclusion": "pending",
+      "url": ""
+    }
+  },
+  "pre_release_gates": {
+    "independent_assessment": {
+      "status": "pending",
+      "evidence_ref": "",
+      "reviewer": "",
+      "reviewed_at": "",
+      "report_sha256": "",
+      "critical_open": null,
+      "high_open": null,
+      "evidence_sha256": ""
+    },
+    "platform_conformance": {
+      "status": "pending",
+      "evidence_ref": "",
+      "reviewer": "",
+      "reviewed_at": "",
+      "evidence_sha256": ""
+    },
+    "openshell_runtime_acceptance": {
+      "status": "pending",
+      "evidence_ref": "",
+      "reviewer": "",
+      "reviewed_at": "",
+      "evidence_sha256": ""
+    },
+    "risk_register_review": {
+      "status": "pending",
+      "evidence_ref": "",
+      "reviewer": "",
+      "reviewed_at": "",
+      "evidence_sha256": ""
+    }
+  },
+  "post_deployment_gates": {
+    "deployed_digest_verification": {
+      "status": "pending",
+      "evidence_ref": "",
+      "reviewer": "",
+      "reviewed_at": "",
+      "expected_digest": "",
+      "observed_digest": "",
+      "evidence_sha256": ""
+    },
+    "rollback_drill": {
+      "status": "pending",
+      "evidence_ref": "",
+      "reviewer": "",
+      "reviewed_at": "",
+      "evidence_sha256": ""
+    }
+  }
+}

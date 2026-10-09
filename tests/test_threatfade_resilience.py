@@ -168,7 +168,7 @@ def test_pcap_ingress_limit_counts_chunked_body_without_content_length(monkeypat
     import api.main as main_module
 
     monkeypatch.setattr(main_module, "PCAP_UPLOAD_REQUEST_LIMIT", 3)
-    middleware = main_module.PCAPUploadBodyLimitMiddleware
+    middleware = main_module.APIRequestBodyLimitMiddleware
     messages = iter([
         {"type": "http.request", "body": b"ab", "more_body": True},
         {"type": "http.request", "body": b"cd", "more_body": False},

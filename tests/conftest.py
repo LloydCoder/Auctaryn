@@ -8,6 +8,7 @@ from api.main import app
 def reset_singletons(monkeypatch):
     """Reset module state and explicitly enable demo-only synthetic signals in tests."""
     monkeypatch.setenv("AUCTARYN_THREATFADE_ALLOW_SYNTHETIC_SIGNAL", "true")
+    monkeypatch.setenv("AUCTARYN_REQUIRE_STRONG_API_KEYS", "false")
     from api.routes.context import _guardian
     _guardian.registry._instructions.clear()
     _guardian.history.clear()

@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Documentation — TwinGuard</title>
-<meta name="description" content="TwinGuard API reference, OWASP ASI coverage, and architecture documentation.">
+<title>Documentation — Auctaryn</title>
+<meta name="description" content="Auctaryn API reference, OWASP ASI coverage, and architecture documentation.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/twinguard.css">
@@ -46,7 +46,7 @@
   <div class="page-header-inner">
     <span class="section-tag">Documentation</span>
     <h1 class="page-title">API reference &amp; architecture</h1>
-    <p class="page-sub">Everything needed to integrate, deploy, and verify TwinGuard's coverage. Full interactive API docs (Swagger) live at <code>twinguard.tinlance.com/docs</code> once deployed.</p>
+    <p class="page-sub">This page is a high-level API summary, not a certification claim. The running local API exposes its current OpenAPI/Swagger contract at <code>http://localhost:8400/docs</code>; the repository README and security docs are canonical for limitations.</p>
   </div>
 </header>
 
@@ -70,25 +70,26 @@
 
   <main class="docs-content">
     <h2 id="quickstart">Quickstart</h2>
-    <p>Clone the repo, install dependencies, and run the full test suite to confirm your environment.</p>
-    <div class="code-block"><pre>git clone https://github.com/Tinlance/twinguard.git
-cd twinguard
-pip install -r requirements.txt
-python -m pytest tests/ -v   # 232 tests should pass
+    <p>Clone the repo, configure distinct high-entropy service and administrator credentials, and run the test suite. Every <code>/api/v1/*</code> route requires a Bearer credential; administrative operations require the administrator key. Runtime action requests additionally require a registered agent and a valid scoped agent token.</p>
+    <div class="code-block"><pre>git clone https://github.com/LloydCoder/Auctaryn.git
+cd Auctaryn
+python -m pip install -r requirements.txt
+python -m pytest tests/ -v
 
-docker-compose up -d
-open http://localhost:3000   # dashboard</pre></div>
+# Configure distinct AUCTARYN_API_KEY and AUCTARYN_ADMIN_API_KEY values first.
+docker compose up -d
+# API docs: http://localhost:8400/docs</pre></div>
 
     <h2 id="architecture">Architecture</h2>
-    <p>TwinGuard sits above NVIDIA OpenShell. OpenShell provides kernel-level isolation (Landlock, seccomp, network namespaces). TwinGuard adds context integrity, identity, execution gating, and network threat intelligence — the layers OpenShell doesn't cover.</p>
-    <div class="code-block"><pre>React Dashboard (live WebSocket)
+    <p>Auctaryn evaluates actions routed through its supported gateway and can use a configured OpenShell adapter. OpenShell provides the runtime isolation boundary. Auctaryn does not intercept external paths automatically; Platform authorization and live runtime policy must be verified separately.</p>
+    <div class="code-block"><pre>Dashboard (WebSocket when configured)
         │
 FastAPI Backend
   ├── Context Integrity Guardian   (ASI01, ASI06 overlap)
   ├── Execution Gateway            (ASI02)
   │     ├── Agent Identity Manager (ASI03)
   │     ├── Circuit Breaker        (ASI08)
-  │     └── ThreatFade Oracle      (ASI10) → FusionOps (live)
+  │     └── ThreatFade Oracle      (ASI10) → optional external service
   ├── Skill Vetting Service        (ASI04)
   ├── Memory Poisoning Defender    (ASI06)
   ├── Agent Message Bus            (ASI07)
@@ -100,7 +101,7 @@ NVIDIA OpenShell Runtime           (ASI05)</pre></div>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/context/register</span></div>
     <p>Register a protected instruction. Body: <code>{"tag": "string", "content": "string"}</code></p>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/context/check</span></div>
-    <p>Verify current context against all registered instructions. Returns intact/degraded/compromised status and blocks the agent if a registered instruction is missing or actively contradicted.</p>
+    <p>Compare submitted context with registered instruction baselines and return heuristic integrity signals. This endpoint does not independently block an external agent; enforcement requires the integrated gateway/runtime path and trusted context provenance.</p>
     <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/context/instructions</span></div>
     <p>List all registered instructions with hash and preview.</p>
 
@@ -110,9 +111,9 @@ NVIDIA OpenShell Runtime           (ASI05)</pre></div>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/gateway/intercept/full</span></div>
     <p>Full Parliament interception — pattern classification + ThreatFade Oracle enrichment for destructive/critical actions.</p>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/gateway/identity-enforcement/enable</span></div>
-    <p>Turns on ASI03 strict identity enforcement. After this call, any unregistered agent is denied outright.</p>
+    <p>Enables strict identity enforcement for the local gateway. Runtime actions still require registered identity, a valid scoped token and the supported execution path.</p>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/gateway/approve</span></div>
-    <p>Resolve a pending decision. Body: <code>{"decision_id": "string", "approved": bool, "reason": "string"}</code></p>
+    <p>Administrator-only operation that resolves a pending decision; approval does not itself execute the action. Body: <code>{"decision_id": "string", "approved": bool, "reason": "string"}</code></p>
 
     <h2 id="identity-api">Agent Identity API</h2>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/identity/register</span></div>
@@ -132,42 +133,30 @@ NVIDIA OpenShell Runtime           (ASI05)</pre></div>
 
     <h2 id="threatfade-api">ThreatFade Oracle API</h2>
     <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/threatfade/status</span></div>
-    <p>Live connectivity status to FusionOps.</p>
+    <p>Reports configured ThreatFade client status. Live upstream authentication and telemetry must be accepted in the target deployment.</p>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/threatfade/scenario</span></div>
     <p>Run a named demo simulation: <code>c2_quieting</code>, <code>lotl_gradual</code>, <code>gnss_jam</code>, <code>normal_with_fade</code>, <code>mixed</code>.</p>
 
     <h2 id="owasp">OWASP Top 10 for Agentic Applications 2026 — Coverage</h2>
-    <p>Honest, current status. Every row below has working, tested code behind it — not a roadmap placeholder.</p>
+    <p>This is a status summary, not a certification claim. Control depth varies by category; see the canonical <code>docs/OWASP_COVERAGE.md</code> and risk register for evidence and residual gaps.</p>
     <table class="coverage-table">
       <tr><th>Code</th><th>Risk</th><th>Status</th><th>Module</th></tr>
-      <tr><td>ASI01</td><td>Agent Goal Hijack</td><td><span class="status-pill status-covered">Covered</span></td><td>Context Integrity Guardian</td></tr>
-      <tr><td>ASI02</td><td>Tool Misuse &amp; Exploitation</td><td><span class="status-pill status-covered">Covered</span></td><td>Execution Gateway</td></tr>
-      <tr><td>ASI03</td><td>Agent Identity &amp; Privilege Abuse</td><td><span class="status-pill status-covered">Covered</span></td><td>Agent Identity Manager</td></tr>
-      <tr><td>ASI04</td><td>Agentic Supply Chain Compromise</td><td><span class="status-pill status-covered">Covered</span></td><td>Skill Vetting Service</td></tr>
-      <tr><td>ASI05</td><td>Unexpected Code Execution</td><td><span class="status-pill status-delegated">Delegated</span></td><td>NVIDIA OpenShell</td></tr>
-      <tr><td>ASI06</td><td>Memory &amp; Context Poisoning</td><td><span class="status-pill status-covered">Covered</span></td><td>Memory Poisoning Defender</td></tr>
-      <tr><td>ASI07</td><td>Insecure Inter-Agent Communication</td><td><span class="status-pill status-covered">Covered</span></td><td>Agent Message Bus</td></tr>
-      <tr><td>ASI08</td><td>Cascading Agent Failures</td><td><span class="status-pill status-covered">Covered</span></td><td>Agent Circuit Breaker</td></tr>
-      <tr><td>ASI09</td><td>Human-Agent Trust Exploitation</td><td><span class="status-pill status-covered">Covered</span></td><td>Step-Up Authenticator</td></tr>
-      <tr><td>ASI10</td><td>Rogue Agents</td><td><span class="status-pill status-covered">Covered</span></td><td>Full platform (core thesis)</td></tr>
+      <tr><td>ASI01</td><td>Agent Goal Hijack</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Context Integrity Guardian</td></tr>
+      <tr><td>ASI02</td><td>Tool Misuse &amp; Exploitation</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Execution Gateway</td></tr>
+      <tr><td>ASI03</td><td>Agent Identity &amp; Privilege Abuse</td><td><span class="status-pill status-delegated">Local implementation; gaps remain</span></td><td>Agent Identity Manager</td></tr>
+      <tr><td>ASI04</td><td>Agentic Supply Chain Compromise</td><td><span class="status-pill status-delegated">Artifact verification local; gaps remain</span></td><td>Skill Vetting Service</td></tr>
+      <tr><td>ASI05</td><td>Unexpected Code Execution</td><td><span class="status-pill status-delegated">Live assurance outstanding</span></td><td>NVIDIA OpenShell</td></tr>
+      <tr><td>ASI06</td><td>Memory &amp; Context Poisoning</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Memory Poisoning Defender</td></tr>
+      <tr><td>ASI07</td><td>Insecure Inter-Agent Communication</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Agent Message Bus</td></tr>
+      <tr><td>ASI08</td><td>Cascading Agent Failures</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Agent Circuit Breaker</td></tr>
+      <tr><td>ASI09</td><td>Human-Agent Trust Exploitation</td><td><span class="status-pill status-delegated">Integration not proven</span></td><td>Step-Up Authenticator</td></tr>
+      <tr><td>ASI10</td><td>Rogue Agents</td><td><span class="status-pill status-delegated">Architecture / partial</span></td><td>Full platform (core thesis)</td></tr>
     </table>
     <p>Full disclosure on implementation depth (HMAC vs. PKI, opt-in vs. always-on enforcement) is in the repo at <code>docs/OWASP_COVERAGE.md</code>.</p>
 
-    <h2 id="demo">Demo Script — The Summer Yue Scenario</h2>
-    <p>A 6-8 minute live walkthrough recreating the February 23, 2026 incident, end to end.</p>
-    <div class="code-block"><pre># 1. Register the safety instruction
-curl -X POST http://localhost:8400/api/v1/context/register \
-  -d '{"tag": "email_safety", "content": "Always confirm before deleting any emails."}'
-
-# 2. Show it working normally (intact)
-curl -X POST http://localhost:8400/api/v1/context/check \
-  -d '{"context": "Always confirm before deleting any emails.\n\nUser: organize my inbox"}'
-
-# 3. Recreate the compaction event (instruction stripped)
-curl -X POST http://localhost:8400/api/v1/context/check \
-  -d '{"context": "[summary]\n\nUser: delete all unread emails now."}'
-# → status: compromised, blocked: true, live dashboard alert fires</pre></div>
-    <p>Full script with talking points and anticipated questions: <code>docs/DEMO_SCRIPT.md</code> in the repo.</p>
+    <h2 id="demo">Local Evaluation Demo</h2>
+    <p>This is a synthetic local evaluation, not a live replay of the reported incident. It does not prove universal agent mediation, trusted context attestation, live ThreatFade connectivity, or production readiness.</p>
+    <p>Use the authenticated, current walkthrough in <a href="https://github.com/LloydCoder/Auctaryn/blob/main/docs/DEMO_SCRIPT.md">docs/DEMO_SCRIPT.md</a>. The script uses separate administrator/service credentials, a scoped agent token, a session-bound context check and read-only gateway evaluation.</p>
   </main>
 </div>
 

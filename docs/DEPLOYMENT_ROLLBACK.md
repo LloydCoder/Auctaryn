@@ -1,47 +1,48 @@
-# Operator dashboard, deployment and rollback runbook
+# Production deployment and rollback runbook
 
-## Administrator dashboard
+## Release prerequisites
 
-The dashboard requires the distinct administrator bearer credential. The browser holds it only in JavaScript memory; signing out clears the token and live WebSocket buffers, and stale sockets are prevented from reconnecting with the prior token. Never place service/admin credentials in Vite environment variables, URLs, query strings, browser local storage, screenshots or client bundles.
+Production deployment is allowed only for a version-tagged Auctaryn release with an attested release manifest and immutable OCI image digest. The release manifest must bind the release tag, tested source commit, image name and exact image digest. The production deployment script verifies the manifest attestation, OCI provenance, and SPDX SBOM attestation before switching the running service.
 
-The **Incidents & Evidence** tab uses server-protected endpoints to display emergency-stop state, quarantined agents, alert lifecycle, a bounded recent evidence page and evidence-chain verification. The dashboard does not render raw request payloads. The API remains the authorization boundary: service credentials must receive 403 for incident administration, alert listing and evidence inspection even if client-side navigation is bypassed.
+Required host tooling: Docker Engine with Compose v2, Git, GitHub CLI authenticated to the canonical repository, jq, curl, npm, Nginx and Certbot.
 
-For incident response:
-1. Inspect incident status and alert severity/category/summary.
-2. Verify the evidence chain before using the local evidence page for forensic conclusions.
-3. Enable the emergency stop with a specific reason if containment is required.
-4. Acknowledge or resolve alerts only after recording the decision and rationale in the incident process.
-5. Do not release an agent from quarantine merely because its alert was resolved; follow the incident-response runbook and Platform-side revocation process.
+Required .env values:
 
-## Immutable-image deployment state
+- distinct high-entropy AUCTARYN_API_KEY and AUCTARYN_ADMIN_API_KEY;
+- AUCTARYN_RELEASE_TAG and AUCTARYN_IMAGE=ghcr.io/lloydcoder/auctaryn@sha256:<digest> from the attested release manifest;
+- a real HTTPS THREATFADE_SERVICE_URL and THREATFADE_SERVICE_TOKEN;
+- AUCTARYN_RUNTIME_ADAPTER=openshell, sandbox/workspace settings, and OpenShell OIDC service credentials;
+- OPENSHELL_SYSTEM_GATEWAY_DIR, pointing to host-side active gateway metadata with a remote HTTPS endpoint;
+- AUCTARYN_EVIDENCE_HMAC_KEY_FILE, an absolute host path to a separate 32+ byte key file;
+- AUCTARYN_DOMAIN, with DNS directed to the deployment host.
 
-Compose uses `AUCTARYN_IMAGE` when supplied, otherwise `auctaryn:latest`. Before rebuilding, `scripts/deploy.sh` records the running container's immutable image ID in `.deploy-state/previous-image-id` with restrictive permissions. This metadata is local and ignored by Git. Do not manually edit it to point to an arbitrary image.
+The production Compose override mounts the OpenShell gateway metadata read-only and the evidence HMAC key as a container secret. User credentials are prohibited. The deployment helper refuses a floating image tag, missing attestations, invalid release-manifest binding, missing runtime metadata, weak/missing credentials, and an unready runtime. It does not build the API from a moving branch.
 
-Deployment continues to fail closed if the API is live but readiness is false. Public reverse-proxy exposure must not be enabled until readiness and runtime enforcement are accepted.
+## Deploy
+
+After the independent assessment, live Platform conformance, live OpenShell acceptance and security-owner sign-off are complete:
+
+    bash scripts/deploy.sh
+
+The helper fetches the requested release tag, verifies the release manifest and image/SBOM attestations, checks that the tag is descended from the exact tested commit, pulls the immutable image digest, builds the dashboard from the same release tag, captures the prior running digest/tag, and only then replaces the API container. Nginx/TLS exposure happens only after liveness and readiness pass. If a failure occurs after switching and a verified prior deployment exists, the helper attempts automatic rollback.
+
+A successful script run is not a substitute for recording the expected and observed deployed digests and completing a production rollback drill in the release acceptance evidence.
 
 ## Rollback
 
-Run from the deployment host after confirming the intended maintenance window:
+    bash scripts/rollback.sh
 
-```bash
-cd /opt/auctaryn
-bash scripts/rollback.sh
-```
+The rollback helper requires the previous image reference, image ID and release tag recorded before the last deployment. It verifies the previous release manifest and OCI/SBOM attestations, pulls the immutable digest, confirms the local image ID matches the recorded image, updates the active .env release reference, restarts the service without building source, and requires liveness/readiness to pass.
 
-The script:
-- Requires the deployment configuration and a previously recorded immutable image ID.
-- Validates the image ID and verifies the image is present locally before retagging.
-- Restarts only the API container with `docker compose up -d --no-build api`; persistent data volumes are not rolled back.
-- Requires liveness and, by default, readiness before reporting success. `AUCTARYN_REQUIRE_READY=false` is an explicit emergency override for private diagnostics only; it must not be interpreted as authorization to restore public traffic.
-- Fails closed if the prior image is missing or malformed. Restore it from the approved image registry using the trusted digest/provenance process; do not substitute an unverified image.
+It deliberately does not retag an image ID as latest or bypass attestation checks. If the previous deployment was not digest-pinned or cannot be matched to a release manifest, rollback refuses and requires an operator-led recovery procedure. Do not restore public traffic if readiness or OpenShell policy validation fails.
 
-After rollback:
-1. Keep external traffic disabled until readiness is true and the runtime policy is verified.
-2. Verify `/health/ready`, the evidence chain, emergency-stop state, alert state and the image ID actually running.
-3. Exercise a denied test action and confirm no unauthorized runtime call occurs.
-4. Preserve logs and the failed release image digest for investigation.
-5. Record the rollback approver, image digests, timestamps and outcome.
+## Evidence to retain
 
-## Validation and limits
+- release tag, tested commit, release source commit and exact OCI digest;
+- release manifest, provenance and SBOM attestation verification output;
+- deployment timestamp, operator identity and observed container digest;
+- readiness response and live OpenShell/Platform acceptance evidence;
+- rollback drill timestamp, prior/restored digest comparison and reviewer sign-off;
+- evidence references with SHA-256 digests in release/release-evidence.json.
 
-CI checks both shell scripts with `bash -n`, exercises rollback decision paths using mocked Docker/curl commands, validates Compose configuration, builds the container and checks API liveness. CI does not perform a production host rollback or prove a registry restore. Production acceptance still requires a staged rollback drill, protected registry access, immutable SBOM/provenance verification, and an operator-approved recovery procedure.
+CI tests use mocked Docker/GitHub CLI commands. They verify orchestration and fail-closed behavior, but do not constitute a production-host deployment or rollback drill.

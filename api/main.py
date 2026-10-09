@@ -22,29 +22,31 @@ from modules.execution_gateway.data_guard import SensitiveDataBlocked
 from modules.threatfade_oracle.client import MAX_PCAP_BYTES
 
 PCAP_UPLOAD_REQUEST_LIMIT = MAX_PCAP_BYTES + 64 * 1024
+MAX_API_REQUEST_BYTES = 2 * 1024 * 1024
 
 
 startup_time: float = 0.0
 
 
 class RequestBodyLimitExceeded(Exception):
-    """Raised when a bounded PCAP request exceeds its ingress body limit."""
+    """Raised when a bounded API request exceeds its ingress body limit."""
 
 
-class PCAPUploadBodyLimitMiddleware:
-    """Enforce a route-specific ASGI body limit before multipart parsing can spool data."""
+class APIRequestBodyLimitMiddleware:
+    """Bound API request bodies before JSON/multipart parsing can allocate large payloads."""
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if not (
-            scope.get("type") == "http"
-            and scope.get("method") == "POST"
-            and scope.get("path") == "/api/v1/threatfade/analyze"
-        ):
+        path = scope.get("path", "")
+        method = scope.get("method", "")
+        if scope.get("type") != "http" or method not in {"POST", "PUT", "PATCH", "DELETE"} or not path.startswith("/api/v1/"):
             await self.app(scope, receive, send)
             return
 
+        is_pcap_upload = path == "/api/v1/threatfade/analyze"
+        max_bytes = PCAP_UPLOAD_REQUEST_LIMIT if is_pcap_upload else MAX_API_REQUEST_BYTES
+        limit_detail = "PCAP request exceeds size limit" if is_pcap_upload else "API request exceeds size limit"
         headers = {key.lower(): value for key, value in scope.get("headers", [])}
         content_length = headers.get(b"content-length")
         if content_length:
@@ -53,8 +55,8 @@ class PCAPUploadBodyLimitMiddleware:
             except ValueError:
                 await self._reject(send, 400, "Invalid Content-Length")
                 return
-            if declared_length < 0 or declared_length > PCAP_UPLOAD_REQUEST_LIMIT:
-                await self._reject(send, 413, "PCAP request exceeds size limit")
+            if declared_length < 0 or declared_length > max_bytes:
+                await self._reject(send, 413, limit_detail)
                 return
 
         total_bytes = 0
@@ -65,7 +67,7 @@ class PCAPUploadBodyLimitMiddleware:
             message = await receive()
             if message.get("type") == "http.request":
                 total_bytes += len(message.get("body", b""))
-                if total_bytes > PCAP_UPLOAD_REQUEST_LIMIT:
+                if total_bytes > max_bytes:
                     raise RequestBodyLimitExceeded()
             return message
 
@@ -79,7 +81,7 @@ class PCAPUploadBodyLimitMiddleware:
             await self.app(scope, limited_receive, tracked_send)
         except RequestBodyLimitExceeded:
             if not response_started:
-                await self._reject(send, 413, "PCAP request exceeds size limit")
+                await self._reject(send, 413, limit_detail)
 
     @staticmethod
     async def _reject(send, status_code: int, detail: str):
@@ -108,6 +110,19 @@ async def lifespan(app: FastAPI):
     runtime_adapter = None
     try:
         runtime_adapter = create_openshell_adapter_from_environment()
+        if runtime_adapter is not None and not await runtime_adapter.health_check():
+            try:
+                runtime_adapter.close()
+            except Exception as close_exc:
+                logger.warning(
+                    "OpenShell adapter cleanup after failed health probe failed (%s)",
+                    type(close_exc).__name__,
+                    extra={"event": "runtime_adapter_cleanup_failed"},
+                )
+            runtime_adapter = None
+            raise RuntimeAdapterUnavailable(
+                "Could not verify the configured OpenShell gateway with a bounded health probe."
+            )
         gateway.configure_runtime_adapter(runtime_adapter)
         if runtime_adapter is not None:
             logger.info(
@@ -219,7 +234,7 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=403, content={"detail": "Administrator credential required"})
         return await call_next(request)
 
-    app.add_middleware(PCAPUploadBodyLimitMiddleware)
+    app.add_middleware(APIRequestBodyLimitMiddleware)
 
     app.include_router(health.router, tags=["Health"])
     app.include_router(context.router, prefix="/api/v1/context", tags=["Context Integrity"])

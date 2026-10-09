@@ -261,3 +261,28 @@ def test_context_integrity_is_rechecked_at_runtime_execution_boundary():
 
     assert calls["count"] == 2
     assert adapter.calls == []
+
+
+def test_execution_service_fails_closed_when_deduplication_capacity_is_reached(monkeypatch):
+    import modules.execution_gateway.execution_service as service_module
+
+    monkeypatch.setattr(service_module, "MAX_CLAIMED_DECISIONS", 1)
+    adapter = FakeRuntimeAdapter()
+    service = ExecutionService(ExecutionGateway(), adapter)
+    first_call = ToolCall(tool_name="read_file", action="read", agent_id="dedup-agent")
+    first_decision, first_receipt = asyncio.run(service.execute_tool_call(first_call))
+    assert first_decision.decision == ActionDecision.APPROVED
+    assert first_receipt is not None
+
+    second_call = ToolCall(tool_name="read_file", action="read", agent_id="dedup-agent")
+    second_decision = GatewayDecision(
+        id="another-approved-decision",
+        tool_call=second_call,
+        risk_level=RiskLevel.SAFE,
+        decision=ActionDecision.APPROVED,
+        decided_by="policy",
+        action_fingerprint=action_intent_fingerprint(second_call),
+    )
+    with pytest.raises(RuntimeAdapterFailure, match="deduplication capacity reached"):
+        asyncio.run(service.execute_approved_decision(second_decision))
+    assert len(adapter.calls) == 1

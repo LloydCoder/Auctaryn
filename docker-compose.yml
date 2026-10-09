@@ -1,5 +1,6 @@
-# Auctaryn — Docker Compose
-# ThreatFade is an external service; this repository contains the client/adapter only.
+# Auctaryn — local Docker Compose profile.
+# Production must use docker-compose.production.yml with a verified release digest.
+# ThreatFade and OpenShell are external services; this repo contains their clients/adapters.
 
 services:
   api:
@@ -10,15 +11,27 @@ services:
     ports:
       - "127.0.0.1:8400:8400"
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - AUCTARYN_API_KEY=${AUCTARYN_API_KEY:?Set AUCTARYN_API_KEY in your environment}
-      - AUCTARYN_ADMIN_API_KEY=${AUCTARYN_ADMIN_API_KEY:?Set AUCTARYN_ADMIN_API_KEY in your environment}
-      - AUCTARYN_EVIDENCE_DB=${AUCTARYN_EVIDENCE_DB:-/app/data/evidence.sqlite3}
-      - AUCTARYN_EVIDENCE_HMAC_KEY=${AUCTARYN_EVIDENCE_HMAC_KEY:-}
-      - AUCTARYN_EVIDENCE_HMAC_KEY_FILE=${AUCTARYN_EVIDENCE_HMAC_KEY_FILE:-}
-      - AUCTARYN_CORS_ORIGINS=${AUCTARYN_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
-      - THREATFADE_SERVICE_URL=${THREATFADE_SERVICE_URL:?Set THREATFADE_SERVICE_URL to your ThreatFade service}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AUCTARYN_API_KEY: ${AUCTARYN_API_KEY:?Set AUCTARYN_API_KEY in your environment}
+      AUCTARYN_ADMIN_API_KEY: ${AUCTARYN_ADMIN_API_KEY:?Set AUCTARYN_ADMIN_API_KEY in your environment}
+      AUCTARYN_REQUIRE_STRONG_API_KEYS: ${AUCTARYN_REQUIRE_STRONG_API_KEYS:-true}
+      AUCTARYN_EVIDENCE_DB: ${AUCTARYN_EVIDENCE_DB:-/app/data/evidence.sqlite3}
+      AUCTARYN_EVIDENCE_HMAC_KEY: ${AUCTARYN_EVIDENCE_HMAC_KEY:-}
+      AUCTARYN_EVIDENCE_HMAC_KEY_FILE: ""
+      AUCTARYN_CORS_ORIGINS: ${AUCTARYN_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      AUCTARYN_RUNTIME_ADAPTER: ${AUCTARYN_RUNTIME_ADAPTER:-}
+      AUCTARYN_RELEASE_TAG: ${AUCTARYN_RELEASE_TAG:-}
+      OPENSHELL_SANDBOX_NAME: ${OPENSHELL_SANDBOX_NAME:-}
+      OPENSHELL_WORKSPACE: ${OPENSHELL_WORKSPACE:-default}
+      OPENSHELL_EXECUTION_TIMEOUT_SECONDS: ${OPENSHELL_EXECUTION_TIMEOUT_SECONDS:-60}
+      OPENSHELL_OIDC_ISSUER: ${OPENSHELL_OIDC_ISSUER:-}
+      OPENSHELL_OIDC_CLIENT_ID: ${OPENSHELL_OIDC_CLIENT_ID:-}
+      OPENSHELL_OIDC_CLIENT_SECRET: ${OPENSHELL_OIDC_CLIENT_SECRET:-}
+      OPENSHELL_OIDC_AUDIENCE: ${OPENSHELL_OIDC_AUDIENCE:-}
+      OPENSHELL_ALLOW_USER_CREDENTIALS: ${OPENSHELL_ALLOW_USER_CREDENTIALS:-false}
+      THREATFADE_SERVICE_URL: ${THREATFADE_SERVICE_URL:?Set THREATFADE_SERVICE_URL to your ThreatFade service}
+      THREATFADE_SERVICE_TOKEN: ${THREATFADE_SERVICE_TOKEN:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - auctaryn-data:/app/data
       - auctaryn-logs:/app/logs

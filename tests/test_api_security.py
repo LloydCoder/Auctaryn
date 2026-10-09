@@ -230,3 +230,26 @@ def test_service_credential_cannot_invoke_direct_execution_even_when_enabled(mon
         json={"tool_name": "read_file", "action": "read", "parameters": {"path": "/safe/file"}, "agent_id": "redteam"},
     )
     assert response.status_code == 403
+
+
+def test_weak_api_keys_are_rejected_when_strong_keys_are_required(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_REQUIRE_STRONG_API_KEYS", "true")
+    monkeypatch.setenv("AUCTARYN_API_KEY", "weak-service")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "weak-admin")
+    response = _client().get("/api/v1/gateway/status", headers={"Authorization": "Bearer weak-service"})
+    assert response.status_code == 503
+    assert "not configured" in response.json()["detail"]
+
+
+def test_repeated_character_keys_are_not_strong(monkeypatch):
+    from api.security import credentials_are_strong
+
+    monkeypatch.setenv("AUCTARYN_API_KEY", "a" * 64)
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "b" * 64)
+    assert credentials_are_strong() is False
+
+
+def test_non_ascii_bearer_candidate_is_rejected_without_compare_digest_error():
+    from api.security import token_role
+
+    assert token_role("🔑") is None
