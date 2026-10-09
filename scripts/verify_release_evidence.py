@@ -144,6 +144,9 @@ def _validate_gate(name: str, gate: Any, *, require_passed: bool) -> list[str]:
             value = gate.get(field)
             if not isinstance(value, str) or not value.strip():
                 errors.append(f"{name}.{field} is required when status is passed")
+        evidence_hash = gate.get("evidence_sha256")
+        if not isinstance(evidence_hash, str) or not REPORT_HASH_RE.fullmatch(evidence_hash):
+            errors.append(f"{name}.evidence_sha256 must be a SHA-256 hex digest when status is passed")
         reviewed_at = gate.get("reviewed_at")
         if isinstance(reviewed_at, str) and reviewed_at.strip():
             try:
