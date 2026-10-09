@@ -299,7 +299,7 @@ class ContextIntegrityGuardian:
 
     def authorize_session_action(self, session_id: str, check_id: str, action_id: str) -> str | None:
         """Require a current intact context check bound to this session and action."""
-        if self.registry.count() == 0:
+        if self.registry.count() == 0 and not check_id:
             return None
         with self._session_lock:
             if not session_id or not check_id or not action_id:
