@@ -11,7 +11,7 @@ The current Auctaryn integration can generate a synthetic entropy signal from ac
 ## Client configuration
 
 - `THREATFADE_SERVICE_URL`: absolute HTTPS URL for an external service; plain HTTP is accepted only for loopback/Docker service names unless the explicit isolated-testing override is set.
-- `THREATFADE_SERVICE_TOKEN`: optional Bearer token sent only when the upstream service is configured to validate it. Auctaryn sending a token does not itself authenticate the upstream service.
+- `THREATFADE_SERVICE_TOKEN`: required for external HTTPS endpoints and sent as a Bearer token. The upstream ThreatFade service must validate it; Auctaryn sending a token does not itself authenticate the upstream service. Local Docker/loopback services may run without it for development.
 - `AUCTARYN_ALLOW_INSECURE_THREATFADE_HTTP=true`: isolated testing only; never use for external production endpoints.
 - Requests disable redirects and use bounded timeouts. Credentials must not be placed in URLs.
 
