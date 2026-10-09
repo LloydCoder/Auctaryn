@@ -43,6 +43,22 @@ async def revoke_scope(request: ScopeRequest) -> dict:
     except PolicyViolation as exc:
         raise HTTPException(status_code=404, detail="Agent identity or scope not found") from exc
 
+class TokenRequest(BaseModel):
+    agent_id: str = Field(min_length=1, max_length=128)
+    scopes: list[str] = Field(min_length=1, max_length=100)
+    ttl_seconds: int = Field(default=300, ge=1, le=3600)
+
+
+@router.post("/token", dependencies=[Depends(require_operator_key)])
+async def issue_agent_token(request: TokenRequest) -> dict:
+    try:
+        token = get_identity_manager().issue_token(request.agent_id, request.ttl_seconds, request.scopes)
+        return {"token_id": token.token_id, "agent_id": token.agent_id,
+                "scopes": sorted(token.scopes), "expires_at": token.expires_at.isoformat()}
+    except PolicyViolation as exc:
+        raise HTTPException(status_code=403, detail="Token issuance policy denied") from exc
+
+
 @router.get("/{agent_id}")
 async def get_agent_identity(agent_id: str) -> dict:
     identity = get_identity_manager().get_identity(agent_id)
