@@ -156,6 +156,16 @@ class IncidentResponseManager:
             "acknowledged_by": "", "acknowledged_at": "", "resolved_by": "", "resolved_at": "",
         }
         with closing(self._connect()) as db:
+            db.execute("BEGIN IMMEDIATE")
+            if alert["decision_id"]:
+                existing = db.execute(
+                    """SELECT * FROM incident_alerts WHERE decision_id=? AND category=?
+                    AND status != 'resolved' ORDER BY created_at DESC LIMIT 1""",
+                    (alert["decision_id"], alert["category"]),
+                ).fetchone()
+                if existing is not None:
+                    db.rollback()
+                    return dict(existing)
             db.execute(
                 """INSERT INTO incident_alerts
                 (alert_id, severity, category, title, summary, decision_id, actor_id, status, created_at)
@@ -163,6 +173,7 @@ class IncidentResponseManager:
                 (alert["alert_id"], alert["severity"], alert["category"], alert["title"], alert["summary"],
                  alert["decision_id"], alert["actor_id"], alert["status"], alert["created_at"]),
             )
+            db.commit()
         return alert
 
     def list_alerts(self, status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
