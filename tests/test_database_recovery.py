@@ -66,17 +66,18 @@ def test_restore_rejects_corrupt_snapshot_without_touching_target(tmp_path):
 
 @pytest.mark.asyncio
 async def test_concurrent_evidence_appends_remain_a_valid_ordered_chain(tmp_path):
-    store = EvidenceStore(tmp_path / "concurrent.sqlite3")
+    path = tmp_path / "concurrent.sqlite3"
+    stores = [EvidenceStore(path) for _ in range(4)]
     await asyncio.gather(*[
-        store.append("load.test", actor_id=f"agent-{i}", outcome="accepted")
-        for i in range(64)
+        stores[i % len(stores)].append("load.test", actor_id=f"agent-{i}", outcome="accepted")
+        for i in range(128)
     ])
-    report = await store.verify()
+    report = await stores[0].verify()
     assert report["valid"] is True
-    assert report["records_checked"] == 64
-    rows = await store.list_records(limit=100)
-    assert len(rows) == 64
-    assert len({row["record_id"] for row in rows}) == 64
+    assert report["records_checked"] == 128
+    rows = await stores[0].list_records(limit=200)
+    assert len(rows) == 128
+    assert len({row["record_id"] for row in rows}) == 128
 
 
 def test_verify_reports_sqlite_integrity_and_hash_chain(tmp_path):
