@@ -20,7 +20,7 @@ MAX_JSON_RESPONSE_BYTES = 1_000_000
 MAX_PCAP_BYTES = 10 * 1024 * 1024
 VALID_SCENARIOS = {"c2_quieting", "lotl_gradual", "gnss_jam", "normal_with_fade", "mixed"}
 VALID_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
-PCAP_MAGIC_HEADERS = (b"\\xd4\\xc3\\xb2\\xa1", b"\\xa1\\xb2\\xc3\\xd4", b"\\x4d\\x3c\\xb2\\xa1", b"\\xa1\\xb2\\x3c\\x4d", b"\\x0a\\x0d\\x0d\\x0a")
+PCAP_MAGIC_HEADERS = (b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4", b"\x4d\x3c\xb2\xa1", b"\xa1\xb2\x3c\x4d", b"\x0a\x0d\x0d\x0a")
 
 
 class FusionOpsClient:
