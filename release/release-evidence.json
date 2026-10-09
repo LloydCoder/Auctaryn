@@ -29,25 +29,29 @@
       "reviewed_at": "",
       "report_sha256": "",
       "critical_open": null,
-      "high_open": null
+      "high_open": null,
+      "evidence_sha256": ""
     },
     "platform_conformance": {
       "status": "pending",
       "evidence_ref": "",
       "reviewer": "",
-      "reviewed_at": ""
+      "reviewed_at": "",
+      "evidence_sha256": ""
     },
     "openshell_runtime_acceptance": {
       "status": "pending",
       "evidence_ref": "",
       "reviewer": "",
-      "reviewed_at": ""
+      "reviewed_at": "",
+      "evidence_sha256": ""
     },
     "risk_register_review": {
       "status": "pending",
       "evidence_ref": "",
       "reviewer": "",
-      "reviewed_at": ""
+      "reviewed_at": "",
+      "evidence_sha256": ""
     }
   },
   "post_deployment_gates": {
@@ -57,13 +61,15 @@
       "reviewer": "",
       "reviewed_at": "",
       "expected_digest": "",
-      "observed_digest": ""
+      "observed_digest": "",
+      "evidence_sha256": ""
     },
     "rollback_drill": {
       "status": "pending",
       "evidence_ref": "",
       "reviewer": "",
-      "reviewed_at": ""
+      "reviewed_at": "",
+      "evidence_sha256": ""
     }
   }
 }
