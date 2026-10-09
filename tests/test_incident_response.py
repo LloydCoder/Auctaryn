@@ -112,3 +112,23 @@ def test_service_credential_cannot_change_incident_controls(client, monkeypatch)
         json={"enabled": True, "reason": "Must be admin controlled"},
     )
     assert response.status_code == 403
+
+
+def test_websocket_acknowledgement_is_admin_only_and_persistent(client):
+    from modules.incident_response.manager import get_incident_response_manager
+    alert = get_incident_response_manager().create_alert(
+        "high", "test", "Test alert", "Safe summary", decision_id="ws-alert-decision"
+    )
+    with client.websocket_connect("/ws/alerts") as websocket:
+        websocket.send_json({"type": "authenticate", "token": "test-service-secret"})
+        assert websocket.receive_json()["type"] == "authenticated"
+        websocket.send_json({"type": "acknowledge", "alert_id": alert["alert_id"]})
+        assert websocket.receive_json()["type"] == "error"
+    assert get_incident_response_manager().list_alerts(status="open")
+    with client.websocket_connect("/ws/alerts") as websocket:
+        websocket.send_json({"type": "authenticate", "token": "test-admin-secret"})
+        assert websocket.receive_json()["type"] == "authenticated"
+        websocket.send_json({"type": "acknowledge", "alert_id": alert["alert_id"]})
+        result = websocket.receive_json()
+        assert result["type"] == "alert_acknowledged"
+        assert result["status"] == "acknowledged"
