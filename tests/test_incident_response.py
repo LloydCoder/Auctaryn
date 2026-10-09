@@ -132,3 +132,13 @@ def test_websocket_acknowledgement_is_admin_only_and_persistent(client):
         result = websocket.receive_json()
         assert result["type"] == "alert_acknowledged"
         assert result["status"] == "acknowledged"
+
+
+def test_alert_creation_deduplicates_unresolved_decision_alerts(tmp_path):
+    manager = IncidentResponseManager(str(tmp_path / "evidence.sqlite3"))
+    first = manager.create_alert("critical", "agent_action_risk", "Critical risk", "Vetoed action",
+                                 decision_id="same-decision", actor_id="agent-a")
+    second = manager.create_alert("critical", "agent_action_risk", "Critical risk", "Vetoed action",
+                                  decision_id="same-decision", actor_id="agent-a")
+    assert first["alert_id"] == second["alert_id"]
+    assert len([a for a in manager.list_alerts() if a["decision_id"] == "same-decision"]) == 1
