@@ -1,5 +1,5 @@
 # Auctaryn — Docker Compose
-# API credentials are required; the ThreatFade service is internal-only.
+# ThreatFade is an external service; this repository contains the client/adapter only.
 
 services:
   api:
@@ -13,27 +13,13 @@ services:
       - AUCTARYN_API_KEY=${AUCTARYN_API_KEY:?Set AUCTARYN_API_KEY in your environment}
       - AUCTARYN_ADMIN_API_KEY=${AUCTARYN_ADMIN_API_KEY:?Set AUCTARYN_ADMIN_API_KEY in your environment}
       - AUCTARYN_CORS_ORIGINS=${AUCTARYN_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
-      - THREATFADE_SERVICE_URL=http://threatfade:8401
+      - THREATFADE_SERVICE_URL=${THREATFADE_SERVICE_URL:?Set THREATFADE_SERVICE_URL to your ThreatFade service}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./config:/app/config:ro
       - ./policies:/app/policies:ro
-    depends_on:
-      - threatfade
-    restart: unless-stopped
-    networks:
-      - auctaryn
-
-  threatfade:
-    build:
-      context: ./modules/threatfade_oracle
-      dockerfile: Dockerfile
-    # Internal-only: do not publish the unauthenticated Oracle port to the host.
-    volumes:
-      - ./data/pcaps:/app/pcaps
-      - ./data/reports:/app/reports
     restart: unless-stopped
     networks:
       - auctaryn
@@ -43,7 +29,7 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - VITE_API_URL=http://localhost:8400
       - VITE_WS_URL=ws://localhost:8400
