@@ -39,3 +39,18 @@ def test_risk_assessment_rejects_raw_secrets_without_echoing_them(client):
     assert response.status_code == 422
     assert "parameters.password" in response.json()["detail"]["paths"]
     assert secret not in response.text
+
+
+def test_risk_contract_rejects_untrusted_tenant_identity_fields(client):
+    response = client.post(
+        "/api/v1/risk/assess",
+        json={
+            "tool_name": "read_file",
+            "action": "read",
+            "parameters": {"path": "/workspace/report.txt"},
+            "agent_id": "platform-agent",
+            "tenant_id": "caller-asserted-tenant",
+        },
+    )
+    assert response.status_code == 422
+    assert "tenant_id" in response.text
