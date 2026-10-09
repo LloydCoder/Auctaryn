@@ -268,6 +268,21 @@ class TestFusionOpsClient:
             await client.get_events(201)
 
     @pytest.mark.asyncio
+    async def test_pcap_rejects_filename_with_directory_component(self):
+        from modules.threatfade_oracle.client import FusionOpsClient
+        client = FusionOpsClient()
+        filename = "folder" + chr(47) + "sample.pcap"
+        with pytest.raises(ValueError, match="basename"):
+            await client.detect_pcap(b"pcap", filename)
+
+    @pytest.mark.asyncio
+    async def test_triage_rejects_non_finite_payload(self):
+        from modules.threatfade_oracle.client import FusionOpsClient
+        client = FusionOpsClient()
+        with pytest.raises(ValueError, match="JSON serializable"):
+            await client.triage({"score": float("nan")})
+
+    @pytest.mark.asyncio
     async def test_get_events(self):
         from modules.threatfade_oracle.client import FusionOpsClient
         client = FusionOpsClient()
