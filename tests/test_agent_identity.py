@@ -120,7 +120,8 @@ class TestTimeScopedTokens:
         from modules.agent_identity.identity import AgentIdentityManager
         mgr = AgentIdentityManager()
         mgr.register("agent-001", owner="user-1")
-        token = mgr.issue_token("agent-001", ttl_seconds=-1)  # already expired
+        token = mgr.issue_token("agent-001", ttl_seconds=1)
+        token.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
         assert mgr.validate_token(token.token_id) is False
 
     def test_revoked_token_fails_validation(self):
@@ -153,9 +154,12 @@ class TestPrivilegeDelegation:
         mgr.grant_scope("manager-agent", "delete_database")
 
         mgr.register("sub-agent", owner="user-1")
-        mgr.delegate("manager-agent", "sub-agent", scopes=["read_file"])
+        token = mgr.delegate("manager-agent", "sub-agent", scopes=["read_file"])
 
-        assert mgr.is_authorized("sub-agent", "read_file") is True
+        assert mgr.is_authorized("sub-agent", "read_file") is False
+        assert mgr.is_authorized(
+            "sub-agent", "read_file", token_id=token.token_id, require_token=True
+        ) is True
         assert mgr.is_authorized("sub-agent", "delete_database") is False
 
     def test_cannot_delegate_scope_you_do_not_have(self):
