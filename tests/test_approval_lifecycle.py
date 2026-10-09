@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from core.models import ActionDecision, ToolCall
-from modules.execution_gateway.gateway import ExecutionGateway
+from modules.execution_gateway.gateway import ExecutionGateway, ApprovalIntentIntegrityError
 
 
 def _pending_gateway(ttl_seconds: int = 900):
@@ -76,7 +76,7 @@ def test_pending_action_mutation_is_denied_and_cannot_be_approved():
     gateway, decision = _pending_gateway()
     decision.tool_call.parameters["path"] = "/tmp/attacker-selected.db"
 
-    with pytest.raises(KeyError, match="intent changed"):
+    with pytest.raises(ApprovalIntentIntegrityError, match="intent changed"):
         gateway.resolve_pending(decision.id, approved=True, operator="test-operator")
 
     assert gateway.get_pending() == []
