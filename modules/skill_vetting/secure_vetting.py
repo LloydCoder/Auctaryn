@@ -4,10 +4,6 @@ import hashlib
 import hmac
 import json
 import re
-import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
@@ -75,11 +71,19 @@ def verify_artifact(content: bytes, expected_hash: str) -> bool:
     )
 
 
-def _version_tuple(value: str) -> tuple[int, int, int]:
+def _version_tuple(value: str) -> tuple:
     match = _VERSION.fullmatch(value)
     if not match:
         raise ValueError("exact semantic version required")
-    return tuple(int(match.group(i)) for i in (1, 2, 3))
+    core = tuple(int(match.group(i)) for i in (1, 2, 3))
+    prerelease = match.group(4)
+    if prerelease is None:
+        return (*core, 1, ())
+    identifiers = tuple(
+        (0, int(part)) if part.isdigit() else (1, part)
+        for part in prerelease.split(".")
+    )
+    return (*core, 0, identifiers)
 
 
 class SecureSkillVettingService:
