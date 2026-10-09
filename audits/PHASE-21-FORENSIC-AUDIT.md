@@ -1,6 +1,6 @@
 # Phase 21 forensic audit — operator dashboard and deployment compatibility
 
-**Status:** Pre-merge forensic review completed. Exact-head CI passed on `18ac0a2e979e51b05f430f02c1cb8bfcfb037166`; merge and post-merge verification remain required before phase closure.  
+**Status:** Phase 21 is merged and its mainline CI is green after the Phase 20 concurrency follow-up. PR #29 was merged as `bdd95239bea6db1629869386fbe527f51d068d56`; PR #30 then fixed the evidence-store race exposed by the post-merge stress run. Final verified main commit: `90416b8d4806e980e33686f96ceef6d6d6eb0b18`.  
 **Scope:** Administrator incident/evidence UI, correct rendering of durable incident alert envelopes, session credential cleanup, server-side authorization regressions, immutable image rollback and deployment documentation.
 
 ## Findings addressed
@@ -30,7 +30,8 @@
 - [x] Dashboard production build and dependency audit passed.
 - [x] Both deployment scripts passed `bash -n`.
 - [x] Compose validation, container build and API liveness passed.
-- [ ] Merge and verify the resulting main commit's full workflow before closing Phase 21.
+- [x] PR #29 merged; the post-merge workflow exposed a Phase 20 concurrency race, fixed in PR #30.
+- [x] Final main workflow [37959881631](https://github.com/LloydCoder/Auctaryn/actions/runs/37959881631) passed Python 3.11/3.12, Ruff, dependency audit, dashboard build, shell syntax, Compose validation, container build and liveness.
 
 **Non-blocking test warning:** Python 3.12 emitted 280 warnings, including Starlette's deprecation warning for using `httpx` with `starlette.testclient`. Tests still pass, but this dependency compatibility warning is retained for Phase 22 dependency/toolchain hardening rather than hidden with a warning filter.
 
@@ -53,4 +54,4 @@
 - Confirm server-side admin checks reject service credentials independent of client navigation.
 - Confirm logout cannot trigger a stale authenticated WebSocket reconnect.
 - Confirm the rollback script never substitutes an unverified image and fails closed when state is missing.
-- Close Phase 21 only after merge and a green post-merge main workflow; retain the test-client deprecation as a tracked Phase 22 dependency-hardening item.
+- Phase 21 exit gate is satisfied for repository implementation. Retain the test-client deprecation as a tracked Phase 22 dependency-hardening item and the staged production-host rollback as a release gate.
