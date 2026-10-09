@@ -76,7 +76,8 @@ def test_rollback_fails_closed_without_valid_previous_image(tmp_path):
     result = subprocess.run(["bash", "scripts/rollback.sh"], env=env, capture_output=True, text=True, check=False)
 
     assert result.returncode != 0
-    assert "compose up -d --no-build api" not in log.read_text(encoding="utf-8")
+    commands = log.read_text(encoding="utf-8") if log.exists() else ""
+    assert "compose up -d --no-build api" not in commands
 
 
 def test_deployment_scripts_pass_bash_syntax_check():
