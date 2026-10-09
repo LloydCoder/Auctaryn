@@ -30,6 +30,9 @@ def test_public_pages_do_not_claim_universal_mediation_or_unverified_metrics():
         "FusionOps: <span>online</span>",
         "All tiers include Summer Yue scenario protection",
         "z-score 14.76",
+        "Live C2 threat intelligence from FusionOps",
+        "Summer Yue protection active",
+        "Watch live demo",
     ]
     combined = "\n".join(path.read_text(encoding="utf-8") for path in public_pages)
     for phrase in forbidden:
