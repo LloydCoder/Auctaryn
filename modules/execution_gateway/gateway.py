@@ -3,12 +3,13 @@ Auctaryn execution gateway.
 Evaluates agent actions and records enforceable decisions before execution.
 """
 
+import hmac
 import uuid
 from datetime import datetime, timezone, timedelta
 
 from core.models import (
     ToolCall, GatewayDecision, ActionDecision, ActionClassification,
-    Alert, Severity, RiskLevel,
+    Alert, Severity, RiskLevel, action_intent_fingerprint,
 )
 from core.logging import get_logger
 from modules.execution_gateway.risk_classifier import RiskClassifier
@@ -67,6 +68,7 @@ class ExecutionGateway:
     def _record_preflight_denial(self, decision: GatewayDecision) -> GatewayDecision:
         # Never retain or return the caller's bearer capability in decision history.
         decision.tool_call = decision.tool_call.model_copy(update={"identity_token": ""})
+        decision.action_fingerprint = action_intent_fingerprint(decision.tool_call)
         self.history.append(decision)
         self.total_processed += 1
         self.total_vetoed += 1
@@ -83,6 +85,7 @@ class ExecutionGateway:
         tool_call = tool_call.model_copy(update={"identity_token": ""})
         classification = self.classifier.classify(tool_call)
         decision = self.veto_engine.decide(classification)
+        decision.action_fingerprint = action_intent_fingerprint(decision.tool_call)
         self.history.append(decision)
         self.total_processed += 1
 
@@ -120,6 +123,7 @@ class ExecutionGateway:
         if self.oracle and classification.risk_level in (RiskLevel.DESTRUCTIVE, RiskLevel.CRITICAL):
             decision = await self._enrich_with_oracle(tool_call, classification, decision)
 
+        decision.action_fingerprint = action_intent_fingerprint(decision.tool_call)
         self.history.append(decision)
         self.total_processed += 1
 
@@ -194,6 +198,7 @@ class ExecutionGateway:
                 decision=ActionDecision.TIMEOUT,
                 reason="Approval window expired; action was not approved or executed.",
                 decided_by="approval_timeout",
+                action_fingerprint=pending.action_fingerprint,
             )
             for index, history_item in enumerate(self.history):
                 if history_item.id == decision_id:
@@ -210,7 +215,36 @@ class ExecutionGateway:
         if decision_id not in self._pending:
             raise KeyError(f"No pending decision with id {decision_id}")
 
-        original = self._pending.pop(decision_id)
+        original = self._pending.get(decision_id)
+        if original is None:
+            raise KeyError(f"No pending decision with id {decision_id}")
+
+        current_fingerprint = action_intent_fingerprint(original.tool_call)
+        if (
+            not original.action_fingerprint
+            or not hmac.compare_digest(original.action_fingerprint, current_fingerprint)
+        ):
+            # Mutation invalidates the approval request. Replace the pending
+            # state with a terminal denial; never approve or execute altered intent.
+            self._pending.pop(decision_id, None)
+            rejected = GatewayDecision(
+                id=original.id,
+                timestamp=datetime.now(timezone.utc),
+                tool_call=original.tool_call,
+                risk_level=RiskLevel.CRITICAL,
+                decision=ActionDecision.DENIED,
+                reason="Action intent integrity check failed; the action was not approved.",
+                decided_by="intent_integrity_guard",
+                action_fingerprint=original.action_fingerprint,
+            )
+            for index, history_item in enumerate(self.history):
+                if history_item.id == decision_id:
+                    self.history[index] = rejected
+                    break
+            self.total_vetoed += 1
+            raise KeyError("Pending action intent changed; approval rejected")
+
+        self._pending.pop(decision_id, None)
         new_decision = ActionDecision.APPROVED if approved else ActionDecision.DENIED
         resolved = GatewayDecision(
             id=original.id,
@@ -220,6 +254,7 @@ class ExecutionGateway:
             decision=new_decision,
             reason=reason or f"{'Approved' if approved else 'Denied'} by {operator}",
             decided_by=operator,
+            action_fingerprint=original.action_fingerprint,
         )
 
         for index, history_item in enumerate(self.history):
