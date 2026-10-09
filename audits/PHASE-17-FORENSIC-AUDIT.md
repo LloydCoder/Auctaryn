@@ -8,7 +8,7 @@
 - Incident controls return HTTP 423 when they block execution. A global stop does not depend on the dashboard or WebSocket connection being available.
 - Quarantining an agent revokes its current in-process capabilities; releasing quarantine does not restore tokens.
 - Added agent-wide token revocation that invalidates the identity permission version and marks direct/delegated tokens revoked.
-- Critical-risk and veto decisions create durable alerts with bounded metadata and are broadcast to connected alert clients.
+- Critical-risk and veto decisions create durable alerts with bounded metadata and are broadcast to connected alert clients. Trusted runtime execution failures also create durable alerts; unresolved duplicate signals for the same decision/category are deduplicated.
 - Alert state persists across process restarts and supports open → acknowledged → resolved transitions; resolved alerts cannot be reopened through the transition API.
 - Alert acknowledgement over WebSocket requires the administrator credential and persists state rather than claiming unsupported success.
 - State changes and alert transitions are correlated with the Phase 16 evidence chain; a failed terminal record is explicitly surfaced as `terminal_record_failed`.
