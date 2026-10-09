@@ -19,7 +19,7 @@ A phase is complete only when its implementation and documentation are reconcile
 | 5 | Sensitive-data guard across classification, interception, Oracle and execution ingress | Secret-pattern and redaction tests; no raw secret in findings or decision history; CI green | Complete on main; CI verified |
 | 6 | Evidence-based health/readiness semantics | Liveness separated from readiness; credentials and runtime dependencies reported separately; CI green | Core change on main; remediation tracked in Phase 7 |
 | 7 | Real bounded OpenShell health probe and truthful readiness | Active gateway health call with timeout; non-empty version required; unavailable/invalid probe fails readiness; tests and docs reconciled | Complete on main; PR #8 full CI green and phase audit passed |
-| 8 | Context-integrity enforcement and trust provenance | Prompt/context manipulation tests; findings bound to enforcement path; false-positive and bypass cases covered | Planned |
+| 8 | Context-integrity enforcement and trust provenance | Session-bound integrity checks; persistent quarantine until admin reset; protected-instruction compaction fingerprint; gateway denial and alert tests | In progress |
 | 9 | Execution mediation and approval lifecycle hardening | Protected operations are mediated; approvals bind to immutable action intent; expiry, replay and duplicate execution rejected | Planned |
 | 10 | Runtime containment and policy verification | OpenShell policy and sandbox acceptance; filesystem/network/process restrictions verified against a live runtime | Planned |
 | 11 | ThreatFade Oracle resilience and evidence handling | Authentication, schema validation, timeout/circuit-breaker behavior, conservative failure policy | Planned |
