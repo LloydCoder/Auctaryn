@@ -73,7 +73,7 @@ Only continue if the response is intact and has a non-empty check ID. Then evalu
 
 ```bash
 curl -fsS -X POST "$AUCTARYN_API_URL/api/v1/gateway/intercept" \
-  -H "Authorization: Bearer $AUCTARYN_ADMIN_API_KEY" \
+  -H "Authorization: Bearer $AUCTARYN_API_KEY" \
   -H "Content-Type: application/json" \
   -d "$(jq -n --arg token "$AUCTARYN_DEMO_AGENT_TOKEN" \
     --arg check "$AUCTARYN_CONTEXT_CHECK_ID" \
