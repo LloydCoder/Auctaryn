@@ -40,8 +40,9 @@ class TestGatewayBroadcast:
             assert r.json()["decision"] == "vetoed"
             mock_alert.assert_called_once()
             alert_data = mock_alert.call_args[0][0]
-            assert alert_data["severity"] == "critical"
-            assert alert_data["module"] == "execution_gateway"
+            assert alert_data["type"] == "incident_alert"
+            assert alert_data["alert"]["severity"] == "critical"
+            assert alert_data["alert"]["category"] == "agent_action_risk"
 
     def test_approve_pending_broadcasts(self, client):
         token_id = self._register_scope(client, "broadcast-delete-agent", "delete_file")
