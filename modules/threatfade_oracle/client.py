@@ -1,6 +1,6 @@
 """
 TwinGuard — FusionOps HTTP Client
-Calls the live FusionOps API (ThreatFade Oracle) at 13.50.16.19.
+Calls the configured FusionOps API (ThreatFade Oracle) over an explicitly configured endpoint.
 
 API contract v0.3.0 (Tinlance Limited):
   GET  /health
@@ -11,7 +11,10 @@ API contract v0.3.0 (Tinlance Limited):
   POST /triage          (DetectionResult dict)
 """
 
+import os
 import random
+from urllib.parse import urlparse
+
 import httpx
 from core.exceptions import ThreatFadeConnectionError
 from core.models import ToolCall
@@ -19,7 +22,7 @@ from core.logging import get_logger
 
 logger = get_logger("threatfade_oracle.client")
 
-DEFAULT_BASE_URL = "http://13.50.16.19"
+DEFAULT_BASE_URL = "http://threatfade:8401"
 MIN_DATA_POINTS = 10
 
 VALID_SCENARIOS = {
@@ -34,8 +37,21 @@ VALID_SCENARIOS = {
 class FusionOpsClient:
     """Async HTTP client for the FusionOps API."""
 
-    def __init__(self, base_url: str = DEFAULT_BASE_URL, timeout: float = 10.0):
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: str | None = None, timeout: float = 10.0):
+        configured_url = (base_url or os.getenv("THREATFADE_SERVICE_URL") or DEFAULT_BASE_URL).strip()
+        parsed = urlparse(configured_url)
+        local_hosts = {"localhost", "127.0.0.1", "::1", "threatfade"}
+        allow_insecure = os.getenv("AUCTARYN_ALLOW_INSECURE_THREATFADE_HTTP", "").lower() in {"1", "true", "yes"}
+        if parsed.scheme != "https" and not (
+            parsed.scheme == "http" and (parsed.hostname in local_hosts or allow_insecure)
+        ):
+            raise ValueError(
+                "ThreatFade endpoint must use HTTPS unless it is a local/Docker service. "
+                "For isolated testing only, set AUCTARYN_ALLOW_INSECURE_THREATFADE_HTTP=true."
+            )
+        if not parsed.hostname:
+            raise ValueError("THREATFADE_SERVICE_URL must be an absolute HTTP(S) URL")
+        self.base_url = configured_url.rstrip("/")
         self.timeout = timeout
 
     async def health_check(self) -> dict:
