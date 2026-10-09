@@ -207,7 +207,7 @@ async def list_quarantined_memory(limit: int = Query(100, ge=1, le=100)) -> dict
 async def inspect_quarantined_memory(key: str) -> dict:
     defender = get_memory_defender()
     entry = defender.store.get(key)
-    if entry is None or not entry.quarantined:
+    if entry is None:
         raise HTTPException(status_code=404, detail="Quarantined memory entry not found")
     if not defender.store.verify_integrity(key):
         if not defender.store.rollback(key):
