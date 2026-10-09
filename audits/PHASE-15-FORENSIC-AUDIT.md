@@ -1,6 +1,6 @@
 # Phase 15 forensic audit — explainable risk findings
 
-Status: implementation review complete; exact final-head CI remains the acceptance gate.
+Status: implementation and forensic audit complete. PR #23 exact-head workflow passed all required checks; the merged commit's post-merge Python 3.11/3.12, dependency-audit, dashboard, Compose, container-build and liveness checks also passed.
 
 ## Implemented
 
