@@ -26,7 +26,7 @@ Each entry receives a unique opaque ID. The SHA-256 digest binds:
 - quarantine state;
 - creation timestamp.
 
-A separately held last-known-good snapshot anchors integrity verification. Metadata tampering, including changing `quarantined` to false or rewriting the source label, is detected. The metadata API attempts rollback and reports `tamper_detected`, `rolled_back`, and `integrity_ok` without returning memory content. The scoped content endpoint returns content only to an authorized agent/session; quarantined content is restricted to its originating session.
+A separately held last-known-good snapshot anchors integrity verification. Metadata tampering, including changing `quarantined` to false or rewriting the source label, is detected. The metadata API attempts rollback and reports `tamper_detected`, `rolled_back`, and `integrity_ok` without returning memory content. The scoped content endpoint returns content only to an authorized agent/session; quarantined content is never readable by agent sessions. Operators may inspect quarantined content through the operator-authenticated review endpoint. This phase does not provide a public quarantine-promotion endpoint; promotion requires a trusted review/approval integration.
 
 This is tamper detection against accidental or ordinary in-process mutation, not a cryptographic guarantee against a compromised process that can modify both live state and the snapshot.
 
