@@ -112,3 +112,35 @@ def test_service_credential_cannot_register_agent(monkeypatch):
     )
 
     assert response.status_code == 403
+
+
+
+def test_approval_endpoint_returns_conflict_when_action_intent_changes(monkeypatch):
+    from api.routes import gateway as gateway_routes
+    from core.models import ActionDecision, ToolCall
+    from modules.execution_gateway.gateway import ExecutionGateway
+
+    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
+    gateway = ExecutionGateway()
+    monkeypatch.setattr(gateway_routes, "_gateway", gateway)
+    decision = gateway.evaluate(
+        ToolCall(
+            tool_name="delete_file",
+            action="delete",
+            parameters={"path": "/tmp/original.db"},
+            agent_id="approval-intent-test",
+        )
+    )
+    assert decision.decision == ActionDecision.PENDING
+    decision.tool_call.parameters["path"] = "/tmp/changed.db"
+
+    response = _client().post(
+        "/api/v1/gateway/approve",
+        headers={"Authorization": "Bearer test-admin-secret"},
+        json={"decision_id": decision.id, "approved": True, "reason": "test"},
+    )
+
+    assert response.status_code == 409
+    assert "intent changed" in response.json()["detail"]
+    assert gateway.history[0].decision == ActionDecision.DENIED
