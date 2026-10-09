@@ -151,7 +151,7 @@ def test_entry_access_rolls_back_tampered_agent_binding(client):
 
 
 
-def test_quarantined_memory_content_is_only_available_to_originating_session(client):
+def test_quarantined_memory_content_is_not_readable_by_any_agent_session(client):
     headers = _agent_token(client, "memory-content-isolation")
     owner_session = _session(client, headers)
     other_session = _session(client, headers)
@@ -161,15 +161,42 @@ def test_quarantined_memory_content_is_only_available_to_originating_session(cli
         f"/api/v1/memory/content/{stored['entry_id']}/{owner_session}",
         headers=headers,
     )
-    assert owner_read.status_code == 200
-    assert owner_read.json()["content"] == "review-only note"
-    assert owner_read.json()["quarantined"] is True
+    assert owner_read.status_code == 403
 
     other_read = client.get(
         f"/api/v1/memory/content/{stored['entry_id']}/{other_session}",
         headers=headers,
     )
     assert other_read.status_code == 403
+
+
+def test_operator_can_inspect_quarantined_content_but_agents_cannot(client):
+    headers = _agent_token(client, "memory-quarantine-review")
+    session_id = _session(client, headers)
+    stored = _store(client, headers, session_id, content="needs human review").json()
+
+    agent_read = client.get(
+        f"/api/v1/memory/content/{stored['entry_id']}/{session_id}",
+        headers=headers,
+    )
+    assert agent_read.status_code == 403
+
+    operator_read = client.get(f"/api/v1/memory/quarantine/{stored['entry_id']}")
+    assert operator_read.status_code == 200
+    assert operator_read.json()["content"] == "needs human review"
+    assert operator_read.json()["quarantined"] is True
+    assert operator_read.json()["integrity_ok"] is True
+
+
+def test_service_token_cannot_inspect_quarantined_content(client):
+    headers = _agent_token(client, "memory-quarantine-admin-only")
+    session_id = _session(client, headers)
+    stored = _store(client, headers, session_id).json()
+    response = client.get(
+        f"/api/v1/memory/quarantine/{stored['entry_id']}",
+        headers={"Authorization": "Bearer test-service-secret"},
+    )
+    assert response.status_code == 403
 
 
 def test_memory_content_endpoint_never_returns_tampered_content(client):
