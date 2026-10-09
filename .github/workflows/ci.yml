@@ -66,6 +66,9 @@ jobs:
           bash -n scripts/deploy.sh
           bash -n scripts/rollback.sh
 
+      - name: Validate public site JavaScript
+        run: node --check site/js/partials.js
+
       - name: Validate local Compose configuration
         env:
           AUCTARYN_API_KEY: ci-service-key-that-is-long-enough
