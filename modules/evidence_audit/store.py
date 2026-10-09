@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from pathlib import Path
 import sqlite3
 from typing import Any
@@ -86,6 +87,15 @@ class EvidenceStore:
     def _text(value: Any, limit: int = 256) -> str:
         return " ".join(str(value or "").split())[:limit]
 
+    @classmethod
+    def _identifier(cls, value: Any, limit: int = 128) -> str:
+        text = cls._text(value, limit)
+        if not text:
+            return ""
+        if re.fullmatch(r"[A-Za-z0-9._:@/-]+", text):
+            return text
+        return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
     def _append_sync(self, event_type: str, *, correlation_id: str = "", actor_id: str = "",
                      tenant_id: str = "", decision_id: str = "", execution_id: str = "",
                      outcome: str = "", details: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -118,9 +128,9 @@ class EvidenceStore:
         payload = {
             "schema": "auctaryn.evidence-record.v1", "record_id": uuid4().hex,
             "occurred_at": occurred_at, "event_type": event_type,
-            "correlation_id": self._text(correlation_id), "actor_id": self._text(actor_id),
-            "tenant_id": self._text(tenant_id), "decision_id": self._text(decision_id),
-            "execution_id": self._text(execution_id), "outcome": self._text(outcome, 96),
+            "correlation_id": self._identifier(correlation_id), "actor_id": self._identifier(actor_id),
+            "tenant_id": self._identifier(tenant_id), "decision_id": self._identifier(decision_id),
+            "execution_id": self._identifier(execution_id), "outcome": self._text(outcome, 96),
             "details": safe_details,
             "provenance": {"producer": "auctaryn", "source": "application_event"},
         }
