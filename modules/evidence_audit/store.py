@@ -77,7 +77,6 @@ class EvidenceStore:
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA busy_timeout=10000")
         db.execute("PRAGMA synchronous=FULL")
-        db.execute("PRAGMA journal_mode=WAL")
         return db
 
     def _init_sync(self):
@@ -85,6 +84,7 @@ class EvidenceStore:
         # Serialize WAL-mode negotiation and idempotent schema/trigger creation.
         with _initialization_lock(self.path):
             with closing(self._connect()) as db:
+                db.execute("PRAGMA journal_mode=WAL")
                 db.execute("""CREATE TABLE IF NOT EXISTS evidence_records (
                     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                     record_id TEXT NOT NULL UNIQUE,
