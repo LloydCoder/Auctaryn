@@ -137,3 +137,6 @@ Built by [Chinaemerem Nkwachukwu](https://github.com/LloydCoder)
 ---
 
 *Securing AI agents. Nigeria-1. World-0.* 💚
+
+
+ThreatFade Oracle transport, schema validation, payload limits, fallback behavior and evidence semantics are documented in [ThreatFade Oracle Resilience](docs/THREATFADE_ORACLE.md).
