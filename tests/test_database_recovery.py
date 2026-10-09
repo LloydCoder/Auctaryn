@@ -87,3 +87,18 @@ def test_verify_reports_sqlite_integrity_and_hash_chain(tmp_path):
     assert report["sqlite"]["integrity"] == "ok"
     assert report["evidence"]["valid"] is True
     assert len(report["sha256"]) == 64
+
+
+def test_hmac_signed_evidence_fails_closed_without_key(tmp_path, monkeypatch):
+    path = tmp_path / "signed.sqlite3"
+    monkeypatch.setenv("AUCTARYN_EVIDENCE_HMAC_KEY", "h" * 32)
+    store = EvidenceStore(path)
+    asyncio.run(store.append("signed.event", outcome="protected"))
+    monkeypatch.delenv("AUCTARYN_EVIDENCE_HMAC_KEY", raising=False)
+
+    with pytest.raises(ValueError, match="HMAC signatures"):
+        verify(path)
+    report = verify(path, allow_unverified_hmac=True)
+    assert report["evidence"]["valid"] is True
+    assert report["evidence"]["reason"] == "key_unavailable"
+    assert report["evidence"]["hmac_verified"] is False
