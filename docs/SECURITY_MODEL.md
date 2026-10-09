@@ -9,7 +9,7 @@
 
 ## Context-session enforcement
 
-When protected instructions are configured, gateway actions require a session ID and the latest intact context-check ID for that session. Each context check is single-use per action intent; replays for a different action are denied. Compromised or degraded sessions remain quarantined until an administrator clears them, after which a fresh clean check is mandatory. This binds a submitted local check to a gateway action but does not prove that the text is the exact context consumed by an external agent; trusted runtime/harness attestation remains necessary for that stronger claim.
+When protected instructions are configured, gateway actions require a session ID and the latest intact context-check ID for that session. The check ID participates in the action-intent fingerprint, and context integrity is revalidated immediately before the runtime adapter is invoked. Each check is bound to one action intent; replay for a different action is denied. Compromised sessions remain quarantined until an administrator clears them, after which a fresh clean check is mandatory. Tracked sessions are capped at 10,000, protected instructions at 1,000, and check/compaction histories at 5,000 each; capacity exhaustion fails closed. These controls are process-local, not durable or multi-replica safe. A submitted local check does not prove that the external agent consumed that exact context; trusted runtime/harness attestation remains necessary. See the [Phase 8 enforcement audit](../audits/PHASE-08-SESSION-BOUND-ENFORCEMENT.md).
 
 ## Decision and execution invariants
 
