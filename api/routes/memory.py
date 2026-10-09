@@ -88,10 +88,13 @@ async def check_readability(
     if not defender.session_owned_by(session_id, owner):
         raise HTTPException(status_code=404, detail="Memory session not found")
     entry = defender.store.get(key)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Memory entry not found")
+    # This call verifies and restores tampered metadata before ownership is evaluated.
+    readable = defender.is_readable_by_session(key, session_id, owner)
+    entry = defender.store.get(key)
     if entry is None or entry.agent_id != owner:
         raise HTTPException(status_code=404, detail="Memory entry not found")
-    # Integrity must be checked before quarantine metadata is used for an access decision.
-    readable = defender.is_readable_by_session(key, session_id, owner)
     return {"key": key, "session_id": session_id, "readable": readable}
 
 
@@ -104,7 +107,7 @@ async def get_entry(
     owner = _require_memory_scope(agent_id, identity_token, "memory:read")
     defender = get_memory_defender()
     entry = defender.store.get(key)
-    if entry is None or entry.agent_id != owner:
+    if entry is None:
         raise HTTPException(status_code=404, detail="Memory entry not found")
 
     integrity_ok = defender.store.verify_integrity(key)
@@ -114,6 +117,8 @@ async def get_entry(
         rolled_back = defender.store.rollback(key)
         entry = defender.store.get(key)
         integrity_ok = defender.store.verify_integrity(key)
+    if entry is None or entry.agent_id != owner:
+        raise HTTPException(status_code=404, detail="Memory entry not found")
 
     return {
         "found": True,
