@@ -27,7 +27,15 @@ class DelegateRequest(BaseModel):
 
 @router.post("/register", dependencies=[Depends(require_operator_key)])
 async def register_agent(request: RegisterRequest) -> dict:
-    identity = get_identity_manager().register(request.agent_id, request.owner)
+    try:
+        identity = get_identity_manager().register(request.agent_id, request.owner)
+    except PolicyViolation as exc:
+        if exc.policy_rule == "identity_owner_conflict":
+            raise HTTPException(
+                status_code=409,
+                detail="Agent identity is already bound to a different owner",
+            ) from exc
+        raise HTTPException(status_code=400, detail="Agent registration rejected by policy") from exc
     return {"agent_id": identity.agent_id, "identity_id": identity.identity_id,
             "owner": identity.owner, "scopes": list(identity.scopes)}
 
