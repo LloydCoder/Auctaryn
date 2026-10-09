@@ -165,9 +165,20 @@ async def list_pending_approvals() -> list[GatewayDecision]:
 @router.post("/approve", dependencies=[Depends(require_operator_key)])
 async def approve_action(request: ApprovalRequest) -> dict:
     try:
+        await record_evidence(
+            "approval.resolution_requested",
+            correlation_id=request.decision_id,
+            decision_id=request.decision_id,
+            outcome="approve_requested" if request.approved else "deny_requested",
+            details={"decision": "approved" if request.approved else "denied"},
+        )
+    except (EvidenceStoreError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="Evidence recording unavailable; approval not changed") from exc
+    try:
         resolved = get_gateway().resolve_pending(
             request.decision_id, request.approved, request.reason, operator="authenticated_operator"
         )
+        evidence_status = "complete"
         try:
             await record_evidence(
                 "approval.resolved",
@@ -180,10 +191,11 @@ async def approve_action(request: ApprovalRequest) -> dict:
                     "action_fingerprint": action_intent_fingerprint(resolved.tool_call),
                 },
             )
-        except EvidenceStoreError as exc:
-            raise HTTPException(status_code=503, detail="Evidence recording unavailable") from exc
+        except (EvidenceStoreError, ValueError):
+            evidence_status = "terminal_record_failed"
         await _broadcast_decision(resolved)
         return {"decision_id": resolved.id, "result": resolved.decision.value,
+                "evidence_status": evidence_status,
                 "timestamp": datetime.now(timezone.utc).isoformat()}
     except ApprovalIntentIntegrityError as exc:
         raise HTTPException(status_code=409, detail="Pending action intent changed; approval rejected") from exc
