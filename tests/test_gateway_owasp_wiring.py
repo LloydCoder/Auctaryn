@@ -117,3 +117,52 @@ class TestCircuitBreakerEnforcement:
             gw.evaluate(tc)
 
         assert breaker.is_open("good-agent") is False
+
+
+class TestScopedIdentityCapabilities:
+    def test_revoked_scope_invalidates_previously_issued_token(self):
+        from modules.agent_identity.identity import AgentIdentityManager
+
+        manager = AgentIdentityManager()
+        manager.register("agent-token", owner="test")
+        manager.grant_scope("agent-token", "read_file")
+        token = manager.issue_token("agent-token")
+        assert manager.is_authorized(
+            "agent-token", "read_file", token_id=token.token_id, require_token=True
+        )
+        manager.revoke_scope("agent-token", "read_file")
+        assert not manager.is_authorized(
+            "agent-token", "read_file", token_id=token.token_id, require_token=True
+        )
+
+    def test_delegated_scope_is_token_scoped_and_revocable_by_delegator(self):
+        from modules.agent_identity.identity import AgentIdentityManager
+
+        manager = AgentIdentityManager()
+        manager.register("manager", owner="test")
+        manager.register("delegate", owner="test")
+        manager.grant_scope("manager", "read_file")
+        token = manager.delegate("manager", "delegate", ["read_file"], ttl_seconds=60)
+
+        assert not manager.is_authorized("delegate", "read_file")
+        assert manager.is_authorized(
+            "delegate", "read_file", token_id=token.token_id, require_token=True
+        )
+        manager.revoke_scope("manager", "read_file")
+        assert not manager.is_authorized(
+            "delegate", "read_file", token_id=token.token_id, require_token=True
+        )
+
+    def test_expired_token_is_denied(self):
+        from datetime import datetime, timedelta, timezone
+        from modules.agent_identity.identity import AgentIdentityManager
+
+        manager = AgentIdentityManager()
+        manager.register("agent-expired", owner="test")
+        manager.grant_scope("agent-expired", "read_file")
+        token = manager.issue_token("agent-expired")
+        token.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+        assert not manager.is_authorized(
+            "agent-expired", "read_file", token_id=token.token_id, require_token=True
+        )
