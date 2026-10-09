@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import re
 from pathlib import Path
 import sys
 from urllib.parse import urlsplit
@@ -20,8 +21,8 @@ def validate_endpoint(metadata: object) -> str:
         endpoint = metadata.get("endpoint")  # Legacy metadata compatibility.
     if not isinstance(endpoint, str) or not endpoint or len(endpoint) > MAX_ENDPOINT_LENGTH:
         raise ValueError("gateway_endpoint must be a bounded URL string")
-    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in endpoint):
-        raise ValueError("gateway_endpoint contains control characters")
+    if any(char.isspace() or char == "\\\\" or ord(char) < 0x20 or ord(char) == 0x7F for char in endpoint):
+        raise ValueError("gateway_endpoint contains whitespace, backslashes or control characters")
     try:
         parsed = urlsplit(endpoint)
         hostname = parsed.hostname
@@ -46,6 +47,20 @@ def validate_endpoint(metadata: object) -> str:
         address = ipaddress.ip_address(host)
     except ValueError:
         address = None
+        try:
+            ascii_host = host.encode("idna").decode("ascii")
+        except UnicodeError as exc:
+            raise ValueError("gateway_endpoint hostname is invalid") from exc
+        labels = ascii_host.split(".")
+        if (
+            len(ascii_host) > 253
+            or not labels
+            or any(
+                not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
+                for label in labels
+            )
+        ):
+            raise ValueError("gateway_endpoint hostname is invalid")
     if address is not None and (address.is_loopback or address.is_unspecified):
         raise ValueError("gateway_endpoint must not target a loopback or unspecified address")
     return endpoint
