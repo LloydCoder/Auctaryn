@@ -31,6 +31,7 @@ MAX_DATA_POINTS = 10_000
 MAX_SOURCE_LABEL_LENGTH = 256
 MAX_PCAP_BYTES = 25 * 1024 * 1024
 MAX_TRIAGE_PAYLOAD_BYTES = 1_000_000
+MAX_RESPONSE_BYTES = 2_000_000
 MAX_EVENTS_LIMIT = 200
 VALID_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
 
@@ -69,6 +70,11 @@ class FusionOpsClient:
 
     @staticmethod
     def _json_object(response: httpx.Response, endpoint: str) -> dict:
+        body = getattr(response, "content", b"")
+        if isinstance(body, bytes) and len(body) > MAX_RESPONSE_BYTES:
+            raise ThreatFadeConnectionError(
+                f"FusionOps response exceeded the size limit for {endpoint}."
+            )
         try:
             data = response.json()
         except (ValueError, json.JSONDecodeError) as exc:
@@ -83,6 +89,16 @@ class FusionOpsClient:
 
     @staticmethod
     def _validate_full_analysis(data: dict, endpoint: str) -> dict:
+        try:
+            encoded = json.dumps(data, allow_nan=False, separators=(",", ":")).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise ThreatFadeConnectionError(
+                f"FusionOps returned non-JSON analysis data for {endpoint}."
+            ) from exc
+        if len(encoded) > MAX_RESPONSE_BYTES:
+            raise ThreatFadeConnectionError(
+                f"FusionOps analysis exceeded the size limit for {endpoint}."
+            )
         detection = data.get("detection")
         triage = data.get("triage")
         remediation = data.get("remediation")
@@ -113,7 +129,12 @@ class FusionOpsClient:
             raise ThreatFadeConnectionError(
                 f"FusionOps returned an invalid detection flag for {endpoint}."
             )
-        if not isinstance(triage.get("category"), str) or not isinstance(triage.get("recommended_action"), str):
+        if (
+            not isinstance(triage.get("category"), str)
+            or len(triage["category"]) > 128
+            or not isinstance(triage.get("recommended_action"), str)
+            or len(triage["recommended_action"]) > 128
+        ):
             raise ThreatFadeConnectionError(
                 f"FusionOps returned invalid triage fields for {endpoint}."
             )
@@ -226,7 +247,7 @@ class FusionOpsClient:
         if not isinstance(detection_result, dict):
             raise ValueError("detection_result must be a mapping")
         try:
-            serialized = json.dumps(detection_result, allow_nan=False, separators=(",", ":"), default=str)
+            serialized = json.dumps(detection_result, allow_nan=False, separators=(",", ":"))
         except (TypeError, ValueError) as exc:
             raise ValueError("detection_result must be JSON serializable without NaN/Infinity") from exc
         if len(serialized.encode("utf-8")) > MAX_TRIAGE_PAYLOAD_BYTES:
