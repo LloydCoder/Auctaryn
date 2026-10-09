@@ -121,8 +121,8 @@ export default function App() {
               <Shield className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold tracking-tight text-white">TwinGuard</h1>
-              <p className="text-xs text-gray-500">AI Agent Containment</p>
+              <h1 className="text-lg font-semibold tracking-tight text-white">Auctaryn</h1>
+              <p className="text-xs text-gray-500">Runtime Authority for Autonomous AI</p>
             </div>
           </div>
 
