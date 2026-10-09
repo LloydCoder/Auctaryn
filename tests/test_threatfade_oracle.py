@@ -408,6 +408,25 @@ class TestThreatFadeOracleService:
             assert result.severity == Severity.LOW
 
     @pytest.mark.asyncio
+    async def test_oracle_falls_back_on_malformed_analysis_schema(self):
+        from modules.threatfade_oracle.oracle import ThreatFadeOracle
+        from core.models import ToolCall
+
+        oracle = ThreatFadeOracle()
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = {"detection": [], "triage": {}, "remediation": {}}
+
+        with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=response)):
+            result = await oracle.analyze(
+                ToolCall(tool_name="read_file", action="read", parameters={})
+            )
+        assert result.severity == Severity.INFO
+        assert result.fade_detected is False
+        assert len(oracle.history) == 1
+        assert oracle.raw_results == []
+
+    @pytest.mark.asyncio
     async def test_oracle_tracks_history(self):
         from modules.threatfade_oracle.oracle import ThreatFadeOracle
         from core.models import ToolCall
