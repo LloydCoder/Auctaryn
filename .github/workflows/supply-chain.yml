@@ -83,7 +83,9 @@ jobs:
         with:
           image: auctaryn:ci
           fail-build: false
-          severity-cutoff: critical
+          # Keep the full report unfiltered so the independent audit can see high
+          # and critical findings regardless of whether a fix is available.
+          severity-cutoff: negligible
           only-fixed: false
           output-format: json
           output-file: grype-full.json
