@@ -43,6 +43,14 @@ def _database_check(path: Path) -> dict[str, Any]:
 
 
 async def _evidence_check(path: Path, allow_unverified_hmac: bool) -> dict[str, Any]:
+    # Inspect read-only first: verification must never initialize or mutate a backup.
+    with sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True, timeout=10) as db:
+        tables = {row[0] for row in db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )}
+    if "evidence_records" not in tables:
+        return {"valid": True, "records_checked": 0, "reason": "no_evidence_table",
+                "hmac_verified": False, "integrity_mode": "not_present"}
     # Import lazily so SQLite integrity checks remain usable independently.
     from modules.evidence_audit.store import EvidenceStore, EvidenceStoreError
 
@@ -101,7 +109,10 @@ def backup(source: Path, destination: Path, allow_unverified_hmac: bool = False)
                 dst.execute("PRAGMA integrity_check")
         os.chmod(temp, 0o600)
         report = verify(temp, allow_unverified_hmac)
-        os.replace(temp, destination)
+        # Hard-link creation is atomic and fails if another process created the
+        # destination after our initial existence check (no accidental overwrite).
+        os.link(temp, destination)
+        temp.unlink()
         os.chmod(destination, 0o600)
         return {**report, "database": str(destination), "source": str(source), "operation": "backup"}
     finally:
@@ -136,9 +147,12 @@ def restore(source: Path, destination: Path, overwrite: bool = False,
             os.fsync(dst.fileno())
         os.chmod(temp, 0o600)
         report = verify(temp, allow_unverified_hmac)
-        if destination.exists() and not overwrite:
-            raise FileExistsError(f"Restore target appeared during restore: {destination}")
-        os.replace(temp, destination)
+        if overwrite:
+            os.replace(temp, destination)
+        else:
+            # Atomic no-clobber install closes the check/replace race.
+            os.link(temp, destination)
+            temp.unlink()
         os.chmod(destination, 0o600)
         return {**report, "database": str(destination), "source": str(source), "operation": "restore"}
     finally:
