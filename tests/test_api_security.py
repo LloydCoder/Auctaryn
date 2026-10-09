@@ -87,3 +87,28 @@ def test_service_websocket_credential_cannot_approve(monkeypatch):
             response = websocket.receive_json()
             assert response["type"] == "error"
             assert response["message"] == "Administrator credential required"
+
+def test_service_credential_cannot_approve_pending_action(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
+
+    response = _client().post(
+        "/api/v1/gateway/approve",
+        headers={"Authorization": "Bearer test-service-secret"},
+        json={"decision_id": "not-pending", "approved": True, "reason": "test"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_service_credential_cannot_register_agent(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
+
+    response = _client().post(
+        "/api/v1/identity/register",
+        headers={"Authorization": "Bearer test-service-secret"},
+        json={"agent_id": "agent-forbidden", "owner": "test"},
+    )
+
+    assert response.status_code == 403
