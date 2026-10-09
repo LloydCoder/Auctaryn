@@ -27,7 +27,7 @@ Do not add broad vulnerability suppressions. A necessary exception must identify
 
 The CI workflow attests tested build artifacts. The separate version-tag release workflow can publish an OCI image to GHCR, generate SPDX SBOMs, attest the image and release manifest, and verify the registry digest. The checked-in acceptance manifest remains pending, so no production release is currently authorized; no production deployment digest or rollback drill has been supplied. Phase 22's exact-head full Grype report contained zero high/critical findings and zero actionable high/critical findings at that run; this is time-bounded scan evidence, not a permanent guarantee. See [Phase 22 forensic audit](../audits/PHASE-22-FORENSIC-AUDIT.md) and [production release acceptance](PRODUCTION_RELEASE_ACCEPTANCE.md).
 
-GitHub-hosted CI also does not prove live OpenShell containment, Platform-side authorization/revocation, multi-replica durability, or independent penetration-test results. Those remain separately documented production gates.
+The production deployment helper consumes only a verified version-tagged digest and checks readiness; it does not prove the deployed host is safe merely because the script completed. Live OpenShell containment, Platform-side authorization/revocation, multi-replica durability, independent penetration testing, and an observed production rollback drill remain separately documented gates.
 
 
 ## Phase 24 release promotion
