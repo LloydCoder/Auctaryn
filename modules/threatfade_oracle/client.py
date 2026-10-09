@@ -51,6 +51,8 @@ class FusionOpsClient:
             )
         if not parsed.hostname:
             raise ValueError("THREATFADE_SERVICE_URL must be an absolute HTTP(S) URL")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("ThreatFade base URL must not contain credentials, query parameters, or fragments")
         self.base_url = configured_url.rstrip("/")
         self.timeout = timeout
 
