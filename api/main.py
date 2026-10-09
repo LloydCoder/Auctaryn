@@ -3,7 +3,6 @@ Auctaryn API entry point.
 FastAPI application with authenticated REST and WebSocket surfaces.
 """
 
-import os
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
