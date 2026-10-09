@@ -21,6 +21,7 @@ def test_accepts_legacy_endpoint_field_for_compatibility():
     "https://localhost:8443",
     "https://api.localhost",
     "https://127.0.0.1:8443",
+    "https://127.000.000.001:8443",
     "https://0.0.0.0:8443",
     "https://[::1]:8443",
     "https://user:password@openshell.example.com",
