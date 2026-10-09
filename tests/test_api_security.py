@@ -76,7 +76,7 @@ def test_service_websocket_credential_cannot_approve(monkeypatch):
     monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
 
     with _client() as client:
-        with client.websocket_connect("/ws/actions") as websocket:
+        with client.websocket_connect("/ws/actions", headers={"origin": "http://localhost:3000"}) as websocket:
             websocket.send_json({"type": "authenticate", "token": "test-service-secret"})
             assert websocket.receive_json()["role"] == "api"
             websocket.send_json({
