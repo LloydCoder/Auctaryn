@@ -261,6 +261,13 @@ class TestFusionOpsClient:
         assert result["error"] == "ThreatFadeConnectionError"
 
     @pytest.mark.asyncio
+    async def test_get_events_rejects_out_of_range_limit(self):
+        from modules.threatfade_oracle.client import FusionOpsClient
+        client = FusionOpsClient()
+        with pytest.raises(ValueError, match="between 1 and 200"):
+            await client.get_events(201)
+
+    @pytest.mark.asyncio
     async def test_get_events(self):
         from modules.threatfade_oracle.client import FusionOpsClient
         client = FusionOpsClient()
