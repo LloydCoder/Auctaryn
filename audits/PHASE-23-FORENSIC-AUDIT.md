@@ -37,3 +37,8 @@
 ## Exit decision
 
 **Phase 23 repository implementation gate: PASS.** The traceability validator and tests are included, all required CI workflows are green on the implementation head, and documentation is reconciled. **External assurance gate: OPEN.** The project must not be described as independently penetration-tested or production-certified until a qualified external assessor provides a report tied to the release commit and verifies remediation.
+
+
+## Phase 24 follow-up — warning hygiene closure
+
+The 279-warning count above is an accurate historical result for the Phase 23 implementation head, not the current repository state. Phase 24 replaced project-owned naive UTC model factories with timezone-aware UTC factories. On implementation head `3da5a4f5a86f803545963a03a40a033c086ae566`, [Python 3.11 CI](https://github.com/LloydCoder/Auctaryn/actions/runs/37978786024) and Python 3.12 each passed 552 tests without a pytest warning summary. The finding is closed in [AUC-R009](../docs/SECURITY_RISK_REGISTER.md). Upstream Node/npm tooling notices remain visible and were not suppressed.

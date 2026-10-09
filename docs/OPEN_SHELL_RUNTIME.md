@@ -2,6 +2,8 @@
 
 Auctaryn's runtime adapter is opt-in. It is not a replacement for OpenShell's policy enforcement: Auctaryn authorizes and risk-checks a tool call; OpenShell enforces sandbox filesystem, process, and network restrictions.
 
+Production gateway registration metadata follows NVIDIA OpenShell's current SDK/CLI contract: `gateway_endpoint` in `metadata.json` under the active gateway. See the [Python SDK guide](https://docs.nvidia.com/openshell/dev/sdk/python) and [OpenShell gateway registration script](https://github.com/NVIDIA/OpenShell/blob/main/tasks/scripts/gateway.sh). The production deploy helper accepts the legacy `endpoint` key for compatibility, but requires a valid remote HTTPS URL and rejects localhost, loopback and unspecified addresses. This validates configuration shape only; it does not prove that the live gateway is reachable or enforcing the intended effective policy.
+
 ## Restrictive baseline
 
 When the OpenShell adapter is enabled through environment configuration, Auctaryn validates the repository-owned baseline YAML before initializing the SDK client. Startup fails closed if the policy is missing or malformed, Landlock is not set to `hard_requirement`, read/write paths exceed the explicit allowlists, required read-only system paths are missing, or the baseline introduces network rules. The validated source SHA-256 is retained on the adapter for diagnostics.

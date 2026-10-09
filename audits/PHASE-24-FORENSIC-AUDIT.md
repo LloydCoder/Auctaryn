@@ -99,6 +99,45 @@ This audit does not represent external gates as completed. No independent penetr
 
 **Remediation:** production deployment now requires a version tag, an exact GHCR digest, a verified release manifest, OCI provenance and SPDX SBOM attestations, HTTPS OpenShell gateway metadata, service-to-service OIDC credentials, and a mounted evidence HMAC key. The production Compose override pins the image digest. Rollback verifies the prior release and restores its immutable digest; deployment refuses missing/mismatched evidence and waits for readiness before exposing Nginx/TLS.
 
+### P24-12 — Naive UTC model factories produced hundreds of deprecation warnings
+
+**Risk:** repeated `datetime.utcnow` model defaults created naive timestamps and obscured the test signal with hundreds of Python deprecation warnings.
+
+**Remediation:** replaced project-owned model timestamp factories with `datetime.now(timezone.utc)`. Exact implementation-head Python 3.11 and 3.12 CI each passed 552 tests with no pytest warning summary. No global warning suppression was added. Node/npm tooling still emits upstream deprecation notices; those are distinct from the resolved Python model warning.
+
+### P24-13 — OpenShell system gateway metadata used the wrong endpoint field and allowed loopback HTTPS
+
+**Risk:** the deploy helper expected `"endpoint"`, while current NVIDIA OpenShell gateway metadata uses `gateway_endpoint`. A legitimate registered gateway could be rejected. The old loopback guard checked only HTTP even though the preceding condition required HTTPS, so an HTTPS loopback endpoint could pass that check.
+
+**Remediation:** added `scripts/verify_openshell_gateway_metadata.py`, accepts the current `gateway_endpoint` field (and the legacy `endpoint` key for compatibility), bounds metadata size, validates the HTTPS URL/hostname/port, rejects URL credentials/query/fragment, whitespace/backslashes, malformed numeric hosts, localhost, loopback and unspecified IPs, and fails closed. Production deployment invokes the validator before switching traffic; CI now uses the official `gateway_endpoint` field and tests rejection cases. This is contract validation, not proof of a live OpenShell connection.
+
+### P24-14 — Synchronous runtime health probes could block or exhaust workers
+
+**Risk:** invoking a synchronous adapter probe directly would block the event loop; running arbitrary blocking probes in a thread cannot safely cancel a hung function and repeated requests could exhaust worker threads.
+
+**Remediation:** detailed health/readiness now require an asynchronous probe and apply a bounded timeout. Unsupported synchronous probes are rejected without invoking them. Regression tests cover timeout behavior and fail-closed handling.
+
+### P24-15 — CI workflow token permissions were implicit
+
+**Risk:** the primary CI workflow relied on repository defaults rather than declaring a least-privilege token contract.
+
+**Remediation:** the primary CI workflow now explicitly sets `permissions: contents: read`. CodeQL and supply-chain workflows retain only the additional permissions needed for SARIF publication and artifact attestations.
+
+### External standards review — OWASP Agent Control Standard
+
+The OWASP GenAI Security Project's [Agent Control Standard (ACS)](https://github.com/GenAI-Security-Project/agent-control-standard) v0.1.0 is a wire protocol with JSON-RPC envelopes, handshake/capability negotiation and pre-action hook requests; it is not the same thing as the OWASP ASI01–ASI10 risk taxonomy. Auctaryn currently exposes its own versioned REST contracts and **does not claim ACS conformance**. An ACS adapter is a future interoperability candidate, not an implemented capability or a current release blocker. Any future adapter requires schema validation, handshake, authentication/replay semantics, disposition mapping and live end-to-end mediation tests.
+
+## Exact-head implementation CI evidence
+
+Implementation head reviewed: `3da5a4f5a86f803545963a03a40a033c086ae566`.
+
+- [Auctaryn CI — run 37978786024](https://github.com/LloydCoder/Auctaryn/actions/runs/37978786024): Python 3.11 and 3.12 each passed **552 tests**; lint, dependency audit, dashboard build, deployment/rollback syntax, Compose validation, container build and liveness passed.
+- [Secure software supply chain — run 37978785991](https://github.com/LloydCoder/Auctaryn/actions/runs/37978785991): Gitleaks, npm audit, SBOM generation, fixable high/critical container gate, full Grype inventory audit and artifact upload passed. The full inventory reported 16 matches across 95 packages (3 ignored), with **0 high/critical and 0 actionable high/critical** findings.
+- [CodeQL security analysis — run 37978785928](https://github.com/LloydCoder/Auctaryn/actions/runs/37978785928): SARIF reported **0 findings** across critical, high, medium and low/unrated severities.
+- [Gated production release — run 37978786032](https://github.com/LloydCoder/Auctaryn/actions/runs/37978786032): release-evidence contract validation passed. OCI publication was skipped because this was a pull request, as intended; the release manifest remains pending external acceptance evidence.
+
+These results apply to the implementation head above. The final audit/documentation commit must pass its own exact-head workflows before merge, and main must pass post-merge verification.
+
 ## Security and failure-mode coverage
 
 The Phase 24 tests cover:
@@ -136,7 +175,7 @@ These require real systems, authorized reviewers and operational evidence. GitHu
 
 ## Required completion check
 
-Before merging, verify all required jobs on the exact final PR head: Python 3.11 and 3.12 tests/Ruff, dependency audit, dashboard/container workflow, CodeQL, and secure-supply-chain workflow. A skipped release-publication job is expected on a pull request because publication is restricted to version tags; it is not evidence that a release was published. After merge, verify the post-merge workflows on the exact main commit.
+Implementation head `3da5a4f5a86f803545963a03a40a033c086ae566` passed all required exact-head checks listed above. The final audit/documentation commit must also pass Python 3.11/3.12, Ruff, dependency audit, dashboard/container, CodeQL and secure-supply-chain checks before merge. The tag-only publication job is expected to be skipped on a pull request; no release was published. After merge, verify the post-merge workflows on the exact main commit.
 
 ## Standards references used
 

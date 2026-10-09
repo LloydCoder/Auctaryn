@@ -7,6 +7,10 @@
 - **OpenShell** is the operating-system/runtime containment boundary for supported executions. Auctaryn must not weaken or replace the effective OpenShell policy.
 - **ThreatFade Oracle** contributes threat intelligence. It cannot override a denial or turn an unapproved destructive action into an approval.
 
+## Agent Control Standard interoperability boundary
+
+Auctaryn's current public contract is its versioned REST API; it does not implement the OWASP GenAI Security Project's [Agent Control Standard (ACS) v0.1.0](https://github.com/GenAI-Security-Project/agent-control-standard) JSON-RPC wire envelopes, handshake/capability negotiation or hook taxonomy. No ACS conformance claim is made. ACS is a runtime-control wire specification, not an additional ASI risk category. If interoperability becomes a product requirement, implement a separate adapter with schema validation, authenticated request/replay handling, explicit disposition mapping and live end-to-end mediation tests. Do not infer conformance from Auctaryn's existing REST endpoints or local gateway tests.
+
 ## Context-session enforcement
 
 When protected instructions are configured, gateway actions require a session ID and the latest intact context-check ID for that session. The check ID participates in the action-intent fingerprint, and context integrity is revalidated immediately before the runtime adapter is invoked. Each check is bound to one action intent; replay for a different action is denied. Compromised sessions remain quarantined until an administrator clears them, after which a fresh clean check is mandatory. Tracked sessions are capped at 10,000, protected instructions at 1,000, and check/compaction histories at 5,000 each; capacity exhaustion fails closed. These controls are process-local, not durable or multi-replica safe. A submitted local check does not prove that the external agent consumed that exact context; trusted runtime/harness attestation remains necessary. See the [Phase 8 enforcement audit](../audits/PHASE-08-SESSION-BOUND-ENFORCEMENT.md).
