@@ -98,6 +98,13 @@ jobs:
           subject-name: ${{ steps.build.outputs.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+      - name: Attest image SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: ${{ steps.build.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: auctaryn-container.spdx.json
+          push-to-registry: true
       - name: Create immutable release manifest
         env:
           IMAGE: ${{ steps.build.outputs.image }}

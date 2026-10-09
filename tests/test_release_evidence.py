@@ -83,4 +83,5 @@ def test_release_workflow_is_tag_gated_and_verifies_published_attestation() -> N
     assert "push-to-registry: true" in workflow
     assert "gh attestation verify" in workflow
     assert "release-manifest.json" in workflow
+    assert "sbom-path: auctaryn-container.spdx.json" in workflow
     assert "--verify-tag" in workflow
