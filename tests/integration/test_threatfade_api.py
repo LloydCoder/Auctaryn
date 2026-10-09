@@ -100,6 +100,22 @@ class TestThreatFadeAPI:
         assert len(r.json()) >= 1
 
 
+    def test_scenario_upstream_failure_is_sanitized(self, client, monkeypatch):
+        import api.routes.threatfade as threatfade_routes
+        from core.exceptions import ThreatFadeConnectionError
+
+        class FakeOracle:
+            async def run_scenario(self, scenario):
+                raise ThreatFadeConnectionError("internal-host-secret")
+
+        monkeypatch.setattr(threatfade_routes, "get_oracle", lambda: FakeOracle())
+        response = client.post(
+            "/api/v1/threatfade/scenario",
+            json={"scenario": "normal_with_fade"},
+        )
+        assert response.status_code == 502
+        assert "internal-host-secret" not in response.text
+
     def test_pcap_upload_is_bounded_before_oracle_call(self, client, monkeypatch):
         import api.routes.threatfade as threatfade_routes
         monkeypatch.setattr(threatfade_routes, "MAX_PCAP_BYTES", 4)
