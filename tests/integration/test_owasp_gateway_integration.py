@@ -12,7 +12,13 @@ class TestAgentIdentityAPI:
     def test_register_and_authorize(self, client):
         client.post("/api/v1/identity/register", json={"agent_id": "agent-x", "owner": "user-1"})
         client.post("/api/v1/identity/grant", json={"agent_id": "agent-x", "scope": "read_file"})
-        r = client.get("/api/v1/identity/agent-x/authorized/read_file")
+        token = client.post("/api/v1/identity/token", json={
+            "agent_id": "agent-x", "scopes": ["read_file"]
+        }).json()["token_id"]
+        r = client.get(
+            "/api/v1/identity/agent-x/authorized/read_file",
+            headers={"X-Agent-Identity-Token": token},
+        )
         assert r.status_code == 200
         assert r.json()["authorized"] is True
 
@@ -31,7 +37,7 @@ class TestAgentIdentityAPI:
         })
         assert r.status_code == 200
         assert "read_file" in r.json()["scopes"]
-        assert client.get("/api/v1/identity/sub/authorized/read_file").json()["authorized"] is False
+        assert client.get("/api/v1/identity/sub/authorized/read_file", headers={"X-Agent-Identity-Token": token_id}).json()["authorized"] is True
         from api.routes.gateway import get_gateway
         token_id = r.json()["token_id"]
         assert get_gateway().identity_manager.is_authorized(
