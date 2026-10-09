@@ -131,3 +131,36 @@ async def get_entry(
         "rolled_back": rolled_back,
         "created_at": entry.created_at.isoformat(),
     }
+
+
+
+@router.get("/content/{key}/{session_id}")
+async def get_memory_content(
+    key: str,
+    session_id: str,
+    agent_id: str | None = Header(default=None, alias="X-Agent-ID"),
+    identity_token: str | None = Header(default=None, alias="X-Agent-Identity-Token"),
+) -> dict:
+    owner = _require_memory_scope(agent_id, identity_token, "memory:read")
+    defender = get_memory_defender()
+    if not defender.session_owned_by(session_id, owner):
+        raise HTTPException(status_code=404, detail="Memory session not found")
+    entry = defender.store.get(key)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Memory entry not found")
+    readable = defender.is_readable_by_session(key, session_id, owner)
+    entry = defender.store.get(key)
+    if entry is None or entry.agent_id != owner:
+        raise HTTPException(status_code=404, detail="Memory entry not found")
+    if not readable:
+        raise HTTPException(status_code=403, detail="Quarantined memory is isolated to its originating session")
+    if not defender.store.verify_integrity(key):
+        raise HTTPException(status_code=409, detail="Memory integrity could not be restored")
+    return {
+        "key": entry.key,
+        "session_id": entry.session_id,
+        "source": entry.source,
+        "content": entry.content,
+        "quarantined": entry.quarantined,
+        "integrity_ok": True,
+    }
