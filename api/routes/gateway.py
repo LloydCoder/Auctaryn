@@ -93,6 +93,31 @@ class ApprovalRequest(BaseModel):
     approved: bool
     reason: str = Field(default="", max_length=500)
 
+async def _publish_decision_alert(decision: GatewayDecision) -> None:
+    if decision.risk_level.value != "critical" and decision.decision != ActionDecision.VETOED:
+        return
+    alert = get_incident_response_manager().create_alert(
+        severity="critical" if decision.risk_level.value == "critical" else "high",
+        category="agent_action_risk",
+        title="Critical agent action risk",
+        summary=f"Decision {decision.decision.value}; risk={decision.risk_level.value}",
+        decision_id=decision.id,
+        actor_id=decision.tool_call.agent_id,
+    )
+    try:
+        await record_evidence(
+            "incident.alert.created",
+            correlation_id=alert["alert_id"],
+            actor_id=decision.tool_call.agent_id,
+            decision_id=decision.id,
+            outcome=alert["severity"],
+            details={"decision": decision.decision.value, "risk_level": decision.risk_level.value},
+        )
+    except (EvidenceStoreError, ValueError):
+        pass
+    await broadcast_alert({"type": "incident_alert", "alert": alert})
+
+
 async def _broadcast_decision(decision: GatewayDecision) -> None:
     from api.websockets.actions import broadcast_action
     await broadcast_action({
