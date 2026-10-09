@@ -233,6 +233,34 @@ class TestFusionOpsClient:
             )
 
     @pytest.mark.asyncio
+    async def test_detect_json_rejects_malformed_remote_schema(self):
+        from modules.threatfade_oracle.client import FusionOpsClient
+        from core.exceptions import ThreatFadeConnectionError
+        client = FusionOpsClient()
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = {"detection": [], "triage": {}, "remediation": {}}
+        with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=response)):
+            with pytest.raises(ThreatFadeConnectionError, match="invalid analysis schema"):
+                await client.detect_json(
+                    timestamps=[float(i) for i in range(10)],
+                    values=[float(i) for i in range(10)],
+                    source_label="test",
+                )
+
+    @pytest.mark.asyncio
+    async def test_health_check_invalid_json_fails_closed(self):
+        from modules.threatfade_oracle.client import FusionOpsClient
+        client = FusionOpsClient()
+        response = MagicMock()
+        response.status_code = 200
+        response.json.side_effect = ValueError("invalid response")
+        with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=response)):
+            result = await client.health_check()
+        assert result["status"] == "unreachable"
+        assert result["error"] == "ThreatFadeConnectionError"
+
+    @pytest.mark.asyncio
     async def test_get_events(self):
         from modules.threatfade_oracle.client import FusionOpsClient
         client = FusionOpsClient()
