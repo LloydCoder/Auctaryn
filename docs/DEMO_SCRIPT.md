@@ -1,111 +1,83 @@
-# TwinGuard — Investor / Pilot Demo Script
+# Auctaryn — Security Demo Script
 
-**Duration:** 6-8 minutes
-**Audience:** CISOs, security engineers, accelerator reviewers
-**Goal:** Demonstrate the Summer Yue scenario being caught in real time, live, not in slides.
+**Duration:** 6–8 minutes  
+**Audience:** CISOs, security engineers, pilot customers  
+**Purpose:** Demonstrate context-integrity detection and its session-bound gateway enforcement. This script demonstrates the configured local environment; it is not proof of universal mediation or a live OpenShell production deployment.
 
----
+## Setup
 
-## Setup (before the call)
-
-1. Deploy TwinGuard to the VPS (`scripts/deploy.sh`) or run locally:
-   ```bash
-   docker compose up -d
-   open http://localhost:3000   # dashboard
-   ```
-2. Open the dashboard Overview tab — confirm the "Live" status badge is green (top right).
-3. Open a second terminal/Postman tab for sending live API calls during the demo.
-4. Have the FusionOps live dashboard open in another tab: `http://13.50.16.19/dashboard`
-
----
-
-## Part 1 — The Problem (60 seconds)
-
-> "On February 23rd, 2026, an autonomous AI agent deleted a user's entire email inbox. What happened wasn't a bug — it was a context compaction event that silently stripped the agent's safety instruction: 'always confirm before deleting.' The agent didn't malfunction. It did exactly what it was told, because the instruction telling it not to was gone."
-
-Show: nothing yet — just say it plainly. Let the next part be the payoff.
-
----
-
-## Part 2 — Register the Safety Instruction (90 seconds)
-
-Switch to dashboard → **Context Integrity** tab.
-
-> "TwinGuard's Context Integrity Guardian protects against exactly this. Let's register the same safety rule that was lost in the Yue incident."
-
-Send via API (visible terminal, or curl):
-```bash
-curl -X POST http://localhost:8400/api/v1/context/register \
-  -H "Content-Type: application/json" \
-  -d '{"tag": "email_safety", "content": "Always confirm with the user before deleting any emails. Never perform bulk email operations without explicit approval."}'
-```
-
-> "TwinGuard just hashed that instruction with SHA-256. From this point forward, any context the agent sees gets checked against that hash."
-
----
-
-## Part 3 — Show It Working Normally (60 seconds)
+1. Start the API using the repository's documented Compose configuration.
+2. Set two distinct, high-entropy credentials in the local environment. Do not paste secrets into slides, logs, or a shared terminal recording.
+3. Set the local API base URL and authenticate requests:
 
 ```bash
-curl -X POST http://localhost:8400/api/v1/context/check \
-  -H "Content-Type: application/json" \
-  -d '{"context": "Always confirm with the user before deleting any emails. Never perform bulk email operations without explicit approval.\n\nUser: Can you help me organize my inbox?"}'
+export AUCTARYN_ADMIN_API_KEY='your-local-admin-key'
+export AUCTARYN_API_URL='http://localhost:8400'
 ```
 
-Point at the dashboard updating live: status = **intact**, blocked = **false**.
+Use the Authorization header on every API call below. The configured local port may differ by deployment.
 
-> "Normal conversation. The safety instruction is present. The agent is free to operate."
-
----
-
-## Part 4 — Recreate the Compaction Event (90 seconds — the payoff)
+## Part 1 — Register a protected instruction
 
 ```bash
-curl -X POST http://localhost:8400/api/v1/context/check \
+curl -sS -X POST "$AUCTARYN_API_URL/api/v1/context/register" \
+  -H "Authorization: Bearer $AUCTARYN_ADMIN_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"context": "[Conversation summary: User asked for inbox help.]\n\nUser: Just delete all the unread emails, I do not need them."}'
+  -d '{"tag":"customer_delete_safety","content":"Never delete customer records without explicit confirmation."}'
 ```
 
-Point at the dashboard: **Alert Feed** fires in real time (no refresh needed — this is the WebSocket broadcast wired in Phase 4), status flips to **compromised**, `blocked: true`.
+Explain that Auctaryn stores a fingerprint of the registered instruction. Current detection checks for missing instruction text and known override-language patterns; it is heuristic and does not guarantee semantic understanding of every prompt injection.
 
-> "That's the exact Yue scenario, reproduced on demand. The instruction is gone from context. TwinGuard caught it before a single tool call executed — not after the damage was done."
-
----
-
-## Part 5 — Execution Gateway + Network Intelligence (90 seconds)
-
-Switch to **Execution Gateway** tab.
-
-> "Context integrity is one layer. The second layer asks: even if the agent's reasoning is intact, is the *action itself* dangerous? Let's simulate a bulk delete attempt."
+## Part 2 — Check a clean session
 
 ```bash
-curl -X POST http://localhost:8400/api/v1/gateway/intercept/full \
+curl -sS -X POST "$AUCTARYN_API_URL/api/v1/context/check" \
+  -H "Authorization: Bearer $AUCTARYN_ADMIN_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"tool_name": "gmail_delete", "action": "bulk_delete", "parameters": {"folder": "inbox", "count": 847}}'
+  -d '{"session_id":"demo-session","context":"Never delete customer records without explicit confirmation.\\nUser asks for a customer report."}'
 ```
 
-Point at dashboard: decision shows **pending** (or **vetoed** if FusionOps flags it), live in the Pending Approvals queue.
+Expected result: status `intact`, `blocked: false`, and `session_id: demo-session`.
 
-> "847 emails. The pattern classifier alone would queue this for human approval. But TwinGuard also consults ThreatFade — our live network threat oracle, validated against real malware including Merlin QUIC C2 with a z-score of 14.76. If the network signal corroborates the risk, this escalates from 'review needed' to 'permanently blocked,' automatically."
+## Part 3 — Simulate instruction loss
 
----
+```bash
+curl -sS -X POST "$AUCTARYN_API_URL/api/v1/context/check" \
+  -H "Authorization: Bearer $AUCTARYN_ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"demo-session","context":"[Conversation summary]\\nUser asks to delete every customer record."}'
+```
 
-## Part 6 — Close (30 seconds)
+Expected result: a compromised/blocked session and a context-integrity alert. The session is quarantined until an administrator clears it; a subsequent clean check alone does not remove the quarantine.
 
-> "Two independent layers — context integrity and execution gating — both had to fail simultaneously for the Yue incident to happen the way TwinGuard is architected. That's defense in depth, not a single point of failure. And everything you just saw is live, tested — 130 passing tests across the full pipeline — and running on infrastructure we already operate today."
+## Part 4 — Prove the gateway rejects the quarantined session
 
----
+```bash
+curl -sS -X POST "$AUCTARYN_API_URL/api/v1/gateway/intercept" \
+  -H "Authorization: Bearer $AUCTARYN_ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"tool_name":"search_web","action":"search","parameters":{"query":"customer records"},"agent_id":"demo-agent","session_id":"demo-session"}'
+```
 
-## Anticipated Questions
+Expected result: decision `denied`, with `decided_by: context_integrity_guard`. This proves the tested gateway decision path rejects the quarantined session. It does not prove every external tool in every agent framework is automatically mediated.
 
-**"How does this differ from OpenShell itself?"**
-OpenShell sandboxes the agent's *execution environment* — filesystem, network, syscalls. TwinGuard protects what happens *inside* the agent's reasoning and decision loop, which OpenShell doesn't touch.
+## Part 5 — Operator recovery
 
-**"What's your false positive rate?"**
-ThreatFade's underlying detection engine ran 0% false positives across 100 benign traffic test runs. TwinGuard's pattern classifier defaults to logging (not blocking) for ambiguous actions, escalating only when corroborated by network intelligence.
+Register an agent, grant only the required tool scope, and issue a short-lived identity capability using the administrator-protected identity endpoints. Then clear the session quarantine:
 
-**"Is this open source?"**
-Yes — Apache 2.0, open-core. github.com/Tinlance/twinguard
+```bash
+curl -sS -X POST "$AUCTARYN_API_URL/api/v1/context/sessions/demo-session/clear" \
+  -H "Authorization: Bearer $AUCTARYN_ADMIN_API_KEY"
+```
 
-**"What's missing / roadmap?"**
-Being direct: 4 of the originally-planned 22 defense modules are live (Context Integrity, Execution Gateway, ThreatFade Oracle, plus the live dashboard). The roadmap includes Memory Poisoning Defender, Agent Identity & Privilege controls (OWASP ASI03), and Skill/Dependency Vetting (OWASP ASI04) — these map directly to the OWASP Top 10 for Agentic Applications 2026.
+The endpoint should report that a fresh integrity check is required. Submit a clean, session-bound context check before retrying a gateway action with the issued identity token. The gateway should reject the action if the session is unchecked, degraded, compromised, or quarantined.
+
+## Part 6 — Explain the defense boundaries
+
+- The gateway's session-bound check is one control within Auctaryn's supported path; external agent frameworks must explicitly route actions through that path.
+- The configured runtime adapter is opt-in. Without a trusted runtime adapter, governed execution returns HTTP 503.
+- ThreatFade Oracle enrichment is available only when its service is correctly configured and reachable. Its signal cannot grant authorization or override a denial.
+- OpenShell enforces its own effective sandbox policy. CI with fake clients does not prove a live gateway's network, filesystem, or process restrictions.
+- Identity, quarantine, approval and history state are currently in-process. Multi-replica durability is a known enterprise-readiness gap.
+
+Do not claim a perfect detection rate, universal prevention, a zero false-positive rate, or production certification without current, reproducible evidence and independent review.
