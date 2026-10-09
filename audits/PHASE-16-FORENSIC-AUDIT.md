@@ -2,6 +2,8 @@
 
 **Scope:** append-only event chain, decision/approval/execution correlation, operator verification API and regression tests.
 
+**CI evidence:** PR #24 exact head `c60acec2aa03e6da225ed96b8bdf618dfe3f4018` passed [workflow 37946732792](https://github.com/LloydCoder/Auctaryn/actions/runs/37946732792). Merge commit `ddb7aeaa6e8ee82814a918b2285dd7f4e50c750d` passed post-merge [workflow 37946956578](https://github.com/LloydCoder/Auctaryn/actions/runs/37946956578), including Python 3.11/3.12, Ruff, dependency audit, dashboard build, Compose, image build and liveness.
+
 ## Implemented
 
 - SQLite-backed evidence records use a canonical JSON payload, sequence, previous-record digest and SHA-256 record digest.
