@@ -14,7 +14,7 @@ On February 23, 2026, an OpenClaw agent deleted a user's entire email inbox afte
 
 1. **Context Integrity Guardian** — Checks registered instructions for integrity changes
 2. **Execution Gateway** — Evaluates submitted tool calls and applies risk-based decisions; direct tool execution must still be connected to a trusted runtime adapter
-3. **ThreatFade Oracle** — Network threat intelligence via [ThreatFade](https://github.com/LloydCoder/tinlance-threatfade)
+3. **ThreatFade Oracle** — Advisory network threat intelligence via [ThreatFade](https://github.com/LloydCoder/tinlance-threatfade); see the [Oracle security contract](docs/THREATFADE_ORACLE.md)
 4. **React Dashboard** — Real-time visibility into agent behavior
 5. **Skill Supply-Chain Vetting** — Ed25519 publisher verification, artifact digest validation, exact version pins, and tool-change detection
 
