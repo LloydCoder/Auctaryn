@@ -195,7 +195,6 @@ class EvidenceStore:
                     hmac_verified = False
                 previous_hash = digest
                 checked += 1
-            return {"valid": True, "records_checked": checked, "head_hash": previous_hash,
             if self.key:
                 reason = "ok" if hmac_verified else "hmac_unverified"
             else:
