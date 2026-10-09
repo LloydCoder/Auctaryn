@@ -1,4 +1,5 @@
 """ThreatFade Oracle: bounded advisory analysis with conservative failure behavior."""
+import asyncio
 import os
 import threading
 import time
@@ -97,6 +98,9 @@ class ThreatFadeOracle:
                 logger.warning("ThreatFade Oracle escalation for %s:%s", tool_call.tool_name, tool_call.action,
                     extra={"event": "oracle_escalation", "module_name": "threatfade_oracle"})
             return result
+        except asyncio.CancelledError:
+            self.circuit_breaker.record_failure()
+            raise
         except Exception as exc:
             self.circuit_breaker.record_failure()
             logger.warning("ThreatFade analysis unavailable; retaining local decision (%s)", type(exc).__name__,
@@ -114,6 +118,9 @@ class ThreatFadeOracle:
             self.circuit_breaker.record_success()
             self._remember(result, full_result)
             return result
+        except asyncio.CancelledError:
+            self.circuit_breaker.record_failure()
+            raise
         except ValueError:
             # Invalid caller input is not an upstream health failure.
             raise
