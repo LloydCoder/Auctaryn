@@ -53,6 +53,7 @@ The dashboard requires an administrator API key at sign-in. REST API clients use
 
 - Generate two different secrets, for example with `openssl rand -hex 32`, and set `AUCTARYN_API_KEY` and `AUCTARYN_ADMIN_API_KEY` in `.env`.
 - All `/api/v1/*` HTTP endpoints require a Bearer credential. Identity management, approval, pending-decision, and decision-history endpoints require the administrator credential.
+- Before intercepting actions, an administrator registers an agent, grants exact tool scopes, and issues a short-lived token via `POST /api/v1/identity/token`. Gateway interception requests must include both `agent_id` and `identity_token`. Tokens expire within one hour maximum; scope revocation invalidates matching issued and delegated capabilities.
 - WebSocket clients must send `{"type":"authenticate","token":"..."}` as their first frame. The dashboard prompts for the administrator key and keeps it in memory rather than local storage.
 - The ThreatFade service is not published on the host by Compose. Use HTTPS for external ThreatFade endpoints; plain HTTP is accepted only for local/Docker service names unless the explicit insecure override is set for isolated testing.
 - `/health` is a liveness endpoint, not evidence that OpenShell is connected or that all security controls are ready.
