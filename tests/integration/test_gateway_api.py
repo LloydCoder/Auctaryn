@@ -8,6 +8,9 @@ class TestGatewayAPI:
     def _register_scope(client, agent_id, tool_name):
         client.post("/api/v1/identity/register", json={"agent_id": agent_id, "owner": "test"})
         client.post("/api/v1/identity/grant", json={"agent_id": agent_id, "scope": tool_name})
+        token = client.post("/api/v1/identity/token", json={"agent_id": agent_id})
+        assert token.status_code == 200
+        return token.json()["token_id"]
 
     def test_status(self, client):
         r = client.get("/api/v1/gateway/status")
