@@ -19,7 +19,7 @@ The current Auctaryn integration can generate a synthetic entropy signal from ac
 
 - Signal requests require 10–10,000 finite numeric points, matching timestamp/value lengths, and a bounded source label.
 - Events queries are limited to 1–200.
-- PCAP uploads are capped at 10 MiB; filenames are restricted to a safe basename character set.
+- PCAP uploads are capped at 10 MiB; filenames are restricted to a safe basename character set and file contents must begin with a recognized PCAP/PCAPNG magic header.
 - Analysis responses must be JSON objects with `detection` and `triage` objects, recognized severity values, finite numeric fields, and correctly typed boolean flags. Malformed, invalid or unavailable responses are upstream failures, not benign findings.
 
 The current response-size guard checks Content-Length and the received response body after HTTPX has materialized it. It is defense in depth, not a hard transport-memory cap; production service and reverse-proxy limits must also enforce response sizes.
