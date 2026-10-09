@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from core.exceptions import PolicyViolation
-from api.routes.gateway import get_identity_manager, require_api_key, require_operator_key
+from api.routes.gateway import get_identity_manager
+from api.security import require_api_key, require_operator_key
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
 

@@ -6,6 +6,8 @@ with their first JSON message so credentials never need to appear in URLs.
 import hmac
 import os
 
+from fastapi import Header, HTTPException, status
+
 
 def _matches(candidate: object, configured: str | None) -> bool:
     return (
@@ -56,3 +58,36 @@ def origin_allowed(origin: str | None) -> bool:
         return True  # non-browser clients must still authenticate with a key
     from core.config import get_config
     return origin in get_config().server.cors_origins
+
+async def require_api_key(authorization: str | None = Header(default=None)) -> None:
+    """FastAPI dependency requiring a configured service or administrator bearer."""
+    role = token_role(extract_bearer(authorization))
+    if role in ("api", "admin"):
+        return
+    if not configured_for("api"):
+        raise HTTPException(
+            status_code=503,
+            detail="API authentication is not configured correctly",
+        )
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Valid bearer token required",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+async def require_operator_key(authorization: str | None = Header(default=None)) -> None:
+    """FastAPI dependency requiring the distinct administrator bearer."""
+    role = token_role(extract_bearer(authorization))
+    if role == "admin":
+        return
+    if not configured_for("admin"):
+        raise HTTPException(
+            status_code=503,
+            detail="Administrator authentication is not configured correctly",
+        )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Administrator bearer token required",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
