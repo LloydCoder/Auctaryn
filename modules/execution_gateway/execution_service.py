@@ -62,6 +62,7 @@ class ExecutionService:
                 decision.tool_call, idempotency_key=decision.id
             )
         except Exception as exc:
+            self.gateway.record_execution_outcome(decision.tool_call.agent_id, success=False)
             logger.error(
                 "Trusted runtime execution failed for decision %s (%s)",
                 decision.id,
@@ -72,6 +73,9 @@ class ExecutionService:
                 "Trusted runtime execution failed; no successful receipt was produced."
             ) from exc
 
+        self.gateway.record_execution_outcome(
+            decision.tool_call.agent_id, success=result.status == "succeeded"
+        )
         if result.status != "succeeded":
             logger.warning(
                 "Runtime did not complete decision %s successfully (status=%s)",
