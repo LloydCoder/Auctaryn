@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from contextlib import closing
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -43,31 +44,63 @@ def _database_check(path: Path) -> dict[str, Any]:
 
 
 def _evidence_check(path: Path, allow_unverified_hmac: bool) -> dict[str, Any]:
-    # Inspect read-only first: verification must never initialize or mutate a backup.
+    """Verify evidence rows read-only; never initialize or change the candidate DB."""
     with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=10)) as db:
+        db.row_factory = sqlite3.Row
         tables = {row[0] for row in db.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )}
-    if "evidence_records" not in tables:
-        return {"valid": True, "records_checked": 0, "reason": "no_evidence_table",
-                "hmac_verified": False, "integrity_mode": "not_present"}
-    # Import lazily so SQLite integrity checks remain usable independently.
-    from modules.evidence_audit.store import EvidenceStore, EvidenceStoreError
+        if "evidence_records" not in tables:
+            return {"valid": True, "records_checked": 0, "reason": "no_evidence_table",
+                    "hmac_verified": False, "integrity_mode": "not_present"}
+        rows = db.execute("SELECT * FROM evidence_records ORDER BY sequence ASC").fetchall()
 
-    try:
-        result = EvidenceStore(path)._verify_sync()
-    except (EvidenceStoreError, ValueError) as exc:
-        raise ValueError("Evidence-chain verification failed") from exc
-    if not result.get("valid"):
-        raise ValueError(f"Evidence chain invalid: {result.get('reason', 'unknown')}")
-    if result.get("reason") == "key_unavailable" and not allow_unverified_hmac:
+    key_value = os.getenv("AUCTARYN_EVIDENCE_HMAC_KEY")
+    key_file = os.getenv("AUCTARYN_EVIDENCE_HMAC_KEY_FILE")
+    if key_file:
+        try:
+            key_value = Path(key_file).read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ValueError("Evidence HMAC key file could not be read") from exc
+    key = key_value.encode("utf-8") if key_value else None
+    if key is not None and len(key) < 32:
+        raise ValueError("Evidence HMAC key must be at least 32 bytes")
+
+    previous_hash = "0" * 64
+    checked = 0
+    any_signature = any(row["hmac_signature"] for row in rows)
+    hmac_verified = bool(key)
+    for row in rows:
+        digest = hashlib.sha256(
+            previous_hash.encode("ascii") + bytes([10]) + row["payload_json"].encode("utf-8")
+        ).hexdigest()
+        if row["previous_hash"] != previous_hash or not hmac.compare_digest(digest, row["record_hash"]):
+            raise ValueError(f"Evidence chain invalid at sequence {row['sequence']}: hash_chain_mismatch")
+        signature = row["hmac_signature"]
+        if key is not None:
+            expected = hmac.new(key, digest.encode("ascii"), hashlib.sha256).hexdigest()
+            if not signature or not hmac.compare_digest(expected, signature):
+                raise ValueError(f"Evidence chain invalid at sequence {row['sequence']}: hmac_mismatch")
+        elif signature:
+            hmac_verified = False
+        previous_hash = digest
+        checked += 1
+
+    if key is not None:
+        reason = "ok"
+    elif any_signature:
+        reason = "key_unavailable"
+    else:
+        reason = "hash_chain_only"
+    if reason == "key_unavailable" and not allow_unverified_hmac:
         raise ValueError(
             "Evidence rows contain HMAC signatures but the verification key is unavailable; "
             "configure AUCTARYN_EVIDENCE_HMAC_KEY_FILE or explicitly pass "
             "--allow-unverified-hmac only for a documented recovery operation"
         )
-    return result
-
+    return {"valid": True, "records_checked": checked, "head_hash": previous_hash,
+            "hmac_verified": hmac_verified, "integrity_mode": "sha256-chain+hmac-sha256" if key else "sha256-chain-only",
+            "reason": reason}
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
