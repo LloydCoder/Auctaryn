@@ -1,0 +1,133 @@
+name: Secure software supply chain
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: Pull request dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@ce3cf9537a52e8119d91fd484ab5b8a807627bf8 # v4.6.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: always
+
+  secret-scan:
+    name: Historical and change-set secret scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - name: Scan for leaked credentials
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+  sbom-and-container:
+    name: Dependency audit, SBOM and container scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Install exact dashboard dependency graph
+        working-directory: dashboard
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Audit dashboard dependencies including development tooling
+        working-directory: dashboard
+        run: npm audit --audit-level=high
+      - name: Build API container
+        run: docker build --pull --tag auctaryn:ci .
+      - name: Generate source SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: auctaryn-source.spdx.json
+          artifact-name: auctaryn-source-sbom
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Generate container SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: auctaryn:ci
+          format: spdx-json
+          output-file: auctaryn-container.spdx.json
+          artifact-name: auctaryn-container-sbom
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Scan container image for known vulnerabilities
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
+        with:
+          image: auctaryn:ci
+          fail-build: true
+          severity-cutoff: high
+          output-format: table
+      - name: Export exact CI image for provenance
+        run: docker save --output auctaryn-image.tar auctaryn:ci
+      - name: Upload SBOMs and tested image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: auctaryn-supply-chain
+          path: |
+            auctaryn-source.spdx.json
+            auctaryn-container.spdx.json
+            auctaryn-image.tar
+          if-no-files-found: error
+          retention-days: 14
+
+  attest:
+    name: Attest tested supply-chain artifacts
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: sbom-and-container
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Download tested artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: auctaryn-supply-chain
+      - name: Attest source SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: auctaryn-source.spdx.json
+      - name: Attest container SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: auctaryn-container.spdx.json
+      - name: Attest exact CI container image archive
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: auctaryn-image.tar
