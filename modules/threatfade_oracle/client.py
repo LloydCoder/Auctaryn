@@ -20,6 +20,7 @@ MAX_JSON_RESPONSE_BYTES = 1_000_000
 MAX_PCAP_BYTES = 10 * 1024 * 1024
 VALID_SCENARIOS = {"c2_quieting", "lotl_gradual", "gnss_jam", "normal_with_fade", "mixed"}
 VALID_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
+PCAP_MAGIC_HEADERS = (b"\\xd4\\xc3\\xb2\\xa1", b"\\xa1\\xb2\\xc3\\xd4", b"\\x4d\\x3c\\xb2\\xa1", b"\\xa1\\xb2\\x3c\\x4d", b"\\x0a\\x0d\\x0d\\x0a")
 
 
 class FusionOpsClient:
@@ -146,6 +147,8 @@ class FusionOpsClient:
         if (not isinstance(filename, str) or len(filename) > 128 or PurePath(filename).name != filename
                 or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", filename)):
             raise ValueError("Invalid PCAP filename")
+        if not any(file_bytes.startswith(magic) for magic in PCAP_MAGIC_HEADERS):
+            raise ValueError("PCAP upload does not have a recognized PCAP/PCAPNG header")
         try:
             async with httpx.AsyncClient(timeout=self.timeout * 3, headers=self._headers, follow_redirects=False) as client:
                 response = await client.post(f"{self.base_url}/detect/pcap",
