@@ -216,6 +216,22 @@ class TestFusionOpsClient:
             with pytest.raises(ThreatFadeConnectionError):
                 await client.detect_scenario("c2_quieting")
 
+    def test_client_rejects_invalid_timeout(self):
+        from modules.threatfade_oracle.client import FusionOpsClient
+        with pytest.raises(ValueError):
+            FusionOpsClient(base_url="https://fusionops.example.test", timeout=0)
+
+    @pytest.mark.asyncio
+    async def test_detect_json_rejects_non_finite_input(self):
+        from modules.threatfade_oracle.client import FusionOpsClient
+        client = FusionOpsClient()
+        with pytest.raises(ValueError, match="finite numbers"):
+            await client.detect_json(
+                timestamps=[float(i) for i in range(10)],
+                values=[1.0] * 9 + [float("nan")],
+                source_label="test",
+            )
+
     @pytest.mark.asyncio
     async def test_get_events(self):
         from modules.threatfade_oracle.client import FusionOpsClient
