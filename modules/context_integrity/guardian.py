@@ -57,7 +57,7 @@ def detect_goal_hijack(registered_instruction: str, new_content: str) -> GoalHij
     if overlap:
         return GoalHijackResult(
             hijack_detected=True,
-            reason=f"Override language detected targeting protected instruction terms: {overlap}",
+            reason="Override language overlaps protected instruction content.",
         )
 
     return GoalHijackResult(hijack_detected=False)
@@ -181,28 +181,37 @@ def detect_compaction(
 
 
 def generate_alert(result: IntegrityCheckResult) -> Optional[Alert]:
-    if result.status == IntegrityStatus.INTACT:
+    hijack_tags = [d["tag"] for d in result.details if d.get("status") == "hijack_detected"]
+    missing_tags = [d["tag"] for d in result.details if d.get("status") == "missing"]
+    if result.status == IntegrityStatus.INTACT and not hijack_tags and not result.blocked:
         return None
-    if result.status == IntegrityStatus.COMPROMISED:
+    if result.status == IntegrityStatus.COMPROMISED or hijack_tags or result.blocked:
         severity = Severity.CRITICAL
     elif result.degradation_percent >= 20:
         severity = Severity.HIGH
     else:
         severity = Severity.MEDIUM
 
-    missing_tags = [d["tag"] for d in result.details if d.get("status") == "missing"]
-    return Alert(
-        id=_gen_id(), severity=severity, module="context_integrity",
-        title="Context Integrity Violation Detected",
-        message=(
+    if hijack_tags:
+        message = (
+            f"Goal hijack detected against protected instructions: {', '.join(hijack_tags)}. "
+            f"Agent {'BLOCKED' if result.blocked else 'requires review'}."
+        )
+    else:
+        message = (
             f"{result.instructions_degraded} of {result.instructions_total} protected "
             f"instructions missing ({result.degradation_percent}% degradation). "
             f"Missing: {', '.join(missing_tags)}. "
             f"Agent {'BLOCKED' if result.blocked else 'warned'}."
-        ),
+        )
+    return Alert(
+        id=_gen_id(), severity=severity, module="context_integrity",
+        title="Context Integrity Violation Detected",
+        message=message,
         data={"check_id": result.id, "status": result.status.value,
               "degradation_percent": result.degradation_percent,
-              "missing_tags": missing_tags, "blocked": result.blocked},
+              "missing_tags": missing_tags, "hijack_tags": hijack_tags,
+              "blocked": result.blocked},
     )
 
 
@@ -214,14 +223,34 @@ class ContextIntegrityGuardian:
         self.compaction_history: list[CompactionEvent] = []
         self.check_count: int = 0
         self._last_token_count: int = 0
-        self._last_combined_hash: str = ""
+        self._last_protected_context_hash: str = ""
+        self._session_results: dict[str, IntegrityCheckResult] = {}
+        self._blocked_sessions: dict[str, str] = {}
 
     def register_instruction(self, tag: str, content: str) -> ProtectedInstruction:
-        inst = self.registry.register(tag, content)
-        self._last_combined_hash = self.registry.combined_hash()
-        return inst
+        return self.registry.register(tag, content)
 
-    def check(self, current_context: str) -> IntegrityCheckResult:
+    def _protected_context_hash(self, current_context: str) -> str:
+        present = [
+            f"{instruction.tag}:{instruction.hash}"
+            for instruction in sorted(self.registry.get_all(), key=lambda item: item.tag)
+            if instruction.content in current_context
+        ]
+        return hash_instruction("|".join(present))
+
+    def get_session_result(self, session_id: str) -> IntegrityCheckResult | None:
+        return self._session_results.get(session_id)
+
+    def is_session_blocked(self, session_id: str) -> bool:
+        return session_id in self._blocked_sessions
+
+    def clear_session(self, session_id: str) -> bool:
+        """Clear quarantine but require a new clean check before the session can act."""
+        was_blocked = self._blocked_sessions.pop(session_id, None) is not None
+        self._session_results.pop(session_id, None)
+        return was_blocked
+
+    def check(self, current_context: str, session_id: str | None = None) -> IntegrityCheckResult:
         result = verify_integrity(
             self.registry, current_context,
             degradation_threshold=self.degradation_threshold,
@@ -235,6 +264,7 @@ class ContextIntegrityGuardian:
                 hijack = detect_goal_hijack(inst.content, current_context)
                 if hijack.hijack_detected:
                     result.blocked = True
+                    result.status = IntegrityStatus.COMPROMISED
                     result.details.append({
                         "tag": inst.tag, "status": "hijack_detected",
                         "reason": hijack.reason,
@@ -248,18 +278,23 @@ class ContextIntegrityGuardian:
         self.history.append(result)
         self.check_count += 1
 
+        if session_id:
+            self._session_results[session_id] = result
+            if result.blocked:
+                self._blocked_sessions[session_id] = result.id
+
         estimated_tokens = len(current_context.split())
+        protected_hash = self._protected_context_hash(current_context)
         if self._last_token_count > 0:
-            current_hash = self.registry.combined_hash()
             compaction = detect_compaction(
                 self._last_token_count, estimated_tokens,
-                self._last_combined_hash, current_hash,
+                self._last_protected_context_hash, protected_hash,
             )
             if compaction:
                 self.compaction_history.append(compaction)
 
         self._last_token_count = estimated_tokens
-        self._last_combined_hash = self.registry.combined_hash()
+        self._last_protected_context_hash = protected_hash
         return result
 
     def get_status(self) -> dict:
