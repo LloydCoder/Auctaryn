@@ -113,6 +113,7 @@ class TestTimeScopedTokens:
         from modules.agent_identity.identity import AgentIdentityManager
         mgr = AgentIdentityManager()
         mgr.register("agent-001", owner="user-1")
+        mgr.grant_scope("agent-001", "read_file")
         token = mgr.issue_token("agent-001", ttl_seconds=300)
         assert mgr.validate_token(token.token_id) is True
 
@@ -120,6 +121,7 @@ class TestTimeScopedTokens:
         from modules.agent_identity.identity import AgentIdentityManager
         mgr = AgentIdentityManager()
         mgr.register("agent-001", owner="user-1")
+        mgr.grant_scope("agent-001", "read_file")
         token = mgr.issue_token("agent-001", ttl_seconds=1)
         token.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
         assert mgr.validate_token(token.token_id) is False
@@ -128,6 +130,7 @@ class TestTimeScopedTokens:
         from modules.agent_identity.identity import AgentIdentityManager
         mgr = AgentIdentityManager()
         mgr.register("agent-001", owner="user-1")
+        mgr.grant_scope("agent-001", "read_file")
         token = mgr.issue_token("agent-001", ttl_seconds=300)
         mgr.revoke_token(token.token_id)
         assert mgr.validate_token(token.token_id) is False
@@ -137,6 +140,37 @@ class TestTimeScopedTokens:
         mgr = AgentIdentityManager()
         assert mgr.validate_token("nonexistent-token-id") is False
 
+
+
+    def test_permission_change_invalidates_existing_token(self):
+        from modules.agent_identity.identity import AgentIdentityManager
+        mgr = AgentIdentityManager()
+        mgr.register("agent-versioned", owner="user-1")
+        mgr.grant_scope("agent-versioned", "read_file")
+        token = mgr.issue_token("agent-versioned", scopes=["read_file"])
+        assert mgr.is_authorized(
+            "agent-versioned", "read_file", token_id=token.token_id, require_token=True
+        )
+        mgr.grant_scope("agent-versioned", "send_email")
+        assert mgr.validate_token(token.token_id) is False
+        assert mgr.is_authorized(
+            "agent-versioned", "read_file", token_id=token.token_id, require_token=True
+        ) is False
+
+    def test_delegated_token_invalidated_when_delegator_permissions_change(self):
+        from modules.agent_identity.identity import AgentIdentityManager
+        mgr = AgentIdentityManager()
+        mgr.register("manager-versioned", owner="user-1")
+        mgr.register("sub-versioned", owner="user-1")
+        mgr.grant_scope("manager-versioned", "read_file")
+        token = mgr.delegate("manager-versioned", "sub-versioned", ["read_file"])
+        assert mgr.is_authorized(
+            "sub-versioned", "read_file", token_id=token.token_id, require_token=True
+        )
+        mgr.grant_scope("manager-versioned", "send_email")
+        assert mgr.is_authorized(
+            "sub-versioned", "read_file", token_id=token.token_id, require_token=True
+        ) is False
 
 class TestPrivilegeDelegation:
     """
