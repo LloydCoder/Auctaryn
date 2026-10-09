@@ -134,3 +134,19 @@ def test_readability_check_rolls_back_tampered_quarantine_metadata(client):
     assert response.status_code == 200
     assert response.json()["readable"] is False
     assert memory_routes.get_memory_defender().store.get(stored["entry_id"]).quarantined is True
+
+
+
+def test_entry_access_rolls_back_tampered_agent_binding(client):
+    import api.routes.memory as memory_routes
+
+    headers = _agent_token(client, "memory-agent-binding")
+    session_id = _session(client, headers)
+    stored = _store(client, headers, session_id).json()
+    memory_routes.get_memory_defender().store._entries[stored["entry_id"]].agent_id = "attacker-agent"
+    response = client.get(f"/api/v1/memory/entry/{stored['entry_id']}", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["tamper_detected"] is True
+    assert payload["rolled_back"] is True
+    assert payload["agent_id"] == "memory-agent-binding"
