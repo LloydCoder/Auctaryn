@@ -39,12 +39,14 @@ MODERATE_PATTERNS = [
     (r"execute_.*|run_.*", r".*"),
 ]
 
+READ_ONLY_ACTION_PATTERN = r"^(read|list|get|fetch|search|find|query|view|show|preview|inspect|describe|head|stat|check|status|count)(?:_.*)?$"
+
 SAFE_PATTERNS = [
-    (r"read_.*|.*_read", r".*"),
-    (r"list_.*|.*_list|get_.*|.*_get|fetch_.*|.*_fetch", r".*"),
-    (r"search_.*|.*_search|find_.*|.*_find|query_.*|.*_query", r".*"),
-    (r"view_.*|show_.*|display_.*|preview_.*", r".*"),
-    (r".*", r"read|list|get|fetch|search|find|query|view|show"),
+    (r"read_.*|.*_read", READ_ONLY_ACTION_PATTERN),
+    (r"list_.*|.*_list|get_.*|.*_get|fetch_.*|.*_fetch", READ_ONLY_ACTION_PATTERN),
+    (r"search_.*|.*_search|find_.*|.*_find|query_.*|.*_query", READ_ONLY_ACTION_PATTERN),
+    (r"view_.*|show_.*|display_.*|preview_.*", READ_ONLY_ACTION_PATTERN),
+    (READ_ONLY_ACTION_PATTERN, r"read|list|get|fetch|search|find|query|view|show"),
 ]
 
 # Bulk thresholds — parameters that elevate risk
