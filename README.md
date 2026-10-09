@@ -41,6 +41,10 @@ npm run dev -- --host 0.0.0.0
 # Open the Vite URL shown in the terminal (normally http://localhost:5173).
 ```
 
+## Implementation roadmap
+
+Auctaryn follows a serial 24-phase security and enterprise-readiness roadmap with explicit CI and forensic acceptance gates. See [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) for phase status and known limitations. A green CI run is necessary but does not certify live runtime security or production readiness.
+
 ## Tinlance Agent Platform integration
 
 Auctaryn exposes the versioned advisory risk contract `POST /api/v1/risk/assess` (`auctaryn-risk-assessment.v1`). It returns risk signals only; it does not grant permission, approve an action, or execute tools. Tinlance Agent Platform remains authoritative for identity, tenant binding, policy, approvals, governed execution, secrets, and audit. A live Platform-side adapter and conformance tests are still required before claiming production integration. See [the integration boundary](docs/integration/TINLANCE_AGENT_PLATFORM.md).
