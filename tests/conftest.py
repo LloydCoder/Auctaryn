@@ -32,8 +32,11 @@ def reset_singletons():
 
 
 @pytest.fixture
-def client():
-    return TestClient(app)
+def client(monkeypatch):
+    """Authenticated administrator client for functional API tests."""
+    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
+    return TestClient(app, headers={"Authorization": "Bearer test-admin-secret"})
 
 
 @pytest.fixture
