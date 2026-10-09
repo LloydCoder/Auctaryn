@@ -46,6 +46,21 @@ class TestAgentIdentityRegistration:
         identity = mgr.register("agent-001", owner="user-1")
         assert identity.scopes == set()
 
+    def test_duplicate_registration_cannot_change_identity_owner(self):
+        from modules.agent_identity.identity import AgentIdentityManager
+        from core.exceptions import PolicyViolation
+
+        mgr = AgentIdentityManager()
+        original = mgr.register("agent-owner-bound", owner="tenant-a")
+
+        with pytest.raises(PolicyViolation, match="identity_owner_conflict"):
+            mgr.register("agent-owner-bound", owner="tenant-b")
+
+        persisted = mgr.get_identity("agent-owner-bound")
+        assert persisted is not None
+        assert persisted.identity_id == original.identity_id
+        assert persisted.owner == "tenant-a"
+
 
 class TestScopedPermissions:
     """Permissions are explicit, minimal, and tied to specific tool/action patterns."""
