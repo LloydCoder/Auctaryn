@@ -13,6 +13,9 @@ class TestGatewayBroadcast:
     def _register_scope(client, agent_id, scope):
         client.post("/api/v1/identity/register", json={"agent_id": agent_id, "owner": "test"})
         client.post("/api/v1/identity/grant", json={"agent_id": agent_id, "scope": scope})
+        token = client.post("/api/v1/identity/token", json={"agent_id": agent_id})
+        assert token.status_code == 200
+        return token.json()["token_id"]
 
     def test_intercept_broadcasts_decision(self, client):
         token_id = self._register_scope(client, "broadcast-reader", "read_file")
