@@ -7,7 +7,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Create the non-root runtime identity without adding an unused network client.
-RUN adduser -D -u 10001 -s /sbin/nologin appuser
+# Pin the zlib security fix identified by Grype (CVE-2026-85091).
+RUN apk add --no-cache 'zlib=1.3.2-r1' \
+    && adduser -D -u 10001 -s /sbin/nologin appuser
 
 # Python deps
 COPY requirements.lock .
