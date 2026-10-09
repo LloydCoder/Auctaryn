@@ -67,7 +67,11 @@ def test_all_external_github_actions_are_pinned_to_full_commit_shas() -> None:
 def test_supply_chain_workflow_has_required_controls() -> None:
     supply = (ROOT / ".github/workflows/supply-chain.yml").read_text()
     codeql = (ROOT / ".github/workflows/codeql.yml").read_text()
-    assert "gitleaks/gitleaks-action@" in supply
+    assert "gitleaks/gitleaks-action@" not in supply
+    assert "gitleaks_8.30.1_linux_x64.tar.gz" in supply
+    assert "Scan exact pull-request/push change set" in supply
+    assert "Scan full history reachable from this ref" in supply
+    assert '--log-opts="$GITHUB_SHA"' in supply
     assert "anchore/sbom-action@" in supply
     assert "anchore/scan-action@" in supply
     assert "severity-cutoff: high" in supply

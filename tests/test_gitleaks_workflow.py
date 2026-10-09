@@ -9,7 +9,7 @@ def test_gitleaks_is_checksum_pinned_and_scans_explicit_commit_ranges():
     assert "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb" in workflow
     assert 'range="${PR_BASE_SHA}..${PR_HEAD_SHA}"' in workflow
     assert 'range="${PUSH_BEFORE}..${PUSH_AFTER}"' in workflow
-    assert 'range="$GITHUB_SHA"' in workflow
+    assert '--log-opts="$GITHUB_SHA"' in workflow
     assert '--log-opts="$range"' in workflow
     assert "Scan full history reachable from this ref" in workflow
     assert '--log-opts="$GITHUB_SHA"' in workflow
