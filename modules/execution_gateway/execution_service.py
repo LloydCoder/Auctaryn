@@ -10,6 +10,7 @@ import logging
 
 from core.models import ActionDecision, GatewayDecision, ToolCall, action_intent_fingerprint
 from modules.execution_gateway.gateway import ExecutionGateway
+from modules.incident_response.manager import get_incident_response_manager
 from modules.execution_gateway.runtime_adapter import (
     DuplicateExecution,
     RuntimeAdapter,
@@ -44,6 +45,7 @@ class ExecutionService:
     async def execute_tool_call(self, tool_call: ToolCall) -> tuple[GatewayDecision, RuntimeExecutionReceipt | None]:
         """Evaluate a call and execute it only when local policy approves it."""
         self.gateway.data_guard.validate_tool_call(tool_call)
+        get_incident_response_manager().assert_execution_allowed(tool_call.agent_id)
         self.require_adapter()
         decision = await self.gateway.evaluate_with_oracle(tool_call)
         if decision.decision != ActionDecision.APPROVED:
@@ -55,6 +57,7 @@ class ExecutionService:
         self, decision: GatewayDecision
     ) -> RuntimeExecutionReceipt:
         """Execute an already approved immutable decision exactly once per process."""
+        get_incident_response_manager().assert_execution_allowed(decision.tool_call.agent_id)
         adapter = self.require_adapter()
         if decision.decision != ActionDecision.APPROVED:
             raise RuntimeAdapterFailure("Only approved decisions may be executed.")
