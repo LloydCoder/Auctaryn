@@ -8,7 +8,7 @@ multi-replica coordination.
 from __future__ import annotations
 
 import argparse
-import asyncio
+from contextlib import closing
 import hashlib
 import json
 import os
@@ -30,7 +30,7 @@ def _database_check(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise ValueError(f"Database does not exist: {path}")
     try:
-        with sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True, timeout=10) as db:
+        with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=10)) as db:
             integrity = [row[0] for row in db.execute("PRAGMA integrity_check")]
             tables = {row[0] for row in db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'"
@@ -42,9 +42,9 @@ def _database_check(path: Path) -> dict[str, Any]:
     return {"integrity": "ok", "tables": sorted(tables)}
 
 
-async def _evidence_check(path: Path, allow_unverified_hmac: bool) -> dict[str, Any]:
+def _evidence_check(path: Path, allow_unverified_hmac: bool) -> dict[str, Any]:
     # Inspect read-only first: verification must never initialize or mutate a backup.
-    with sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True, timeout=10) as db:
+    with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=10)) as db:
         tables = {row[0] for row in db.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )}
@@ -79,7 +79,7 @@ def _sha256(path: Path) -> str:
 
 def verify(path: Path, allow_unverified_hmac: bool = False) -> dict[str, Any]:
     database = _database_check(path)
-    evidence = asyncio.run(_evidence_check(path, allow_unverified_hmac))
+    evidence = _evidence_check(path, allow_unverified_hmac)
     return {
         "database": str(path),
         "sqlite": database,
