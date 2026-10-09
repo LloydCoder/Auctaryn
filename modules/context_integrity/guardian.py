@@ -5,6 +5,7 @@ Monitors AI agent context windows for instruction loss during compaction.
 
 import hashlib
 import re
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -268,6 +269,7 @@ class ContextIntegrityGuardian:
         self._session_results: dict[str, IntegrityCheckResult] = {}
         self._blocked_sessions: dict[str, str] = {}
         self._consumed_checks: dict[str, str] = {}
+        self._session_lock = threading.RLock()
 
     def register_instruction(self, tag: str, content: str) -> ProtectedInstruction:
         inst = self.registry.register(tag, content)
@@ -285,28 +287,30 @@ class ContextIntegrityGuardian:
         """Require a current intact context check bound to this session and action."""
         if self.registry.count() == 0:
             return None
-        if not session_id or not check_id or not action_id:
-            return "Session ID, current context-check ID, and action ID are required."
-        if session_id in self._blocked_sessions:
-            return "Session is quarantined after a context-integrity violation; administrator clearance is required."
-        result = self._session_results.get(session_id)
-        if result is None or result.id != check_id or result.session_id != session_id:
-            return "No current session-bound context-integrity check exists; action denied."
-        if result.blocked or result.status != IntegrityStatus.INTACT:
-            return "Latest context-integrity check is not intact; action denied."
-        consumed_by = self._consumed_checks.get(check_id)
-        if consumed_by is not None and consumed_by != action_id:
-            return "Context-check ID has already been consumed by another action."
-        self._consumed_checks[check_id] = action_id
-        return None
+        with self._session_lock:
+            if not session_id or not check_id or not action_id:
+                return "Session ID, current context-check ID, and action ID are required."
+            if session_id in self._blocked_sessions:
+                return "Session is quarantined after a context-integrity violation; administrator clearance is required."
+            result = self._session_results.get(session_id)
+            if result is None or result.id != check_id or result.session_id != session_id:
+                return "No current session-bound context-integrity check exists; action denied."
+            if result.blocked or result.status != IntegrityStatus.INTACT:
+                return "Latest context-integrity check is not intact; action denied."
+            consumed_by = self._consumed_checks.get(check_id)
+            if consumed_by is not None and consumed_by != action_id:
+                return "Context-check ID has already been consumed by another action."
+            self._consumed_checks[check_id] = action_id
+            return None
 
     def clear_session(self, session_id: str) -> bool:
         """Clear quarantine but require a new clean check before the session can act."""
-        was_blocked = self._blocked_sessions.pop(session_id, None) is not None
-        previous = self._session_results.pop(session_id, None)
-        if previous is not None:
-            self._consumed_checks.pop(previous.id, None)
-        return was_blocked
+        with self._session_lock:
+            was_blocked = self._blocked_sessions.pop(session_id, None) is not None
+            previous = self._session_results.pop(session_id, None)
+            if previous is not None:
+                self._consumed_checks.pop(previous.id, None)
+            return was_blocked
 
     def check(self, current_context: str, session_id: str | None = None) -> IntegrityCheckResult:
         result = verify_integrity(
@@ -335,9 +339,10 @@ class ContextIntegrityGuardian:
 
         result.session_id = session_id or ""
         if session_id:
-            self._session_results[session_id] = result
-            if result.blocked or result.status != IntegrityStatus.INTACT:
-                self._blocked_sessions[session_id] = result.id
+            with self._session_lock:
+                self._session_results[session_id] = result
+                if result.blocked or result.status != IntegrityStatus.INTACT:
+                    self._blocked_sessions[session_id] = result.id
 
         self.history.append(result)
         self.check_count += 1
