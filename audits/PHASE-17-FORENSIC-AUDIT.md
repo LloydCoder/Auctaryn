@@ -10,9 +10,10 @@
 - Added agent-wide token revocation that invalidates the identity permission version and marks direct/delegated tokens revoked.
 - Critical-risk and veto decisions create durable alerts with bounded metadata and are broadcast to connected alert clients. Trusted runtime execution failures also create durable alerts; unresolved duplicate signals for the same decision/category are deduplicated.
 - Alert state persists across process restarts and supports open → acknowledged → resolved transitions; resolved alerts cannot be reopened through the transition API.
+- Alert WebSocket broadcasts are restricted to administrator-authenticated sessions; service-key sessions cannot subscribe to incident details. A regression test verifies that alert metadata is not disclosed to service clients.
 - Alert acknowledgement over WebSocket requires the administrator credential and persists state rather than claiming unsupported success.
 - State changes and alert transitions are correlated with the Phase 16 evidence chain; a failed terminal record is explicitly surfaced as `terminal_record_failed`.
-- Added regression tests for restart persistence, stop enforcement, scoped quarantine, token revocation, alert lifecycle, alert creation and service-vs-admin authorization.
+- Added regression tests for restart persistence, stop enforcement, scoped quarantine, token revocation, alert lifecycle, alert creation, service-vs-admin authorization, and administrator-only alert broadcast.
 - Added an operator runbook aligned with NIST SP 800-61 Rev. 3.
 
 ## Security invariants
@@ -30,3 +31,4 @@
 - The local alert/control tables are not protected against a privileged database operator; production requires external key management, immutable export and backup/restore testing.
 - Runtime process termination, stop propagation under worker concurrency, alert false-positive tuning and recovery drills require validation in the deployed environment.
 - Exact final-head CI and post-merge CI must be green before phase acceptance.
+- The local emergency stop is a pre-invocation gate, not a guaranteed cancellation mechanism for an operation already running in the external runtime. Runtime cancellation/fencing and a shared Platform control plane remain production acceptance requirements.
