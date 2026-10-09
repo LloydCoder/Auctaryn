@@ -38,6 +38,7 @@ class ExecutionService:
 
     async def execute_tool_call(self, tool_call: ToolCall) -> tuple[GatewayDecision, RuntimeExecutionReceipt | None]:
         """Evaluate a call and execute it only when local policy approves it."""
+        self.gateway.data_guard.validate_tool_call(tool_call)
         self.require_adapter()
         decision = await self.gateway.evaluate_with_oracle(tool_call)
         if decision.decision != ActionDecision.APPROVED:
