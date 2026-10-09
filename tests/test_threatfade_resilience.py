@@ -96,3 +96,15 @@ def test_events_limit_is_bounded():
     client = FusionOpsClient()
     with pytest.raises(ValueError, match="between 1 and 200"):
         asyncio.run(client.get_events(100_000))
+
+
+
+def test_pcap_api_rejects_oversized_upload_before_forwarding(client, monkeypatch):
+    import api.routes.threatfade as route_module
+
+    monkeypatch.setattr(route_module, "MAX_PCAP_BYTES", 3)
+    response = client.post(
+        "/api/v1/threatfade/analyze",
+        files={"file": ("capture.pcap", b"four", "application/octet-stream")},
+    )
+    assert response.status_code == 413
