@@ -4,6 +4,10 @@ Auctaryn's runtime adapter is opt-in. It is not a replacement for OpenShell's po
 
 ## Restrictive baseline
 
+When the OpenShell adapter is enabled through environment configuration, Auctaryn validates the repository-owned baseline YAML before initializing the SDK client. Startup fails closed if the policy is missing or malformed, Landlock is not set to `hard_requirement`, read/write paths exceed the explicit allowlists, required read-only system paths are missing, or the baseline introduces network rules. The validated source SHA-256 is retained on the adapter for diagnostics.
+
+This is static validation of the checked-in baseline only. It does not prove that the active remote sandbox is enforcing the same effective policy, including provider-composed rules. OpenShell's official policy tooling distinguishes the base policy from the effective policy; operators must inspect the effective policy with `openshell policy get <sandbox> --full` or `openshell sandbox get <sandbox> --policy-only` before production enablement. See [NVIDIA's policy management guide](https://docs.nvidia.com/openshell/dev/how-it-works/policies/manage-policies).
+
 The checked-in policy at `deploy/openshell/auctaryn-policy.yaml`:
 
 - requires Landlock enforcement (`hard_requirement`);
