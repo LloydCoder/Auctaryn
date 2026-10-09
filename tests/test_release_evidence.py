@@ -82,6 +82,39 @@ def test_release_workflow_is_tag_gated_and_verifies_published_attestation() -> N
     assert "python scripts/verify_release_evidence.py release/release-evidence.json --require-passed" in workflow
     assert "push-to-registry: true" in workflow
     assert "gh attestation verify" in workflow
+    assert "--predicate-type https://spdx.dev/Document/v2.3" in workflow
+    assert "workflowName,headBranch,headSha,event,conclusion,url" in workflow
+    assert '.workflowName == $expected_name' in workflow
+    assert '.headBranch == "main"' in workflow
     assert "release-manifest.json" in workflow
     assert "sbom-path: auctaryn-container.spdx.json" in workflow
     assert "--verify-tag" in workflow
+
+
+def test_workflow_evidence_rejects_reused_run_ids_and_mismatched_urls() -> None:
+    evidence = _passed_evidence()
+    evidence["workflow_runs"]["codeql"]["run_id"] = 1
+    evidence["workflow_runs"]["codeql"]["url"] = (
+        "https://github.com/LloydCoder/Auctaryn/actions/runs/2"
+    )
+    errors = validate_release_evidence(evidence, require_passed=True)
+    assert any("run IDs must be distinct" in error for error in errors)
+    assert any("url must identify its run_id" in error for error in errors)
+
+
+def test_independent_assessment_rejects_boolean_finding_counts() -> None:
+    evidence = _passed_evidence()
+    evidence["pre_release_gates"]["independent_assessment"]["critical_open"] = False
+    errors = validate_release_evidence(evidence, require_passed=True)
+    assert any("critical_open must be a non-negative integer" in error for error in errors)
+
+
+def test_passed_gate_requires_timezone_aware_review_timestamp() -> None:
+    evidence = _passed_evidence()
+    evidence["pre_release_gates"]["platform_conformance"]["reviewed_at"] = (
+        "2026-10-09T12:00:00"
+    )
+    errors = validate_release_evidence(evidence, require_passed=True)
+    assert any("reviewed_at must include a timezone" in error for error in errors)
+
+
