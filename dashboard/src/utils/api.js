@@ -9,6 +9,11 @@ export async function validateAdminToken(token) {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!response.ok) throw new Error(response.status === 403 ? 'Administrator access required.' : `Authentication failed (${response.status}).`)
+  const adminCheck = await fetch(`${API_BASE}/api/v1/gateway/pending`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (adminCheck.status === 403) throw new Error('Administrator access required.')
+  if (!adminCheck.ok) throw new Error(`Administrator verification failed (${adminCheck.status}).`)
   const status = await response.json()
   if (status.identity_enforcement_enabled !== true) throw new Error('Gateway identity enforcement is not enabled.')
   return status
