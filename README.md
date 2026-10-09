@@ -48,7 +48,7 @@ Auctaryn follows a serial 24-phase security and enterprise-readiness roadmap wit
 
 ## Tinlance Agent Platform integration
 
-Auctaryn exposes the versioned advisory risk contract `POST /api/v1/risk/assess` (`auctaryn-risk-assessment.v1`). It returns risk signals only; it does not grant permission, approve an action, or execute tools. Tinlance Agent Platform remains authoritative for identity, tenant binding, policy, approvals, governed execution, secrets, and audit. A live Platform-side adapter and conformance tests are still required before claiming production integration. See [the integration boundary](docs/integration/TINLANCE_AGENT_PLATFORM.md).
+Auctaryn exposes the versioned advisory risk contract `POST /api/v1/risk/assess` (`auctaryn-risk-assessment.v1`). It returns risk signals and additive structured findings with confidence, bounded rationale, control references and provenance (`runtime_observed: false` for the current caller-metadata classifier); it does not grant permission, approve an action, or execute tools. The SHA-256 request fingerprint is correlation metadata, not a signature or confidentiality control. Tinlance Agent Platform remains authoritative for identity, tenant binding, policy, approvals, governed execution, secrets, and audit. A live Platform-side adapter and conformance tests are still required before claiming production integration. See [the integration boundary](docs/integration/TINLANCE_AGENT_PLATFORM.md) and [Phase 15 forensic audit](audits/PHASE-15-FORENSIC-AUDIT.md).
 
 ## Skill supply-chain security
 

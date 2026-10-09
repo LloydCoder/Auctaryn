@@ -82,3 +82,8 @@ Skill manifests are accepted only with an exact semantic version, valid SHA-256 
 ## Inter-agent communication and cascade containment
 
 Auctaryn's message envelope binds message ID, sender, recipient, payload, issue time and expiry with HMAC-SHA-256. When managed identity is configured, key registration and rotation require an injected platform key-management authorizer, while send, inbox reads and receive verification require scoped agent tokens. Payloads and the aggregate in-memory queue are bounded; messages expire and are consumed once. Dependency cycles are rejected, and descendants remain blocked until a tripped ancestor's own half-open recovery probe succeeds. Keys, inboxes, replay state and breaker state remain in-memory; the bus is not a production network transport. See the [Inter-Agent Security Contract](INTER_AGENT_SECURITY.md) and [Phase 14 forensic audit](../audits/PHASE-14-FORENSIC-AUDIT.md) for production gates.
+
+
+## Explainable advisory risk findings
+
+The versioned risk endpoint may emit deterministic, bounded findings containing severity, confidence, a sanitized rationale, rule identifier, control crosswalk references, recommendations and provenance. The current source is caller-supplied action metadata analyzed by the local pattern classifier; it is explicitly not runtime-observed evidence. The request fingerprint is an unkeyed correlation hash, not a signature or confidentiality control. Findings are advisory only and must not grant authorization, approval or execution. The Platform must bind its own authoritative decision and execution evidence to the exact action intent. See the [Phase 15 forensic audit](../audits/PHASE-15-FORENSIC-AUDIT.md).

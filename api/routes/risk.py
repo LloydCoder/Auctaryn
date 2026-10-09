@@ -16,6 +16,7 @@ from api.routes.gateway import require_api_key
 from core.models import RiskLevel, ToolCall
 from modules.execution_gateway.data_guard import SensitiveDataGuard
 from modules.execution_gateway.risk_classifier import RiskClassifier
+from modules.execution_gateway.risk_findings import build_risk_findings
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
 CONTRACT_VERSION = "auctaryn-risk-assessment.v1"
@@ -40,6 +41,8 @@ class RiskAssessmentResponse(BaseModel):
     reason: str
     matched_pattern: str
     input_fingerprint: str
+    findings: list[dict] = Field(default_factory=list, max_length=8)
+    evidence_quality: Literal["caller_supplied_metadata"] = "caller_supplied_metadata"
 
 
 @router.post("/assess", response_model=RiskAssessmentResponse)
@@ -68,6 +71,16 @@ async def assess_risk(request: RiskAssessmentRequest) -> RiskAssessmentResponse:
         separators=(",", ":"),
         ensure_ascii=False,
     ).encode("utf-8")
+    fingerprint = sha256(canonical).hexdigest()
+    findings = build_risk_findings(
+        tool_name=request.tool_name,
+        action=request.action,
+        risk_level=classification.risk_level,
+        confidence=classification.confidence,
+        reason=classification.reason,
+        matched_pattern=classification.matched_pattern,
+        input_fingerprint=fingerprint,
+    )
     return RiskAssessmentResponse(
         assessment_id=uuid4().hex,
         assessed_at=datetime.now(timezone.utc),
@@ -75,5 +88,6 @@ async def assess_risk(request: RiskAssessmentRequest) -> RiskAssessmentResponse:
         confidence=classification.confidence,
         reason=classification.reason,
         matched_pattern=classification.matched_pattern,
-        input_fingerprint=sha256(canonical).hexdigest(),
+        input_fingerprint=fingerprint,
+        findings=findings,
     )
