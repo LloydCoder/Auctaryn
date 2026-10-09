@@ -182,6 +182,7 @@ def test_non_approved_decision_cannot_be_executed():
 
 
 def test_api_execute_endpoint_returns_503_without_trusted_adapter(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_ALLOW_DIRECT_EXECUTION", "true")
     monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
     monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
     client = TestClient(create_app())
@@ -203,6 +204,7 @@ def test_api_execute_endpoint_returns_503_without_trusted_adapter(monkeypatch):
 def test_api_rejects_execution_of_auto_approved_decision_as_if_operator_approved(monkeypatch):
     from api.routes.gateway import configure_runtime_adapter, get_gateway
 
+    monkeypatch.setenv("AUCTARYN_ALLOW_DIRECT_EXECUTION", "true")
     monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
     monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
     gateway = get_gateway()

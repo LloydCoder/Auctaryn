@@ -46,3 +46,10 @@ Auctaryn's local evidence chain records application events and safe hashes for a
 - Test behavior during Auctaryn outage, latency, replay, and conflicting assessments.
 - Verify Platform audit evidence links the advisory finding to the authoritative policy decision and actual execution result.
 - Keep the local Auctaryn gateway disabled for direct production execution unless the configured trusted runtime and the Platform authority boundary have both been independently verified.
+
+
+## Phase 19: tenant and execution authority boundary
+
+Auctaryn does not create a competing tenant identity, policy or approval authority. Its current advisory risk endpoint is stateless with respect to tenant records and reports a bounded signal only; the Platform adapter must bind the assessment to the authenticated tenant, subject, agent and exact execution intent. The local identity manager remains a development/defense-in-depth control, not a substitute for Platform identity.
+
+Direct runtime execution endpoints are disabled by default. The explicit `AUCTARYN_ALLOW_DIRECT_EXECUTION=true` switch is reserved for controlled local/test deployments and requires the administrator credential. Production Platform integration must consume `POST /api/v1/risk/assess` as a risk signal and perform authorization, approval and execution through the Platform's versioned `POST /v1/agent-platform` / `governed-execution.v1` boundary. Do not pass a client-supplied tenant identifier as proof of tenant membership.

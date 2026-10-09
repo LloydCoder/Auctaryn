@@ -6,6 +6,7 @@ Deploy behind TLS; static keys are bootstrap controls, not a replacement for
 enterprise identity-provider integration.
 """
 from datetime import datetime, timezone
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -77,6 +78,23 @@ def get_circuit_breaker() -> AgentCircuitBreaker:
 
 def enable_strict_identity_enforcement() -> None:
     _gateway.identity_manager = _identity_manager
+
+
+DIRECT_EXECUTION_ENV = "AUCTARYN_ALLOW_DIRECT_EXECUTION"
+
+
+def _require_direct_execution_enabled() -> None:
+    """Direct runtime execution is an explicit local exception, never the production default."""
+    configured = os.getenv(DIRECT_EXECUTION_ENV, "").strip().lower()
+    if configured not in {"1", "true", "yes"}:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Direct execution is disabled; use the Tinlance Agent Platform "
+                "governed execution boundary or explicitly enable controlled local execution"
+            ),
+        )
+
 
 class ToolCallRequest(BaseModel):
     tool_name: str = Field(min_length=1, max_length=128)
@@ -245,9 +263,10 @@ async def approve_action(request: ApprovalRequest) -> dict:
     except KeyError:
         raise HTTPException(status_code=404, detail="Pending decision not found")
 
-@router.post("/execute")
+@router.post("/execute", dependencies=[Depends(require_operator_key)])
 async def execute_tool_call(request: ToolCallRequest) -> dict:
-    """Evaluate and execute through a trusted adapter; never execute in the API process."""
+    """Execute only in an explicitly enabled controlled local deployment."""
+    _require_direct_execution_enabled()
     tc = ToolCall(tool_name=request.tool_name, action=request.action, parameters=request.parameters,
                   target=request.target, agent_id=request.agent_id, session_id=request.session_id,
                   context_check_id=request.context_check_id,
@@ -315,7 +334,8 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
 
 @router.post("/execute/approved/{decision_id}", dependencies=[Depends(require_operator_key)])
 async def execute_approved_decision(decision_id: str) -> dict:
-    """Execute the exact immutable decision after an administrator approved it."""
+    """Execute only in an explicitly enabled controlled local deployment."""
+    _require_direct_execution_enabled()
     service = get_execution_service()
     decision = next((item for item in get_gateway().history if item.id == decision_id), None)
     if decision is None:

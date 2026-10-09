@@ -37,7 +37,8 @@ def test_gateway_decision_is_recorded_without_raw_action_parameters(client):
     assert "path" not in matched[-1]["details"]
 
 
-def test_execution_intent_is_recorded_before_missing_runtime_is_reported(client):
+def test_execution_intent_is_recorded_before_missing_runtime_is_reported(client, monkeypatch):
+    monkeypatch.setenv("AUCTARYN_ALLOW_DIRECT_EXECUTION", "true")
     response = client.post(
         "/api/v1/gateway/execute",
         json={

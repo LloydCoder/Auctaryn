@@ -1,4 +1,5 @@
 """Regression tests for API authentication and privileged operations."""
+import pytest
 from fastapi.testclient import TestClient
 
 from api.main import create_app
@@ -148,6 +149,7 @@ def test_approval_endpoint_returns_conflict_when_action_intent_changes(monkeypat
 
 
 def test_execute_approved_endpoint_returns_conflict_for_mutated_decision(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_ALLOW_DIRECT_EXECUTION", "true")
     from api.routes import gateway as gateway_routes
     from core.models import ActionDecision, ToolCall
     from modules.execution_gateway.gateway import ExecutionGateway
@@ -186,3 +188,45 @@ def test_execute_approved_endpoint_returns_conflict_for_mutated_decision(monkeyp
 
     assert response.status_code == 409
     assert "intent integrity" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("method,path", [
+    ("get", "/api/v1/gateway/decisions"),
+    ("get", "/api/v1/gateway/pending"),
+    ("get", "/api/v1/context/checks"),
+    ("get", "/api/v1/context/compactions"),
+    ("get", "/api/v1/skills/history"),
+])
+def test_service_credential_cannot_read_privileged_operational_history(monkeypatch, method, path):
+    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
+    response = getattr(_client(), method)(
+        path,
+        headers={"Authorization": "Bearer test-service-secret"},
+    )
+    assert response.status_code == 403
+
+
+def test_direct_execution_is_disabled_by_default_even_for_admin(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
+    monkeypatch.delenv("AUCTARYN_ALLOW_DIRECT_EXECUTION", raising=False)
+    response = _client().post(
+        "/api/v1/gateway/execute",
+        headers={"Authorization": "Bearer test-admin-secret"},
+        json={"tool_name": "read_file", "action": "read", "parameters": {"path": "/safe/file"}, "agent_id": "redteam"},
+    )
+    assert response.status_code == 503
+    assert "Direct execution is disabled" in response.json()["detail"]
+
+
+def test_service_credential_cannot_invoke_direct_execution_even_when_enabled(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
+    monkeypatch.setenv("AUCTARYN_ALLOW_DIRECT_EXECUTION", "true")
+    response = _client().post(
+        "/api/v1/gateway/execute",
+        headers={"Authorization": "Bearer test-service-secret"},
+        json={"tool_name": "read_file", "action": "read", "parameters": {"path": "/safe/file"}, "agent_id": "redteam"},
+    )
+    assert response.status_code == 403

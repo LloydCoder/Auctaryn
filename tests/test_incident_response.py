@@ -53,7 +53,8 @@ def test_agent_wide_token_revocation_invalidates_issued_capabilities():
     assert manager.is_authorized("agent-a", "read_file", token_id=token.token_id, require_token=True) is False
 
 
-def test_emergency_stop_blocks_api_execution_and_can_be_released(client):
+def test_emergency_stop_blocks_api_execution_and_can_be_released(client, monkeypatch):
+    monkeypatch.setenv("AUCTARYN_ALLOW_DIRECT_EXECUTION", "true")
     enabled = client.post(
         "/api/v1/incident/emergency-stop",
         json={"enabled": True, "reason": "Contain suspected active compromise"},
