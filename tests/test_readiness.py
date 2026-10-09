@@ -68,7 +68,7 @@ def test_detailed_health_uses_the_same_live_openshell_probe(client, monkeypatch)
     assert body["openshell_connected"] is True
     runtime = next(module for module in body["modules"] if module["name"] == "openshell_runtime")
     assert runtime["status"] == "healthy"
-    assert runtime["error_message"] is None
+    assert runtime["error_message"] == ""
     # The other enabled modules still have no live probes, so aggregate health
     # remains degraded rather than overstating overall readiness.
     assert body["overall_status"] == "degraded"
