@@ -1,6 +1,5 @@
 """Regression tests for ThreatFade resilience, input validation and advisory boundaries."""
 import asyncio
-import hashlib
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
