@@ -5,9 +5,10 @@ can reach the adapter; pending, denied, vetoed, timed-out, and unknown outcomes
 never execute. Raw runtime output is hashed and excluded from API receipts.
 """
 import hashlib
+import hmac
 import logging
 
-from core.models import ActionDecision, GatewayDecision, ToolCall
+from core.models import ActionDecision, GatewayDecision, ToolCall, action_intent_fingerprint
 from modules.execution_gateway.gateway import ExecutionGateway
 from modules.execution_gateway.runtime_adapter import (
     DuplicateExecution,
@@ -18,6 +19,10 @@ from modules.execution_gateway.runtime_adapter import (
 )
 
 logger = logging.getLogger("execution_gateway.execution_service")
+
+
+class ActionIntentIntegrityError(RuntimeAdapterFailure):
+    """Raised when an approved decision no longer matches its recorded intent."""
 
 
 class ExecutionService:
@@ -53,6 +58,14 @@ class ExecutionService:
         adapter = self.require_adapter()
         if decision.decision != ActionDecision.APPROVED:
             raise RuntimeAdapterFailure("Only approved decisions may be executed.")
+        current_fingerprint = action_intent_fingerprint(decision.tool_call)
+        if (
+            not decision.action_fingerprint
+            or not hmac.compare_digest(decision.action_fingerprint, current_fingerprint)
+        ):
+            raise ActionIntentIntegrityError(
+                "Action intent integrity check failed; execution was refused."
+            )
         if decision.id in self._claimed_decisions:
             raise DuplicateExecution("This decision has already been claimed for execution.")
 

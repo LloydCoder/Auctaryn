@@ -12,11 +12,11 @@ from pydantic import BaseModel, Field
 from api.security import require_api_key, require_operator_key
 
 from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision
-from modules.execution_gateway.gateway import ExecutionGateway
+from modules.execution_gateway.gateway import ExecutionGateway, ApprovalIntentIntegrityError
 from modules.threatfade_oracle.oracle import ThreatFadeOracle
 from modules.agent_identity.identity import AgentIdentityManager
 from modules.inter_agent.circuit_breaker import AgentCircuitBreaker
-from modules.execution_gateway.execution_service import ExecutionService
+from modules.execution_gateway.execution_service import ExecutionService, ActionIntentIntegrityError
 from modules.execution_gateway.runtime_adapter import (
     DuplicateExecution,
     RuntimeAdapter,
@@ -140,6 +140,8 @@ async def approve_action(request: ApprovalRequest) -> dict:
         await _broadcast_decision(resolved)
         return {"decision_id": resolved.id, "result": resolved.decision.value,
                 "timestamp": datetime.now(timezone.utc).isoformat()}
+    except ApprovalIntentIntegrityError as exc:
+        raise HTTPException(status_code=409, detail="Pending action intent changed; approval rejected") from exc
     except KeyError:
         raise HTTPException(status_code=404, detail="Pending decision not found")
 
@@ -155,6 +157,8 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except DuplicateExecution as exc:
         raise HTTPException(status_code=409, detail="Decision already claimed for execution") from exc
+    except ActionIntentIntegrityError as exc:
+        raise HTTPException(status_code=409, detail="Action intent integrity check failed; execution refused") from exc
     except RuntimeAdapterFailure as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {
@@ -181,6 +185,8 @@ async def execute_approved_decision(decision_id: str) -> dict:
         receipt = await service.execute_approved_decision(decision)
     except DuplicateExecution as exc:
         raise HTTPException(status_code=409, detail="Decision already claimed for execution") from exc
+    except ActionIntentIntegrityError as exc:
+        raise HTTPException(status_code=409, detail="Action intent integrity check failed; execution refused") from exc
     except RuntimeAdapterFailure as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"decision_id": decision.id, "execution": receipt.model_dump(mode="json")}

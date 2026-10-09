@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from core.models import ActionDecision, ToolCall
-from modules.execution_gateway.gateway import ExecutionGateway
+from modules.execution_gateway.gateway import ExecutionGateway, ApprovalIntentIntegrityError
 
 
 def _pending_gateway(ttl_seconds: int = 900):
@@ -43,9 +43,11 @@ def test_expired_approval_cannot_be_approved():
 
 def test_pending_approval_is_one_time_use():
     gateway, decision = _pending_gateway()
+    original_fingerprint = decision.action_fingerprint
     resolved = gateway.resolve_pending(decision.id, approved=True, operator="test-operator")
 
     assert resolved.decision == ActionDecision.APPROVED
+    assert resolved.action_fingerprint == original_fingerprint
     with pytest.raises(KeyError):
         gateway.resolve_pending(decision.id, approved=True, operator="test-operator")
 
@@ -67,3 +69,16 @@ def test_gateway_status_does_not_report_expired_approvals_as_pending():
 
     assert status["pending_approvals"] == 0
     assert gateway.history[0].decision == ActionDecision.TIMEOUT
+
+
+
+def test_pending_action_mutation_is_denied_and_cannot_be_approved():
+    gateway, decision = _pending_gateway()
+    decision.tool_call.parameters["path"] = "/tmp/attacker-selected.db"
+
+    with pytest.raises(ApprovalIntentIntegrityError, match="intent changed"):
+        gateway.resolve_pending(decision.id, approved=True, operator="test-operator")
+
+    assert gateway.get_pending() == []
+    assert gateway.history[0].decision == ActionDecision.DENIED
+    assert gateway.history[0].decided_by == "intent_integrity_guard"

@@ -5,6 +5,8 @@ Pydantic schemas used across all modules.
 
 from datetime import datetime
 from enum import Enum
+import hashlib
+import json
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -94,6 +96,27 @@ class ToolCall(BaseModel):
     identity_token: str = Field(default="", exclude=True, repr=False, max_length=128)
 
 
+def action_intent_fingerprint(tool_call: ToolCall) -> str:
+    """Hash the canonical execution intent, excluding transient IDs and credentials.
+
+    This detects mutation of a recorded decision within the application process.
+    It is not a signature and does not protect against an attacker who can alter
+    both the decision and its fingerprint in process memory.
+    """
+    intent = {
+        "tool_name": tool_call.tool_name,
+        "action": tool_call.action,
+        "parameters": tool_call.parameters,
+        "target": tool_call.target,
+        "agent_id": tool_call.agent_id,
+        "session_id": tool_call.session_id,
+    }
+    canonical = json.dumps(
+        intent, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 class ActionClassification(BaseModel):
     tool_call: ToolCall
     risk_level: RiskLevel
@@ -111,6 +134,8 @@ class GatewayDecision(BaseModel):
     reason: str = ""
     decided_by: str = ""  # "auto" | "operator" | "veto_engine"
     response_time_ms: float = 0.0
+    # Internal integrity binding; deliberately excluded from public API serialization.
+    action_fingerprint: str = Field(default="", exclude=True, repr=False)
 
 
 # --- ThreatFade Oracle Models ---
