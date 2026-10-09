@@ -8,7 +8,7 @@ This runbook follows the Detect → Respond → Recover → Improve lifecycle de
 
 - Review `GET /api/v1/incident/alerts?status=open&limit=100` and `GET /api/v1/incident/status` using an administrator credential.
 - Correlate each alert's decision ID with `GET /api/v1/evidence/records` and verify the chain using `GET /api/v1/evidence/verify`.
-- Treat critical-risk and veto alerts as triage signals, not proof that an external runtime was compromised. Confirm the action receipt and authoritative Platform logs.
+- Treat critical-risk, veto and trusted-runtime-failure alerts as triage signals, not proof that an external runtime was compromised. Confirm the action receipt and authoritative Platform logs.
 - Do not copy credentials, prompts, raw parameters, customer data or command output into alert reasons or incident notes.
 
 ## Containment
