@@ -26,7 +26,7 @@ def _tool_call(argv=None, tool_name="openshell_exec", action="exec"):
     return ToolCall(
         tool_name=tool_name,
         action=action,
-        parameters={"argv": argv or ["python", "-c", "print('ok')"]},
+        parameters={"argv": argv if argv is not None else ["python", "-c", "print('ok')"]},
         agent_id="openshell-test-agent",
     )
 
