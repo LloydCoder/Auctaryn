@@ -109,3 +109,28 @@ def test_untrusted_publisher_cannot_approve_artifact():
     verdict = service.vet(manifest, artifact)
     assert verdict.approved is False
     assert any("publisher signature" in reason.lower() for reason in verdict.reasons)
+
+
+
+def test_unknown_permission_is_rejected_until_registered():
+    service, key = configured_service()
+    manifest, artifact = make_manifest(key, permissions=["custom_unreviewed_scope"])
+    verdict = service.vet(manifest, artifact)
+    assert verdict.approved is False
+    assert any("unknown permissions" in reason.lower() for reason in verdict.reasons)
+
+
+def test_stable_release_is_newer_than_its_prerelease():
+    service, key = configured_service()
+    stable, artifact = make_manifest(key, version="1.0.0")
+    assert service.vet(stable, artifact).approved is True
+    prerelease, prerelease_artifact = make_manifest(key, artifact=b"preview", version="1.0.0-rc.1")
+    verdict = service.vet(prerelease, prerelease_artifact)
+    assert verdict.approved is False
+    assert any("rollback" in reason.lower() for reason in verdict.reasons)
+
+
+def test_malformed_prerelease_identifiers_are_rejected():
+    service, key = configured_service()
+    manifest, artifact = make_manifest(key, version="1.0.0-01")
+    assert service.vet(manifest, artifact).approved is False
