@@ -1,29 +1,38 @@
-# TwinGuard — OWASP Top 10 for Agentic Applications 2026 Coverage
+# Auctaryn — OWASP Top 10 for Agentic Applications 2026 coverage
 
-Honest status, updated as modules ship. This is an engineering tracking document, not a marketing claim.
+This is an engineering assurance map, not a claim of OWASP certification. “Represented in code” means a module or control exists; it does not mean every attack in a category is prevented, every external execution path is mediated, or production controls have been independently verified.
 
-| Code | Risk | Status | TwinGuard Module |
-|------|------|--------|-------------------|
-| ASI01 | Agent Goal Hijack | ✅ Covered | Context Integrity Guardian — catches both instruction LOSS (compaction) and instruction OVERRIDE (in-context conflicting directives via `detect_goal_hijack`) |
-| ASI02 | Tool Misuse & Exploitation | ✅ Covered | Execution Gateway — pattern classification + risk-based veto/approval |
-| ASI03 | Agent Identity & Privilege Abuse | ✅ Covered | Agent Identity Manager — scoped permissions, time-limited tokens, subset-constrained delegation. **Wired directly into the Gateway decision path** (opt-in via `/api/v1/gateway/identity-enforcement/enable`) |
-| ASI04 | Agentic Supply Chain Compromise | ✅ Covered | Skill Vetting Service — signature verification, content-hash pinning, permission scanning, typosquat detection |
-| ASI05 | Unexpected Code Execution | Delegated | Handled by NVIDIA OpenShell (Landlock/seccomp), not TwinGuard-native |
-| ASI06 | Memory & Context Poisoning | ✅ Covered | Memory Poisoning Defender — adversarial pattern scanning, provenance-based trust, integrity hashing + rollback, cross-session quarantine |
-| ASI07 | Insecure Inter-Agent Communication | ✅ Covered | Agent Message Bus — HMAC-signed inter-agent messages, tamper detection, per-recipient inbox isolation, impersonation rejection |
-| ASI08 | Cascading Agent Failures | ✅ Covered | Agent Circuit Breaker — per-agent failure isolation, auto-recovery cooldown, dependency-aware blast-radius containment. **Wired into the Gateway by default** (always-on, not opt-in) |
-| ASI09 | Human-Agent Trust Exploitation | ✅ Covered | Step-Up Authenticator — single-use, time-windowed confirmation challenges required for destructive/critical decisions; replay and staleness rejected |
-| ASI10 | Rogue Agents | ✅ Covered | Core thesis of the platform — Context Integrity + Execution Gateway + ThreatFade Oracle combined |
+## Coverage and assurance status
 
-**10 of 10 categories represented in code. 232 tests passing.**
+| OWASP category | Current implementation evidence | Assurance status and remaining gap |
+|---|---|---|
+| ASI01 — Agent Goal Hijack | Context Integrity Guardian hashes registered instructions, checks for missing instruction text, and uses heuristic override-language detection. | **Partial / MVP.** Detection is heuristic and is not a semantic guarantee. Context checks are not proven to gate every external agent execution path. |
+| ASI02 — Tool Misuse & Exploitation | Risk classifier, veto engine, gateway decisions, approval lifecycle and a trusted runtime adapter contract. | **Partial / MVP.** The classifier is not a substitute for authorization. Universal mediation of every external tool is not proven; only supported configured adapter paths are governed. |
+| ASI03 — Agent Identity & Privilege Abuse | Agent identities, scoped expiring tokens, permission-version invalidation, delegation subset checks and mandatory gateway preflight. | **Implemented locally; enterprise gaps remain.** State is in process memory, not durable or multi-replica safe. Tinlance Agent Platform remains the intended authoritative identity and capability owner. |
+| ASI04 — Agentic Supply Chain Compromise | Skill vetting evaluates publisher trust, declared permissions, hashes/signature fields and suspicious names. | **Partial / MVP.** Current checks do not establish full cryptographic publisher-signature verification or runtime behavior integrity. |
+| ASI05 — Unexpected Code Execution | OpenShell adapter restricts the supported operation to a server-selected sandbox/workspace and bounded argv wrapper; OpenShell provides runtime isolation. | **Integration implemented; live assurance outstanding.** CI uses fake clients. Live gateway identity, effective policy, filesystem isolation, egress denial and execution-path mediation require deployment acceptance tests. |
+| ASI06 — Memory & Context Poisoning | Memory Defender scans content, considers source trust and tracks integrity-related state. | **Partial / MVP.** In-process state and heuristic detection do not guarantee protection of every external or persistent memory system. |
+| ASI07 — Insecure Inter-Agent Communication | Agent Message Bus signs and verifies messages with HMAC keys and separates recipient inboxes. | **Partial / MVP.** Key distribution, durable identity binding, transport security and production key rotation/PKI are not established by the in-memory module alone. |
+| ASI08 — Cascading Agent Failures | Per-agent circuit breaker, cooldown and dependency-aware isolation are wired into the gateway. | **Partial / MVP.** Local in-memory breaker state does not provide distributed fleet-wide containment or durable recovery evidence. |
+| ASI09 — Human-Agent Trust Exploitation | A step-up authenticator module tests freshness, one-time challenge consumption and replay rejection. | **Integration not yet proven.** The existence of a standalone module is not evidence that every privileged API approval or runtime execution is bound to a fresh challenge. |
+| ASI10 — Rogue Agents | The combined context, identity, gateway, threat-intelligence and runtime-control architecture provides building blocks for rogue-agent containment. | **Architecture direction / partial.** There is no evidence that the platform detects and contains every rogue-agent behavior or that every agent path is mediated. |
 
-## What "covered" honestly means at this stage
+## Security and architecture boundaries
 
-Every category above has working, tested code behind it — not a stub, not a TODO. But "covered" here means **MVP-depth defensible implementation**, not enterprise-hardened production infrastructure. Specifically, being transparent about depth:
+- Tinlance Agent Platform remains authoritative for tenant binding, identity, capabilities, policy, approvals, governed execution, secrets, durable evidence and audit.
+- Auctaryn contributes specialized agent-risk analysis and security findings. Advisory risk responses are not authorization grants and must not independently authorize execution.
+- OpenShell is the runtime containment boundary for supported operations. Auctaryn must not weaken its effective policy.
+- ThreatFade Oracle contributes threat intelligence; an Oracle result must never override a platform denial or silently approve a pending/destructive action.
+- SensitiveDataGuard is heuristic defense in depth, not complete DLP.
+- The readiness endpoint requires configured credentials, mandatory identity enforcement, a configured trusted adapter and a successful live gateway health probe. CI tests the probe contract with fakes; it does not prove production connectivity.
 
-- **ASI03/ASI08 enforcement is real but partially opt-in.** Circuit breaker isolation is always active in the production gateway. Identity enforcement is available and fully tested, but ships disabled-by-default to avoid breaking deployments with unregistered agent fleets — an operator must explicitly call `/api/v1/gateway/identity-enforcement/enable` once their agents are registered.
-- **ASI07's signing is HMAC, not full PKI.** Production-grade inter-agent security would typically use asymmetric signing (ed25519, same as ASI04's skill signatures) and a real transport layer (mTLS, message queue). The current implementation enforces the correct *contract* (signed, verified, tamper-evident, non-impersonable) using symmetric keys appropriate for an MVP.
-- **ASI04's signature verification is presence + format + trust-list, not full cryptographic ed25519 verification.** The contract (signed, hash-pinned, permission-scanned, typosquat-checked) is real; swapping in actual public-key cryptography is a contained follow-up, not a redesign.
-- **ASI05 is intentionally delegated**, not weak — OpenShell's kernel-level sandboxing is the correct layer for code execution containment, and duplicating that inside TwinGuard would be redundant.
+## Evidence required before production claims
 
-This document will be updated honestly as each item moves from "MVP-depth" to "production-hardened." Anyone — engineering hire, accelerator reviewer, pilot customer's security team — should be able to read this and know exactly what they're getting.
+1. Full required CI matrix is green on the exact release commit.
+2. Live OpenShell acceptance proves the intended authenticated gateway, effective policy revision, sandbox/workspace, denied egress and filesystem restrictions.
+3. Negative end-to-end tests prove denied, pending, expired, replayed and unauthorized actions never reach the runtime.
+4. Approval and identity state are durable and safe under restart, concurrent requests and multiple replicas, or deployment is explicitly constrained to a single instance.
+5. Independent adversarial testing covers each mapped OWASP category and turns findings into regression tests.
+6. Residual risks, false-positive/false-negative limits, and unsupported integration paths remain documented.
+
+Do not describe the project as “10/10 covered,” “fully secure,” or production-certified based only on module presence or unit tests. Update this document when new implementation evidence changes a category's status.

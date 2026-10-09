@@ -113,6 +113,29 @@ class OpenShellRuntimeAdapter:
         self.close_callback = close_callback
         self._seen_idempotency_keys: set[str] = set()
 
+    @property
+    def runtime_name(self) -> str:
+        """Stable runtime identifier consumed by the readiness endpoint."""
+        return "openshell"
+
+    async def health_check(self) -> bool:
+        """Probe the active OpenShell gateway without blocking the API event loop.
+
+        A configured adapter is not considered ready solely because it was
+        constructed. Readiness requires a bounded live health request with a
+        non-empty gateway version in the response.
+        """
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(self.client.health),
+                timeout=5.0,
+            )
+        except Exception:
+            return False
+
+        version = getattr(response, "version", None)
+        return isinstance(version, str) and bool(version.strip())
+
     @staticmethod
     def _validate_argv(tool_call: ToolCall) -> list[str]:
         if tool_call.tool_name != "openshell_exec" or tool_call.action != "exec":

@@ -28,6 +28,7 @@ Recognized secret references (for example vault://...) are treated as opaque ide
 
 - If no runtime adapter is configured, governed execution returns HTTP 503 before evaluating or forwarding the tool call.
 - If OpenShell initialization, authentication, or health verification fails, the application starts with governed execution disabled.
+- Readiness requires a bounded live OpenShell gateway health probe with a non-empty version response; adapter construction or environment configuration alone does not establish readiness. The probe is tested with fake clients in CI, while production connectivity still requires live-environment acceptance.
 - If the OpenShell execution envelope is malformed or the remote completion state is unknown, Auctaryn returns an execution failure and does not claim success.
 - If a required authorization, policy, or runtime dependency is unavailable, no alternate direct execution path is permitted.
 
