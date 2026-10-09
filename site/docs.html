@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Documentation — TwinGuard</title>
-<meta name="description" content="TwinGuard API reference, OWASP ASI coverage, and architecture documentation.">
+<title>Documentation — Auctaryn</title>
+<meta name="description" content="Auctaryn API reference, OWASP ASI coverage, and architecture documentation.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/twinguard.css">
@@ -46,7 +46,7 @@
   <div class="page-header-inner">
     <span class="section-tag">Documentation</span>
     <h1 class="page-title">API reference &amp; architecture</h1>
-    <p class="page-sub">Everything needed to integrate, deploy, and verify TwinGuard's coverage. Full interactive API docs (Swagger) live at <code>twinguard.tinlance.com/docs</code> once deployed.</p>
+    <p class="page-sub">This page is a high-level API summary, not a certification claim. The running local API exposes its current OpenAPI/Swagger contract at <code>http://localhost:8400/docs</code>; the repository README and security docs are canonical for limitations.</p>
   </div>
 </header>
 
@@ -71,24 +71,25 @@
   <main class="docs-content">
     <h2 id="quickstart">Quickstart</h2>
     <p>Clone the repo, install dependencies, and run the full test suite to confirm your environment.</p>
-    <div class="code-block"><pre>git clone https://github.com/Tinlance/twinguard.git
-cd twinguard
-pip install -r requirements.txt
-python -m pytest tests/ -v   # 232 tests should pass
+    <div class="code-block"><pre>git clone https://github.com/LloydCoder/Auctaryn.git
+cd Auctaryn
+python -m pip install -r requirements.txt
+python -m pytest tests/ -v
 
-docker-compose up -d
-open http://localhost:3000   # dashboard</pre></div>
+# Configure distinct AUCTARYN_API_KEY and AUCTARYN_ADMIN_API_KEY values first.
+docker compose up -d
+# API docs: http://localhost:8400/docs</pre></div>
 
     <h2 id="architecture">Architecture</h2>
-    <p>TwinGuard sits above NVIDIA OpenShell. OpenShell provides kernel-level isolation (Landlock, seccomp, network namespaces). TwinGuard adds context integrity, identity, execution gating, and network threat intelligence — the layers OpenShell doesn't cover.</p>
-    <div class="code-block"><pre>React Dashboard (live WebSocket)
+    <p>Auctaryn evaluates actions routed through its supported gateway and can use a configured OpenShell adapter. OpenShell provides the runtime isolation boundary. Auctaryn does not intercept external paths automatically; Platform authorization and live runtime policy must be verified separately.</p>
+    <div class="code-block"><pre>Dashboard (WebSocket when configured)
         │
 FastAPI Backend
   ├── Context Integrity Guardian   (ASI01, ASI06 overlap)
   ├── Execution Gateway            (ASI02)
   │     ├── Agent Identity Manager (ASI03)
   │     ├── Circuit Breaker        (ASI08)
-  │     └── ThreatFade Oracle      (ASI10) → FusionOps (live)
+  │     └── ThreatFade Oracle      (ASI10) → optional external service
   ├── Skill Vetting Service        (ASI04)
   ├── Memory Poisoning Defender    (ASI06)
   ├── Agent Message Bus            (ASI07)
@@ -100,7 +101,7 @@ NVIDIA OpenShell Runtime           (ASI05)</pre></div>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/context/register</span></div>
     <p>Register a protected instruction. Body: <code>{"tag": "string", "content": "string"}</code></p>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/context/check</span></div>
-    <p>Verify current context against all registered instructions. Returns intact/degraded/compromised status and blocks the agent if a registered instruction is missing or actively contradicted.</p>
+    <p>Compare submitted context with registered instruction baselines and return heuristic integrity signals. This endpoint does not independently block an external agent; enforcement requires the integrated gateway/runtime path and trusted context provenance.</p>
     <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/context/instructions</span></div>
     <p>List all registered instructions with hash and preview.</p>
 
@@ -110,9 +111,9 @@ NVIDIA OpenShell Runtime           (ASI05)</pre></div>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/gateway/intercept/full</span></div>
     <p>Full Parliament interception — pattern classification + ThreatFade Oracle enrichment for destructive/critical actions.</p>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/gateway/identity-enforcement/enable</span></div>
-    <p>Turns on ASI03 strict identity enforcement. After this call, any unregistered agent is denied outright.</p>
+    <p>Enables strict identity enforcement for the local gateway. Runtime actions still require registered identity, a valid scoped token and the supported execution path.</p>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/gateway/approve</span></div>
-    <p>Resolve a pending decision. Body: <code>{"decision_id": "string", "approved": bool, "reason": "string"}</code></p>
+    <p>Administrator-only operation that resolves a pending decision; approval does not itself execute the action. Body: <code>{"decision_id": "string", "approved": bool, "reason": "string"}</code></p>
 
     <h2 id="identity-api">Agent Identity API</h2>
     <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/identity/register</span></div>
