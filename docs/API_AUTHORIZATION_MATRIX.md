@@ -19,8 +19,9 @@ Auctaryn's service credential authenticates a service caller; it does not identi
 
 ## Deployment rules
 
-1. Keep service and administrator credentials distinct and rotate them through the deployment secret manager.
-2. Leave `AUCTARYN_ALLOW_DIRECT_EXECUTION` unset in the Platform-integrated production profile.
-3. Use the Platform's authenticated principal to bind tenant, subject, agent, intent, policy and approval. Do not trust request-body or caller-supplied tenant identifiers.
-4. Static service/admin credentials do not provide per-human attribution, tenant isolation or MFA. Use a Platform-side adapter and enterprise identity provider for those properties.
-5. Route-level negative authorization tests are required whenever the API surface changes.
+1. The advisory risk request rejects unknown fields, including caller-supplied `tenant_id`; tenant identity must come from Platform-authenticated context, not the request body.
+2. Keep service and administrator credentials distinct and rotate them through the deployment secret manager.
+3. Leave `AUCTARYN_ALLOW_DIRECT_EXECUTION` unset in the Platform-integrated production profile.
+4. Use the Platform's authenticated principal to bind tenant, subject, agent, intent, policy and approval. Do not trust request-body or caller-supplied tenant identifiers.
+5. Static service/admin credentials do not provide per-human attribution, tenant isolation or MFA. Use a Platform-side adapter and enterprise identity provider for those properties.
+6. Route-level negative authorization tests are required whenever the API surface changes.
