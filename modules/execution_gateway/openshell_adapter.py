@@ -305,10 +305,10 @@ def create_openshell_adapter_from_environment() -> OpenShellRuntimeAdapter | Non
             client_context = SandboxClient.from_active_cluster(client_credentials=auth)
         else:
             client_context = SandboxClient.from_active_cluster()
+        # Do not make an unbounded synchronous health request during adapter
+        # construction. The application lifespan performs the bounded async probe
+        # before enabling the adapter.
         client = client_context.__enter__()
-        health = client.health()
-        if not getattr(health, "version", None):
-            raise RuntimeError("OpenShell health response did not include a version.")
     except Exception as exc:
         if client_context is not None:
             try:
