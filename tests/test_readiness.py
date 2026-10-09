@@ -138,3 +138,33 @@ async def test_startup_keeps_unhealthy_runtime_adapter_disabled(monkeypatch, tmp
     async with lifespan(FastAPI()):
         assert configured and all(value is None for value in configured)
         assert adapter.closed is True
+
+
+def test_readiness_bounds_synchronous_runtime_probe(client, monkeypatch):
+    import time
+
+    _set_strong_credentials(monkeypatch)
+
+    class HangingSyncOpenShellAdapter:
+        runtime_name = "openshell"
+
+        def health_check(self):
+            time.sleep(0.05)
+            return True
+
+    monkeypatch.setattr(
+        "api.routes.gateway.get_execution_service",
+        lambda: SimpleNamespace(adapter=HangingSyncOpenShellAdapter()),
+    )
+    monkeypatch.setattr("api.routes.health.RUNTIME_PROBE_TIMEOUT_SECONDS", 0.001)
+    started = time.monotonic()
+    response = client.get("/health/ready")
+    elapsed = time.monotonic() - started
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ready"] is False
+    assert body["checks"]["runtime_health_probe_passed"] is False
+    assert body["checks"]["openshell_connected"] is False
+    assert "timed out" in body["checks"]["runtime_health_probe_error"].lower() if "runtime_health_probe_error" in body["checks"] else True
+    assert elapsed < 0.04
