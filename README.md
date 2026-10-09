@@ -1,14 +1,14 @@
 # Auctaryn
 
-**Runtime authority and containment for autonomous AI agents**
+**Supported-path governance and runtime integration for autonomous AI agents**
 
 Built on [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) — defense-in-depth for autonomous AI agents.
 
-Auctaryn helps control autonomous agent actions from going rogue by adding context integrity monitoring, execution gating, and network threat intelligence on top of OpenShell's kernel-level sandbox.
+Auctaryn adds heuristic context checks and risk-based decisions to supported agent paths, with optional ThreatFade advisory signals and a configured OpenShell runtime adapter. Tinlance Agent Platform remains authoritative for identity, tenant binding, policy, approvals and governed execution.
 
 ## Why Auctaryn?
 
-On February 23, 2026, an OpenClaw agent deleted a user's entire email inbox after a context compaction event stripped its safety instructions. OpenShell provides kernel-level isolation — but it doesn't monitor what happens *inside* the agent's reasoning. Auctaryn is designed to complement runtime isolation with context integrity, action policy, and threat intelligence.
+On February 23, 2026, Summer Yue publicly reported that OpenClaw began deleting email after a large-inbox workflow and context compaction. TechCrunch reported the account but noted it could not independently verify the event. Auctaryn explores defense-in-depth controls that complement runtime isolation; submitted-context checks do not prove what an external agent consumed.
 
 ## MVP Modules
 
@@ -34,6 +34,8 @@ cp .env.example .env
 # Edit .env: set two independent high-entropy API keys and a reachable HTTPS
 # THREATFADE_SERVICE_URL. Do not commit .env.
 docker compose --env-file .env up -d --build api
+# Local evaluation only: no trusted runtime adapter is configured by default.
+# /health/ready remains false until OpenShell and all required runtime settings are verified.
 
 # Dashboard (local dev; run in another terminal)
 cd dashboard
@@ -64,7 +66,7 @@ This is not a complete enterprise DR service: off-host/immutable backup retentio
 
 The administrator dashboard includes an **Incidents & Evidence** view for server-authorized emergency-stop status, incident alerts, bounded evidence metadata and evidence-chain verification. The backend remains the authorization boundary; hiding a dashboard tab is not access control. See the [operator dashboard and deployment rollback runbook](docs/DEPLOYMENT_ROLLBACK.md).
 
-Deployments record the running container's immutable image ID before rebuilding. On the deployment host, `bash scripts/rollback.sh` restores that recorded image and requires liveness/readiness checks. CI validates the rollback script and tests guarded rollback paths with mocked Docker commands. A CI mock is not a production-host rollback drill; verify readiness and runtime policy before restoring public traffic.
+Production deployment is separate from local Compose. `scripts/deploy.sh` requires a version tag and exact GHCR image digest from the attested release manifest, verifies the manifest and image/SBOM attestations, mounts OpenShell gateway metadata and the evidence HMAC key, and refuses to expose the service until liveness/readiness pass. It records the previous digest/tag for verified rollback through `scripts/rollback.sh`. CI tests do not replace a production-host rollback drill.
 
 ## Enterprise authorization boundary
 
@@ -88,7 +90,7 @@ Auctaryn bounds protected-instruction inputs, verifies stored baseline hashes, a
 
 ## Production
 
-The deployment scripts and domain configuration may still reference legacy TwinGuard infrastructure. Verify DNS, TLS, runtime integration, and authentication before exposing a deployment.
+No production domain is preconfigured. Production uses the `docker-compose.production.yml` override and only a digest-pinned versioned release; `scripts/deploy.sh` validates the DNS hostname, GitHub release attestations, service/admin secrets, OpenShell OIDC credentials and mounted gateway metadata before exposing Nginx/TLS.
 - `/` — marketing site (`site/`)
 - `/dashboard` — operational console (built React app)
 - `/api/` — REST API
@@ -100,7 +102,7 @@ The dashboard requires an administrator API key at sign-in. REST API clients use
 ## Security configuration
 
 - Generate two different secrets, for example with `openssl rand -hex 32`, and set `AUCTARYN_API_KEY` and `AUCTARYN_ADMIN_API_KEY` in `.env`.
-- All `/api/v1/*` HTTP endpoints require a Bearer credential. Identity management, approval, pending-decision, and decision-history endpoints require the administrator credential.
+- All `/api/v1/*` HTTP endpoints require a Bearer credential. Ordinary API request bodies are capped at 2 MiB before parsing; PCAP ingress has a separate bounded allowance. Identity management, approval, pending-decision, and decision-history endpoints require the administrator credential.
 - Before intercepting actions, an administrator registers an agent, grants tool scopes, and issues a short-lived token via `POST /api/v1/identity/token`. Gateway interception requests must include both `agent_id` and `identity_token`. Tokens expire within one hour maximum. Any permission change increments the identity's permission version and invalidates existing issued capabilities; delegated capabilities also become invalid when the delegator's permission version changes. Reissue capabilities after any scope change.
 - Gateway decisions carry an internal canonical fingerprint of the action intent (tool, action, parameters, target, agent and session). A pending action is denied if its intent changes before approval, and execution rechecks the fingerprint immediately before calling the trusted runtime adapter. The fingerprint is excluded from public serialization; it is mutation detection, not a signature or durable audit guarantee. Approval and execution-deduplication state remain in process memory. See [Approval Lifecycle](docs/APPROVAL_LIFECYCLE.md).
 - Agent registration is idempotent only for the same owner. Re-registering an existing `agent_id` under a different owner is rejected with a policy violation; resolve ownership conflicts through an explicit, audited administrative workflow rather than silently reassigning the identity.
@@ -115,7 +117,7 @@ The dashboard requires an administrator API key at sign-in. REST API clients use
 - `POST /api/v1/gateway/execute` is the governed execution entry point. It fails with HTTP 503 before evaluating the action if no trusted runtime adapter is configured. With an adapter configured, only an `APPROVED` decision is forwarded to it; pending, denied, vetoed, or timed-out actions are never executed.
 - Destructive actions remain pending until an administrator approves them with `POST /api/v1/gateway/approve`. Approval changes the decision state but does not execute the action; execution then uses `POST /api/v1/gateway/execute/approved/{decision_id}`. Runtime receipts expose output hashes rather than raw stdout/stderr.
 - The restrictive OpenShell baseline is `deploy/openshell/auctaryn-policy.yaml`; it requires Landlock `hard_requirement` and denies network egress until explicit rules are added. See `docs/OPEN_SHELL_RUNTIME.md` for setup and production acceptance.
-- The OpenShell adapter is opt-in through `AUCTARYN_RUNTIME_ADAPTER=openshell` and a configured sandbox/workspace. Production requires service-to-service OIDC credentials and the active OpenShell CLI gateway/TLS context; user credentials are allowed only through an explicit local-development override. Execution timeout is bounded to 1–3600 seconds. Only bounded argv arrays are accepted; shell command strings and caller-selected sandbox names are rejected. OpenShell sandbox policy remains mandatory and must be independently configured and verified.
+- The OpenShell adapter is opt-in through `AUCTARYN_RUNTIME_ADAPTER=openshell` and a configured sandbox/workspace. Production requires service-to-service OIDC credentials and read-only active-gateway metadata mounted at `/etc/openshell`; user credentials are prohibited in the production deployment script. Execution timeout is bounded to 1–3600 seconds. Only bounded argv arrays are accepted; shell command strings and caller-selected sandbox names are rejected. OpenShell sandbox policy remains mandatory and must be independently configured and verified.
 - This release does not yet prove that every external agent tool execution is forcibly mediated by Auctaryn. Do not treat an API decision alone as an execution sandbox.
 
 ## Adversarial security benchmark
