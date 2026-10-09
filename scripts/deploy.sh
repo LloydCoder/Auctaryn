@@ -65,6 +65,15 @@ if [ "$healthy" != true ]; then
     exit 1
 fi
 
+# Liveness is not readiness. Do not expose the service while runtime enforcement
+# and the OpenShell connectivity probe are still unverified.
+READINESS=$(curl -fsS http://127.0.0.1:8400/health/ready || true)
+if ! grep -Eq '"ready"[[:space:]]*:[[:space:]]*true' <<< "$READINESS"; then
+    echo "Auctaryn is alive but not ready for public exposure. Current readiness: $READINESS"
+    echo "Resolve the listed security/runtime checks before enabling Nginx/TLS."
+    exit 1
+fi
+
 # 5. Configure the reverse proxy. Certbot adds HTTPS after the HTTP vhost exists.
 NGINX_CONF="/etc/nginx/sites-available/auctaryn"
 if [ ! -f "$NGINX_CONF" ]; then
