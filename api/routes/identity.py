@@ -28,6 +28,7 @@ class ScopeRequest(BaseModel):
 
 class TokenRequest(BaseModel):
     agent_id: str = Field(min_length=1, max_length=128)
+    scopes: list[str] = Field(min_length=1, max_length=50)
     ttl_seconds: int = Field(default=300, ge=1, le=3600)
 
 
@@ -59,7 +60,7 @@ async def register_agent(request: RegisterRequest) -> dict:
 async def issue_agent_token(request: TokenRequest) -> dict:
     """Issue a short-lived, scoped bearer capability for an already-authorized agent."""
     try:
-        token = get_identity_manager().issue_token(request.agent_id, request.ttl_seconds)
+        token = get_identity_manager().issue_token(request.agent_id, request.ttl_seconds, request.scopes)
         return {
             "token_id": token.token_id,
             "agent_id": token.agent_id,
