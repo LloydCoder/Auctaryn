@@ -49,3 +49,14 @@ def test_context_history_and_quarantine_state_are_bounded(monkeypatch):
     assert guardian.authorize_session_action(
         "blocked-session", compromised.id, "blocked-action"
     ) is not None
+
+
+def test_protected_instruction_registry_is_bounded(monkeypatch):
+    import pytest
+    import modules.context_integrity.guardian as guardian_module
+
+    monkeypatch.setattr(guardian_module, "MAX_PROTECTED_INSTRUCTIONS", 1)
+    guardian = ContextIntegrityGuardian()
+    guardian.register_instruction("first", "Protect the first instruction.")
+    with pytest.raises(ValueError, match="registry capacity"):
+        guardian.register_instruction("second", "Protect the second instruction.")
