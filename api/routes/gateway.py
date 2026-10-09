@@ -6,6 +6,7 @@ Deploy behind TLS; static keys are bootstrap controls, not a replacement for
 enterprise identity-provider integration.
 """
 from datetime import datetime, timezone
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -32,21 +33,10 @@ _circuit_breaker = AgentCircuitBreaker(failure_threshold=5, cooldown_seconds=60)
 
 
 def _context_integrity_preflight(tool_call: ToolCall) -> str | None:
-    """Require a clean session-bound check whenever protected instructions exist."""
-    guardian = get_guardian()
-    if guardian.registry.count() == 0:
-        return None
-    session_id = tool_call.session_id
-    if not session_id:
-        return "Session ID is required while protected context instructions are configured."
-    if guardian.is_session_blocked(session_id):
-        return "Session is quarantined after a context-integrity violation; administrator clearance is required."
-    result = guardian.get_session_result(session_id)
-    if result is None:
-        return "No session-bound context-integrity check exists; action denied."
-    if result.blocked or result.status != IntegrityStatus.INTACT:
-        return "Latest context-integrity check is not intact; action denied."
-    return None
+    """Require a current clean check and consume it for this exact gateway request."""
+    return get_guardian().authorize_session_action(
+        tool_call.session_id, tool_call.context_check_id, tool_call.id
+    )
 
 
 # Fail closed: the gateway always has an identity manager. Agents must be
@@ -91,6 +81,7 @@ class ToolCallRequest(BaseModel):
     target: str = Field(default="", max_length=512)
     agent_id: str = Field(default="", max_length=128)
     session_id: str = Field(default="", max_length=128)
+    context_check_id: str = Field(default="", max_length=64)
     identity_token: str = Field(default="", max_length=128)
 
 class ApprovalRequest(BaseModel):
@@ -132,9 +123,9 @@ async def enable_identity_enforcement() -> dict:
 
 @router.post("/evaluate")
 async def evaluate_tool_call(request: ToolCallRequest) -> ActionClassification:
-    tc = ToolCall(tool_name=request.tool_name, action=request.action, parameters=request.parameters,
+    tc = ToolCall(id=uuid.uuid4().hex, tool_name=request.tool_name, action=request.action, parameters=request.parameters,
                   target=request.target, agent_id=request.agent_id, session_id=request.session_id,
-                  identity_token=request.identity_token)
+                  context_check_id=request.context_check_id, identity_token=request.identity_token)
     get_gateway().data_guard.validate_tool_call(tc)
     from modules.execution_gateway.risk_classifier import RiskClassifier
     return RiskClassifier().classify(tc)
