@@ -6,14 +6,14 @@
 
 ## Controls reviewed
 
-1. `IntegrityCheckResult` carries a session ID, and gateway tool-call intent carries a context-check ID. The context-check ID participates in the canonical action-intent fingerprint.
+1. `IntegrityCheckResult` carries a session ID and the protected-instruction baseline hash; gateway tool-call intent carries a context-check ID. The context-check ID participates in the canonical action-intent fingerprint. If the baseline changes during a check or after a check is issued—including removal of the final instruction—the old result is rejected and a fresh check is required.
 2. When protected instructions are configured, gateway preflight fails closed unless the submitted context-check ID is the current intact result for the same session.
 3. Check IDs are consumed for one action intent. A different action cannot reuse a consumed check; the same immutable action can be revalidated at the runtime boundary without consuming a second time.
 4. The execution service revalidates context integrity immediately before calling the configured runtime adapter, in addition to gateway evaluation. A newly quarantined session blocks execution.
 5. Compromised/degraded sessions remain quarantined until an administrator clears the session. The clear endpoint is covered by the administrator authorization path, and clearing requires a fresh clean context check before a new action can pass.
 6. Compaction integrity now compares protected-instruction presence fingerprints, not the unchanged registered-baseline hash. This prevents a missing protected instruction from being incorrectly recorded as preserved merely because the registry itself did not change.
 7. Context session state is bounded to 10,000 tracked sessions; when capacity is reached, only non-quarantined state may be evicted. If all tracked sessions are quarantined, the API returns a safe unavailable response and new checks fail closed. Protected instructions are capped at 1,000; check history and compaction history are capped at 5,000 each.
-8. State mutations and one-use check consumption are protected by a reentrant lock. This provides in-process concurrency control only; it is not durable or cross-replica coordination.
+8. Context evaluation and one-use check consumption are serialized under a reentrant lock, and registry reads/writes are synchronized. This closes the race in which a concurrent compromised check or baseline update could pass an older intact result. This provides in-process concurrency control only; it is not durable or cross-replica coordination.
 
 ## Regression evidence
 
