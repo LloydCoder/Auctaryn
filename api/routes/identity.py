@@ -3,7 +3,7 @@ TwinGuard — Agent Identity API Routes
 Exposes the ASI03 Agent Identity & Privilege Manager.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel, Field
 
 from modules.agent_identity.identity import AgentIdentityManager
@@ -107,8 +107,14 @@ async def get_agent_identity(agent_id: str) -> dict:
 
 
 @router.get("/{agent_id}/authorized/{tool_name}")
-async def check_authorization(agent_id: str, tool_name: str) -> dict:
-    authorized = get_identity_manager().is_authorized(agent_id, tool_name)
+async def check_authorization(
+    agent_id: str,
+    tool_name: str,
+    identity_token: str | None = Header(default=None, alias="X-Agent-Identity-Token"),
+) -> dict:
+    authorized = get_identity_manager().is_authorized(
+        agent_id, tool_name, token_id=identity_token, require_token=True
+    )
     return {"agent_id": agent_id, "tool_name": tool_name, "authorized": authorized}
 
 
