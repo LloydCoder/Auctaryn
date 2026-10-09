@@ -108,6 +108,19 @@ async def lifespan(app: FastAPI):
     runtime_adapter = None
     try:
         runtime_adapter = create_openshell_adapter_from_environment()
+        if runtime_adapter is not None and not await runtime_adapter.health_check():
+            try:
+                runtime_adapter.close()
+            except Exception as close_exc:
+                logger.warning(
+                    "OpenShell adapter cleanup after failed health probe failed (%s)",
+                    type(close_exc).__name__,
+                    extra={"event": "runtime_adapter_cleanup_failed"},
+                )
+            runtime_adapter = None
+            raise RuntimeAdapterUnavailable(
+                "Could not verify the configured OpenShell gateway with a bounded health probe."
+            )
         gateway.configure_runtime_adapter(runtime_adapter)
         if runtime_adapter is not None:
             logger.info(
