@@ -311,6 +311,8 @@ class ContextIntegrityGuardian:
                 return "No current session-bound context-integrity check exists; action denied."
             if result.blocked or result.status != IntegrityStatus.INTACT:
                 return "Latest context-integrity check is not intact; action denied."
+            if result.baseline_hash != self.registry.combined_hash():
+                return "Protected instruction baseline changed; a fresh context check is required."
             consumed_by = self._consumed_checks.get(check_id)
             if consumed_by is not None and consumed_by != action_id:
                 return "Context-check ID has already been consumed by another action."
@@ -333,6 +335,7 @@ class ContextIntegrityGuardian:
             return self._check_impl(current_context, session_id)
 
     def _check_impl(self, current_context: str, session_id: str | None = None) -> IntegrityCheckResult:
+        baseline_before = self.registry.combined_hash()
         result = verify_integrity(
             self.registry, current_context,
             degradation_threshold=self.degradation_threshold,
@@ -357,6 +360,15 @@ class ContextIntegrityGuardian:
                     )
                     break
 
+        baseline_after = self.registry.combined_hash()
+        result.baseline_hash = baseline_after
+        if baseline_before != baseline_after:
+            result.blocked = True
+            result.status = IntegrityStatus.COMPROMISED
+            result.details.append({
+                "status": "baseline_changed_during_check",
+                "reason": "Protected instruction baseline changed while the check was running.",
+            })
         result.session_id = session_id or ""
         if session_id:
             with self._session_lock:
