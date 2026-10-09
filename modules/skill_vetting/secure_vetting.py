@@ -15,7 +15,7 @@ from modules.skill_vetting.vetting import (
 )
 
 _HASH = re.compile(r"^[0-9a-f]{64}$")
-_VERSION = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?$")
+_VERSION = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 _MAX_ARTIFACT_BYTES = 1024 * 1024
 _MAX_HISTORY = 500
 _REQUIRED = {"name", "version", "content_hash", "signature", "permissions", "publisher"}
