@@ -78,3 +78,5 @@ def test_supply_chain_workflow_has_required_controls() -> None:
     assert "attestations: write" in supply
     assert "security-extended" in codeql
     assert "python,javascript-typescript" in codeql
+    assert "audit_codeql_sarif.py --fail-severity high" in codeql
+    assert "results/*.sarif" in codeql
