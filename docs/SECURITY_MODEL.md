@@ -97,3 +97,8 @@ Auctaryn stores bounded application evidence in a local SQLite append-only seque
 ## Incident response and execution containment
 
 The execution service checks a persistent global emergency stop and per-agent quarantine immediately before runtime invocation, including approved-decision execution. The administrator-only incident API supports stop/release, quarantine/release, agent-wide token revocation, and durable alert acknowledgement/resolution. Critical-risk and veto decisions create bounded alerts; alert WebSocket subscriptions and acknowledgement are administrator-only. Service-key WebSocket sessions must not receive incident alert payloads. Quarantine release never reissues revoked tokens. Local controls and identity tokens do not replace authoritative Platform revocation or provide multi-replica coordination. See the [incident response runbook](INCIDENT_RESPONSE.md) and [Phase 17 forensic audit](../audits/PHASE-17-FORENSIC-AUDIT.md).
+
+
+## Adversarial benchmark and assurance limits
+
+The ASI01–ASI10 red-team suite is a repeatable regression benchmark, not a certification. Each scenario links to a named automated test and a tactic-level MITRE ATLAS mapping; no technique-level mapping is claimed unless its identifier has been independently verified against the current ATLAS dataset. A passing unit test demonstrates the tested control path only. In particular, the step-up freshness contract is not a substitute for a real identity-provider MFA assertion, and local state does not prove multi-replica enforcement. See [the red-team benchmark](RED_TEAM_BENCHMARK.md), [OWASP coverage map](OWASP_COVERAGE.md), and [Phase 18 forensic audit](../audits/PHASE-18-FORENSIC-AUDIT.md).

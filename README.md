@@ -102,6 +102,10 @@ The dashboard requires an administrator API key at sign-in. REST API clients use
 - The OpenShell adapter is opt-in through `AUCTARYN_RUNTIME_ADAPTER=openshell` and a configured sandbox/workspace. Production requires service-to-service OIDC credentials and the active OpenShell CLI gateway/TLS context; user credentials are allowed only through an explicit local-development override. Execution timeout is bounded to 1–3600 seconds. Only bounded argv arrays are accepted; shell command strings and caller-selected sandbox names are rejected. OpenShell sandbox policy remains mandatory and must be independently configured and verified.
 - This release does not yet prove that every external agent tool execution is forcibly mediated by Auctaryn. Do not treat an API decision alone as an execution sandbox.
 
+## Adversarial security benchmark
+
+Run `python -m pytest tests/redteam -v` for the repeatable OWASP ASI01–ASI10 red-team regression suite. Scenario coverage is documented in [`docs/RED_TEAM_BENCHMARK.md`](docs/RED_TEAM_BENCHMARK.md); a passing suite is not certification and does not prove live Platform/IdP or runtime integration.
+
 ## Requirements
 
 - Linux (kernel >= 5.13 for Landlock)
