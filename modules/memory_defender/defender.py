@@ -10,7 +10,7 @@ import re
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from core.logging import get_logger
 
@@ -37,6 +37,14 @@ POISONING_PATTERNS = [
 # Only these internal provenance labels are treated as trusted by the module API.
 # Public API submissions are prefixed with "api:" and are always quarantined.
 TRUSTED_SOURCES = {"user_conversation", "trusted_system", "approved_internal"}
+
+
+@dataclass
+class MemorySession:
+    agent_id: str
+    token_id: str
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -215,24 +223,45 @@ class MemoryDefender:
     """Screen content, isolate sessions, quarantine untrusted sources and detect tampering."""
     def __init__(self):
         self.store = MemoryStore()
-        self._sessions: dict[str, str] = {}
+        self._sessions: dict[str, MemorySession] = {}
         self._session_lock = threading.RLock()
 
-    def create_session(self, agent_id: str) -> str:
+    def create_session(self, agent_id: str, token_id: str = "", ttl_seconds: int = 3600) -> str:
         if not isinstance(agent_id, str) or not agent_id or len(agent_id) > MAX_MEMORY_AGENT_ID_CHARS:
             raise ValueError("agent_id must contain 1–128 characters")
         if any(ord(char) < 32 or ord(char) == 127 for char in agent_id):
             raise ValueError("agent_id contains control characters")
+        if not isinstance(token_id, str) or len(token_id) > 128:
+            raise ValueError("token_id must be at most 128 characters")
+        if not 1 <= ttl_seconds <= 3600:
+            raise ValueError("memory session TTL must be between 1 and 3600 seconds")
+        now = datetime.now(timezone.utc)
         with self._session_lock:
+            for expired_id, session in list(self._sessions.items()):
+                if now >= session.expires_at:
+                    del self._sessions[expired_id]
             if len(self._sessions) >= MAX_MEMORY_SESSIONS:
                 raise ValueError("memory session capacity reached")
             session_id = uuid.uuid4().hex
-            self._sessions[session_id] = agent_id
+            self._sessions[session_id] = MemorySession(
+                agent_id=agent_id,
+                token_id=token_id,
+                created_at=now,
+                expires_at=now + timedelta(seconds=ttl_seconds),
+            )
             return session_id
 
-    def session_owned_by(self, session_id: str, agent_id: str) -> bool:
+    def session_owned_by(self, session_id: str, agent_id: str, token_id: str | None = None) -> bool:
         with self._session_lock:
-            return self._sessions.get(session_id) == agent_id
+            session = self._sessions.get(session_id)
+            if session is None:
+                return False
+            if datetime.now(timezone.utc) >= session.expires_at:
+                del self._sessions[session_id]
+                return False
+            if session.agent_id != agent_id:
+                return False
+            return token_id is None or session.token_id == token_id
 
     def evaluate_for_storage(
         self,
