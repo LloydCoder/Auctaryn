@@ -23,7 +23,7 @@ Update release/release-evidence.json with evidence references, the SHA-256 diges
 
 ## Post-deployment acceptance
 
-Production rollout is a separate operation and is not performed by this workflow. Before declaring production acceptance, record the expected immutable OCI digest and the observed deployed digest, prove they match, execute a rollback drill, and attach reviewer/evidence references plus `evidence_sha256` digests. Validate with python scripts/verify_release_evidence.py release/release-evidence.json --require-production.
+The release workflow does not deploy to production. The separate `scripts/deploy.sh` operation verifies the published release manifest, image provenance/SBOM attestations and exact image digest, then checks readiness before exposing Nginx/TLS. Before declaring production acceptance, record the expected immutable OCI digest and observed deployed digest, prove they match, execute a production rollback drill, and attach reviewer/evidence references plus `evidence_sha256` digests. Validate with python scripts/verify_release_evidence.py release/release-evidence.json --require-production.
 
 ## Fail-closed behavior
 
