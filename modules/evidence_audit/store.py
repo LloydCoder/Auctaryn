@@ -130,7 +130,7 @@ class EvidenceStore:
                 db.execute("BEGIN IMMEDIATE")
                 row = db.execute("SELECT record_hash FROM evidence_records ORDER BY sequence DESC LIMIT 1").fetchone()
                 previous_hash = row["record_hash"] if row else ZERO_HASH
-                digest = hashlib.sha256(previous_hash.encode("ascii") + b"\\n" + serialized.encode("utf-8")).hexdigest()
+                digest = hashlib.sha256(previous_hash.encode("ascii") + b"\n" + serialized.encode("utf-8")).hexdigest()
                 signature = self._signature(digest)
                 cursor = db.execute(
                     """INSERT INTO evidence_records
@@ -183,7 +183,7 @@ class EvidenceStore:
             hmac_verified = bool(self.key)
             for row in rows:
                 digest = hashlib.sha256(
-                    previous_hash.encode("ascii") + b"\\n" + row["payload_json"].encode("utf-8")
+                    previous_hash.encode("ascii") + b"\n" + row["payload_json"].encode("utf-8")
                 ).hexdigest()
                 if row["previous_hash"] != previous_hash or not hmac.compare_digest(digest, row["record_hash"]):
                     return {"valid": False, "records_checked": checked, "failed_sequence": row["sequence"],
@@ -196,8 +196,13 @@ class EvidenceStore:
                 previous_hash = digest
                 checked += 1
             return {"valid": True, "records_checked": checked, "head_hash": previous_hash,
+            if self.key:
+                reason = "ok" if hmac_verified else "hmac_unverified"
+            else:
+                reason = "key_unavailable" if any(row["hmac_signature"] for row in rows) else "hash_chain_only"
+            return {"valid": True, "records_checked": checked, "head_hash": previous_hash,
                     "hmac_verified": hmac_verified, "integrity_mode": self.integrity_mode,
-                    "reason": "ok" if hmac_verified else "key_unavailable"}
+                    "reason": reason}
         except (sqlite3.Error, OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise EvidenceStoreError("Evidence verification failed") from exc
 
