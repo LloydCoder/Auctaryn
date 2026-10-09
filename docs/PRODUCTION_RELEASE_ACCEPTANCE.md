@@ -12,7 +12,7 @@ Auctaryn now has a fail-closed version-tag release workflow. It does not deploy 
 4. Live OpenShell acceptance evidence for gateway identity, effective policy revision, filesystem/workspace boundaries, egress restrictions, process limits and denied-action non-execution.
 5. Human security-owner review of the current risk register and explicit closure/acceptance of all release-blocking risks.
 
-Update release/release-evidence.json with evidence references and reviewer metadata only after the evidence exists. Then set tested_commit to the exact commit that passed CI and record the successful workflow run IDs, conclusions, URLs and head SHAs. The release workflow re-queries GitHub for those run conclusions and rejects a release tag if any run is not green or does not match tested_commit.
+Update release/release-evidence.json with evidence references, the SHA-256 digest of each referenced evidence artifact (`evidence_sha256`), reviewer identity and a timezone-aware ISO-8601 review timestamp only after the evidence exists. For the independent assessment, also populate `report_sha256` and numeric critical/high finding counts. Then set tested_commit to the exact commit that passed CI and record the successful workflow run IDs, conclusions, URLs and head SHAs. The release workflow re-queries GitHub for those run conclusions and rejects a release tag if any run is not green or does not match tested_commit.
 
 ## Version-tag release process
 
@@ -23,7 +23,7 @@ Update release/release-evidence.json with evidence references and reviewer metad
 
 ## Post-deployment acceptance
 
-Production rollout is a separate operation and is not performed by this workflow. Before declaring production acceptance, record the expected immutable OCI digest and the observed deployed digest, prove they match, execute a rollback drill, and attach reviewer/evidence references. Validate with python scripts/verify_release_evidence.py release/release-evidence.json --require-production.
+Production rollout is a separate operation and is not performed by this workflow. Before declaring production acceptance, record the expected immutable OCI digest and the observed deployed digest, prove they match, execute a rollback drill, and attach reviewer/evidence references plus `evidence_sha256` digests. Validate with python scripts/verify_release_evidence.py release/release-evidence.json --require-production.
 
 ## Fail-closed behavior
 
