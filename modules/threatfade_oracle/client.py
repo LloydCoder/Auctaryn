@@ -178,30 +178,52 @@ class FusionOpsClient:
                 resp = await client.post(f"{self.base_url}/detect/scenario",
                                          json={"scenario": scenario})
                 resp.raise_for_status()
-                return resp.json()
+                data = self._json_object(resp, "/detect/scenario")
+                return self._validate_full_analysis(data, "/detect/scenario")
         except httpx.HTTPError as e:
-            raise ThreatFadeConnectionError(f"FusionOps unreachable: {e}") from e
+            raise ThreatFadeConnectionError("FusionOps scenario request failed.") from e
 
     async def detect_pcap(self, file_bytes: bytes, filename: str) -> dict:
         """POST /detect/pcap — analyze a real PCAP file (multipart)."""
+        if not isinstance(file_bytes, bytes) or not 1 <= len(file_bytes) <= MAX_PCAP_BYTES:
+            raise ValueError(f"PCAP content must be between 1 and {MAX_PCAP_BYTES} bytes")
+        if (
+            not isinstance(filename, str)
+            or not filename
+            or len(filename) > 255
+            or PurePath(filename).name != filename
+            or "/" in filename
+            or "\\" in filename
+            or any(ord(char) < 32 for char in filename)
+        ):
+            raise ValueError("filename must be a bounded basename without control characters")
         try:
             async with httpx.AsyncClient(timeout=self.timeout * 3) as client:
                 files = {"file": (filename, file_bytes, "application/octet-stream")}
                 resp = await client.post(f"{self.base_url}/detect/pcap", files=files)
                 resp.raise_for_status()
-                return resp.json()
+                data = self._json_object(resp, "/detect/pcap")
+                return self._validate_full_analysis(data, "/detect/pcap")
         except httpx.HTTPError as e:
-            raise ThreatFadeConnectionError(f"FusionOps unreachable: {e}") from e
+            raise ThreatFadeConnectionError("FusionOps PCAP analysis request failed.") from e
 
     async def triage(self, detection_result: dict) -> dict:
         """POST /triage — run triage agent on an existing detection result."""
+        if not isinstance(detection_result, dict):
+            raise ValueError("detection_result must be a mapping")
+        try:
+            serialized = json.dumps(detection_result, allow_nan=False, separators=(",", ":"), default=str)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("detection_result must be JSON serializable without NaN/Infinity") from exc
+        if len(serialized.encode("utf-8")) > MAX_TRIAGE_PAYLOAD_BYTES:
+            raise ValueError(f"detection_result exceeds {MAX_TRIAGE_PAYLOAD_BYTES} bytes")
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(f"{self.base_url}/triage", json=detection_result)
                 resp.raise_for_status()
-                return resp.json()
+                return self._json_object(resp, "/triage")
         except httpx.HTTPError as e:
-            raise ThreatFadeConnectionError(f"FusionOps unreachable: {e}") from e
+            raise ThreatFadeConnectionError("FusionOps triage request failed.") from e
 
 
 def generate_synthetic_signal(tool_call: ToolCall, num_points: int = 20) -> tuple[list[float], list[float]]:
