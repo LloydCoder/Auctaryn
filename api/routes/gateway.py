@@ -29,7 +29,7 @@ _circuit_breaker = AgentCircuitBreaker(failure_threshold=5, cooldown_seconds=60)
 _gateway = ExecutionGateway(
     auto_approve_safe=True,
     oracle=_oracle,
-    identity_manager=None,  # set via enable_strict_identity()
+    identity_manager=_identity_manager,
     circuit_breaker=_circuit_breaker,
 )
 
