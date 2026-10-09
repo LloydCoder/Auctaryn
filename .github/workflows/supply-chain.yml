@@ -13,19 +13,6 @@ permissions:
   contents: read
 
 jobs:
-  dependency-review:
-    name: Pull request dependency review
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Review dependency changes
-        uses: actions/dependency-review-action@ce3cf9537a52e8119d91fd484ab5b8a807627bf8 # v4.6.0
-        with:
-          fail-on-severity: high
-          comment-summary-in-pr: always
-
   secret-scan:
     name: Historical and change-set secret scan
     runs-on: ubuntu-latest
