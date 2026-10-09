@@ -19,8 +19,8 @@ def verify_effective_policy(
     *,
     runner: Callable[..., Any] = subprocess.run,
 ) -> str:
-    if not sandbox_name or not sandbox_name.strip() or len(sandbox_name) > 128:
-        raise ValueError("A bounded OpenShell sandbox name is required.")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", sandbox_name or ""):
+        raise ValueError("OpenShell sandbox name contains unsupported characters.")
     if not re.fullmatch(r"[0-9a-fA-F]{64}", expected_sha256 or ""):
         raise ValueError("A reviewed 64-character SHA-256 policy pin is required.")
 
