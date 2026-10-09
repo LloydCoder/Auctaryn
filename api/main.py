@@ -18,6 +18,7 @@ from api.routes import health, context, gateway, threatfade, identity, skills, m
 from api.websockets import actions, alerts
 from modules.execution_gateway.openshell_adapter import create_openshell_adapter_from_environment
 from modules.execution_gateway.runtime_adapter import RuntimeAdapterUnavailable
+from modules.execution_gateway.data_guard import SensitiveDataBlocked
 
 
 startup_time: float = 0.0
@@ -97,6 +98,20 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         lifespan=lifespan,
     )
+
+    @app.exception_handler(SensitiveDataBlocked)
+    async def sensitive_data_blocked_handler(request: Request, exc: SensitiveDataBlocked):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {
+                    "code": "sensitive_data_blocked",
+                    "message": str(exc),
+                    "paths": list(exc.paths),
+                    "additional_count": exc.additional_count,
+                }
+            },
+        )
 
     app.add_middleware(
         CORSMiddleware,
