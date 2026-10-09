@@ -1,7 +1,7 @@
-"""Readiness reports configured and live runtime controls separately."""
+    _set_strong_credentials(monkeypatch)\n    _set_strong_credentials(monkeypatch)\n    _set_strong_credentials(monkeypatch)\n    _set_strong_credentials(monkeypatch)\n    _set_strong_credentials(monkeypatch)\n"""Readiness reports configured and live runtime controls separately."""
 
 import logging
-from types import SimpleNamespace
+from types import SimpleNamespace\n\n\ndef _set_strong_credentials(monkeypatch):\n    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-key-0123456789abcdef")\n    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-key-0123456789abcdef")
 
 import pytest
 
