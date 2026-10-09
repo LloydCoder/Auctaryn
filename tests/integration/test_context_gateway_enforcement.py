@@ -46,6 +46,7 @@ def test_compromised_session_is_denied_until_admin_clear_and_fresh_check(client)
         "parameters": {"query": "customer records"},
         "agent_id": "context-enforcement-agent",
         "session_id": session_id,
+        "context_check_id": check.json()["id"],
         "identity_token": token_id,
     }
     denied = client.post("/api/v1/gateway/intercept", json=payload)
@@ -81,6 +82,12 @@ def test_compromised_session_is_denied_until_admin_clear_and_fresh_check(client)
     assert clean.json()["status"] == "intact"
     assert clean.json()["blocked"] is False
 
+    payload["context_check_id"] = clean.json()["id"]
     allowed = client.post("/api/v1/gateway/intercept", json=payload)
     assert allowed.status_code == 200
     assert allowed.json()["decision"] == "approved"
+
+    replayed = client.post("/api/v1/gateway/intercept", json=payload)
+    assert replayed.status_code == 200
+    assert replayed.json()["decision"] == "denied"
+    assert replayed.json()["decided_by"] == "context_integrity_guard"
