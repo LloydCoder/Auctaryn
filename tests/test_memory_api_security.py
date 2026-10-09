@@ -206,10 +206,7 @@ def test_memory_content_endpoint_never_returns_tampered_content(client):
     session_id = _session(client, headers)
     stored = _store(client, headers, session_id, content="original").json()
     memory_routes.get_memory_defender().store._entries[stored["entry_id"]].content = "tampered"
-    response = client.get(
-        f"/api/v1/memory/content/{stored['entry_id']}/{session_id}",
-        headers=headers,
-    )
+    response = client.get(f"/api/v1/memory/quarantine/{stored['entry_id']}")
     assert response.status_code == 200
     assert response.json()["content"] == "original"
     assert response.json()["integrity_ok"] is True
