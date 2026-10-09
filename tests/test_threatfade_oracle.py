@@ -492,6 +492,30 @@ class TestThreatFadeOracleService:
         assert oracle.history[-1].severity == Severity.INFO
 
     @pytest.mark.asyncio
+    async def test_oracle_half_open_probe_resets_after_success(self, monkeypatch):
+        import modules.threatfade_oracle.oracle as oracle_module
+        from modules.threatfade_oracle.oracle import ThreatFadeOracle
+        from core.exceptions import ThreatFadeConnectionError
+        from core.models import ToolCall
+
+        clock = [100.0]
+        monkeypatch.setattr(oracle_module.time, "monotonic", lambda: clock[0])
+        oracle = ThreatFadeOracle()
+        oracle.oracle_failure_threshold = 1
+        oracle.client.detect_json = AsyncMock(
+            side_effect=[ThreatFadeConnectionError("simulated service error"), SAMPLE_FULL_RESULT]
+        )
+        call = ToolCall(tool_name="read_file", action="read", parameters={})
+
+        await oracle.analyze(call)
+        assert oracle._oracle_breaker_state() == "open"
+        clock[0] += 31
+        result = await oracle.analyze(call)
+        assert result.severity == Severity.LOW
+        assert oracle._oracle_breaker_state() == "closed"
+        assert oracle.client.detect_json.await_count == 2
+
+    @pytest.mark.asyncio
     async def test_oracle_tracks_history(self):
         from modules.threatfade_oracle.oracle import ThreatFadeOracle
         from core.models import ToolCall
