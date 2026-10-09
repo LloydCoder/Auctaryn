@@ -91,21 +91,33 @@ class FusionOpsClient:
                 f"FusionOps returned an invalid analysis schema for {endpoint}."
             )
         for key in ("score", "entropy", "drop_ratio", "z_outlier"):
-            value = detection.get(key, 0.0)
+            value = detection.get(key)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
                 raise ThreatFadeConnectionError(
                     f"FusionOps returned an invalid numeric field for {endpoint}."
                 )
-        severity = detection.get("severity", "INFO")
+        if not 0 <= detection["score"] <= 1 or not 0 <= detection["entropy"] <= 1:
+            raise ThreatFadeConnectionError(
+                f"FusionOps returned an out-of-range score for {endpoint}."
+            )
+        if not 0 <= detection["drop_ratio"] <= 1 or not 0 <= detection["z_outlier"] <= 1_000_000:
+            raise ThreatFadeConnectionError(
+                f"FusionOps returned an out-of-range statistic for {endpoint}."
+            )
+        severity = detection.get("severity")
         if not isinstance(severity, str) or severity.upper() not in VALID_SEVERITIES:
             raise ThreatFadeConnectionError(
                 f"FusionOps returned an invalid severity for {endpoint}."
             )
-        if "detected" in detection and not isinstance(detection["detected"], bool):
+        if not isinstance(detection.get("detected"), bool):
             raise ThreatFadeConnectionError(
                 f"FusionOps returned an invalid detection flag for {endpoint}."
             )
-        if "escalate" in triage and not isinstance(triage["escalate"], bool):
+        if not isinstance(triage.get("category"), str) or not isinstance(triage.get("recommended_action"), str):
+            raise ThreatFadeConnectionError(
+                f"FusionOps returned invalid triage fields for {endpoint}."
+            )
+        if not isinstance(triage.get("escalate"), bool):
             raise ThreatFadeConnectionError(
                 f"FusionOps returned an invalid escalation flag for {endpoint}."
             )
@@ -141,6 +153,8 @@ class FusionOpsClient:
     async def detect_json(self, timestamps: list[float], values: list[float],
                           source_label: str = "") -> dict:
         """POST /detect/json — analyze signal data, returns FullAnalysisResult."""
+        if not isinstance(timestamps, list) or not isinstance(values, list):
+            raise ValueError("timestamps and values must be lists")
         if len(timestamps) != len(values):
             raise ValueError("timestamps and values must be the same length")
         if not MIN_DATA_POINTS <= len(values) <= MAX_DATA_POINTS:
