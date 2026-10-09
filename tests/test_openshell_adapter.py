@@ -77,6 +77,19 @@ def test_adapter_live_health_probe_fails_closed_when_version_missing():
     assert asyncio.run(adapter.health_check()) is False
 
 
+def test_adapter_live_health_probe_fails_closed_on_timeout(monkeypatch):
+    import modules.execution_gateway.openshell_adapter as adapter_module
+
+    async def timeout_probe(awaitable, *, timeout):
+        awaitable.close()
+        assert timeout == 5.0
+        raise TimeoutError("probe timed out")
+
+    monkeypatch.setattr(adapter_module.asyncio, "wait_for", timeout_probe)
+    adapter = OpenShellRuntimeAdapter(FakeOpenShellClient(), sandbox_name="s", workspace="w")
+    assert asyncio.run(adapter.health_check()) is False
+
+
 def test_adapter_live_health_probe_fails_closed_on_gateway_error():
     class UnavailableClient(FakeOpenShellClient):
         def health(self):
