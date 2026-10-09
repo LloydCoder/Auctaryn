@@ -9,6 +9,9 @@ from typing import Any
 import yaml
 
 _ALLOWED_WRITE_PATHS = {"/sandbox", "/tmp", "/dev/null"}
+_ALLOWED_READ_ONLY_PATHS = {
+    "/bin", "/usr", "/lib", "/proc", "/dev/urandom", "/etc", "/var/log"
+}
 _REQUIRED_READ_ONLY_PATHS = {"/bin", "/usr", "/lib", "/etc"}
 
 
@@ -32,8 +35,12 @@ def validate_baseline_policy(policy: Any) -> list[str]:
         read_write = filesystem.get("read_write")
         if not isinstance(read_only, list) or any(not isinstance(path, str) for path in read_only):
             errors.append("filesystem_policy.read_only must be a list of paths")
-        elif not _REQUIRED_READ_ONLY_PATHS.issubset(set(read_only)):
-            errors.append("filesystem_policy.read_only is missing required system paths")
+        else:
+            read_only_paths = set(read_only)
+            if not _REQUIRED_READ_ONLY_PATHS.issubset(read_only_paths):
+                errors.append("filesystem_policy.read_only is missing required system paths")
+            if not read_only_paths.issubset(_ALLOWED_READ_ONLY_PATHS):
+                errors.append("filesystem_policy.read_only contains an unapproved readable path")
 
         if not isinstance(read_write, list) or any(not isinstance(path, str) for path in read_write):
             errors.append("filesystem_policy.read_write must be a list of paths")
