@@ -3,7 +3,7 @@ TwinGuard — Context Integrity API Routes
 """
 
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from core.models import IntegrityCheckResult, IntegrityStatus, CompactionEvent
@@ -30,7 +30,7 @@ async def get_integrity_status() -> dict:
     return status
 
 @router.get("/checks")
-async def list_integrity_checks(limit: int = 50) -> list[IntegrityCheckResult]:
+async def list_integrity_checks(limit: int = Query(50, ge=1, le=500)) -> list[IntegrityCheckResult]:
     return get_guardian().history[-limit:]
 
 @router.get("/checks/{check_id}")
@@ -82,7 +82,7 @@ async def trigger_integrity_check() -> IntegrityCheckResult:
     return guardian.check("")
 
 @router.get("/compactions")
-async def list_compaction_events(limit: int = 50) -> list[CompactionEvent]:
+async def list_compaction_events(limit: int = Query(50, ge=1, le=500)) -> list[CompactionEvent]:
     return get_guardian().compaction_history[-limit:]
 
 @router.get("/instructions")
