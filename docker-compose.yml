@@ -1,0 +1,66 @@
+# TwinGuard — Docker Compose
+# Orchestrates API, Dashboard, and ThreatFade Oracle
+
+services:
+  # TwinGuard API Backend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8400:8400"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - TWINGUARD_API_KEY=${TWINGUARD_API_KEY}
+      - THREATFADE_SERVICE_URL=http://threatfade:8401
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+      - ./policies:/app/policies:ro
+    depends_on:
+      - threatfade
+    restart: unless-stopped
+    networks:
+      - twinguard
+
+  # ThreatFade Oracle Service
+  threatfade:
+    build:
+      context: ./modules/threatfade_oracle
+      dockerfile: Dockerfile
+    ports:
+      - "8401:8401"
+    volumes:
+      - ./data/pcaps:/app/pcaps
+      - ./data/reports:/app/reports
+    restart: unless-stopped
+    networks:
+      - twinguard
+
+  # React Dashboard
+  # Dev-only: live-reloading Vite dev server. Production deployments
+  # (scripts/deploy.sh) build static assets and serve them directly via
+  # Nginx instead — this service is for local `docker-compose up` work.
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8400
+      - VITE_WS_URL=ws://localhost:8400
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - twinguard
+
+networks:
+  twinguard:
+    driver: bridge
+
+volumes:
+  twinguard-data:

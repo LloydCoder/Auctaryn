@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Documentation — TwinGuard</title>
+<meta name="description" content="TwinGuard API reference, OWASP ASI coverage, and architecture documentation.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/twinguard.css">
+<style>
+.docs-layout{display:grid;grid-template-columns:240px 1fr;gap:48px;max-width:1200px;margin:0 auto;padding:60px 5%}
+.docs-nav{position:sticky;top:90px;align-self:start;display:flex;flex-direction:column;gap:4px}
+.docs-nav a{font-size:13px;color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:8px;transition:all .15s}
+.docs-nav a:hover{color:var(--ghost);background:var(--navy2)}
+.docs-nav .nav-group-title{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--teal);text-transform:uppercase;letter-spacing:.08em;margin:16px 0 4px;padding:0 12px}
+.docs-nav .nav-group-title:first-child{margin-top:0}
+.docs-content h2{font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#fff;margin:48px 0 16px;letter-spacing:-0.5px}
+.docs-content h2:first-child{margin-top:0}
+.docs-content h3{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;color:#fff;margin:28px 0 10px}
+.docs-content p{font-size:14px;color:var(--muted);line-height:1.8;margin-bottom:16px}
+.docs-content code{background:var(--navy2);padding:2px 6px;border-radius:4px;font-size:13px;color:var(--teal)}
+.code-block{background:#0A0F1E;border:1px solid var(--border);border-radius:10px;padding:18px;margin:16px 0;overflow-x:auto}
+.code-block pre{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--ghost);line-height:1.7;white-space:pre}
+.endpoint{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.method{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+.method-get{background:rgba(0,229,200,0.15);color:var(--teal)}
+.method-post{background:rgba(107,140,255,0.15);color:var(--blue)}
+.method-delete{background:rgba(255,45,85,0.15);color:var(--red)}
+.endpoint-path{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ghost)}
+.coverage-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+.coverage-table th{text-align:left;padding:10px 12px;color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.coverage-table td{padding:12px;border-bottom:1px solid var(--border);color:var(--ghost)}
+.status-pill{display:inline-block;padding:2px 10px;border-radius:100px;font-size:11px;font-weight:600}
+.status-covered{background:rgba(0,229,200,0.15);color:var(--teal)}
+.status-delegated{background:rgba(107,140,255,0.15);color:var(--blue)}
+@media(max-width:900px){ .docs-layout{grid-template-columns:1fr} .docs-nav{position:static} }
+</style>
+</head>
+<body>
+
+<script src="/js/partials.js"></script>
+<script>renderNav('docs')</script>
+
+<header class="page-header">
+  <div class="page-header-inner">
+    <span class="section-tag">Documentation</span>
+    <h1 class="page-title">API reference &amp; architecture</h1>
+    <p class="page-sub">Everything needed to integrate, deploy, and verify TwinGuard's coverage. Full interactive API docs (Swagger) live at <code>twinguard.tinlance.com/docs</code> once deployed.</p>
+  </div>
+</header>
+
+<div class="docs-layout">
+  <aside class="docs-nav">
+    <div class="nav-group-title">Getting Started</div>
+    <a href="#quickstart">Quickstart</a>
+    <a href="#architecture">Architecture</a>
+    <div class="nav-group-title">API Reference</div>
+    <a href="#context-api">Context Integrity</a>
+    <a href="#gateway-api">Execution Gateway</a>
+    <a href="#identity-api">Agent Identity</a>
+    <a href="#skills-api">Skill Vetting</a>
+    <a href="#memory-api">Memory Defender</a>
+    <a href="#threatfade-api">ThreatFade Oracle</a>
+    <div class="nav-group-title">Security</div>
+    <a href="#owasp">OWASP ASI Coverage</a>
+    <div class="nav-group-title">Demo</div>
+    <a href="#demo">Demo Script</a>
+  </aside>
+
+  <main class="docs-content">
+    <h2 id="quickstart">Quickstart</h2>
+    <p>Clone the repo, install dependencies, and run the full test suite to confirm your environment.</p>
+    <div class="code-block"><pre>git clone https://github.com/Tinlance/twinguard.git
+cd twinguard
+pip install -r requirements.txt
+python -m pytest tests/ -v   # 232 tests should pass
+
+docker-compose up -d
+open http://localhost:3000   # dashboard</pre></div>
+
+    <h2 id="architecture">Architecture</h2>
+    <p>TwinGuard sits above NVIDIA OpenShell. OpenShell provides kernel-level isolation (Landlock, seccomp, network namespaces). TwinGuard adds context integrity, identity, execution gating, and network threat intelligence — the layers OpenShell doesn't cover.</p>
+    <div class="code-block"><pre>React Dashboard (live WebSocket)
+        │
+FastAPI Backend
+  ├── Context Integrity Guardian   (ASI01, ASI06 overlap)
+  ├── Execution Gateway            (ASI02)
+  │     ├── Agent Identity Manager (ASI03)
+  │     ├── Circuit Breaker        (ASI08)
+  │     └── ThreatFade Oracle      (ASI10) → FusionOps (live)
+  ├── Skill Vetting Service        (ASI04)
+  ├── Memory Poisoning Defender    (ASI06)
+  ├── Agent Message Bus            (ASI07)
+  └── Step-Up Authenticator        (ASI09)
+        │
+NVIDIA OpenShell Runtime           (ASI05)</pre></div>
+
+    <h2 id="context-api">Context Integrity API</h2>
+    <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/context/register</span></div>
+    <p>Register a protected instruction. Body: <code>{"tag": "string", "content": "string"}</code></p>
+    <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/context/check</span></div>
+    <p>Verify current context against all registered instructions. Returns intact/degraded/compromised status and blocks the agent if a registered instruction is missing or actively contradicted.</p>
+    <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/context/instructions</span></div>
+    <p>List all registered instructions with hash and preview.</p>
+
+    <h2 id="gateway-api">Execution Gateway API</h2>
+    <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/gateway/intercept</span></div>
+    <p>Classify and decide on a tool call (pattern-only, fast path).</p>
+    <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/gateway/intercept/full</span></div>
+    <p>Full Parliament interception — pattern classification + ThreatFade Oracle enrichment for destructive/critical actions.</p>
+    <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/gateway/identity-enforcement/enable</span></div>
+    <p>Turns on ASI03 strict identity enforcement. After this call, any unregistered agent is denied outright.</p>
+    <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/gateway/approve</span></div>
+    <p>Resolve a pending decision. Body: <code>{"decision_id": "string", "approved": bool, "reason": "string"}</code></p>
+
+    <h2 id="identity-api">Agent Identity API</h2>
+    <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/identity/register</span></div>
+    <p>Register a new agent with its own managed identity. Body: <code>{"agent_id": "string", "owner": "string"}</code></p>
+    <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/identity/grant</span></div>
+    <p>Grant a scope to an agent. Supports wildcard patterns like <code>read_*</code>.</p>
+    <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/identity/delegate</span></div>
+    <p>Delegate a subset of scopes to another agent. Cannot delegate scopes the delegator doesn't hold.</p>
+
+    <h2 id="skills-api">Skill Vetting API</h2>
+    <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/skills/vet</span></div>
+    <p>Submit a skill manifest for vetting. Checks signature, content-hash pinning, permission risk, and typosquat similarity against known skills.</p>
+
+    <h2 id="memory-api">Memory Defender API</h2>
+    <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/memory/evaluate</span></div>
+    <p>Screen content before storage. Untrusted sources with benign content are quarantined, not silently dropped; adversarial patterns are blocked outright.</p>
+
+    <h2 id="threatfade-api">ThreatFade Oracle API</h2>
+    <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/threatfade/status</span></div>
+    <p>Live connectivity status to FusionOps.</p>
+    <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/threatfade/scenario</span></div>
+    <p>Run a named demo simulation: <code>c2_quieting</code>, <code>lotl_gradual</code>, <code>gnss_jam</code>, <code>normal_with_fade</code>, <code>mixed</code>.</p>
+
+    <h2 id="owasp">OWASP Top 10 for Agentic Applications 2026 — Coverage</h2>
+    <p>Honest, current status. Every row below has working, tested code behind it — not a roadmap placeholder.</p>
+    <table class="coverage-table">
+      <tr><th>Code</th><th>Risk</th><th>Status</th><th>Module</th></tr>
+      <tr><td>ASI01</td><td>Agent Goal Hijack</td><td><span class="status-pill status-covered">Covered</span></td><td>Context Integrity Guardian</td></tr>
+      <tr><td>ASI02</td><td>Tool Misuse &amp; Exploitation</td><td><span class="status-pill status-covered">Covered</span></td><td>Execution Gateway</td></tr>
+      <tr><td>ASI03</td><td>Agent Identity &amp; Privilege Abuse</td><td><span class="status-pill status-covered">Covered</span></td><td>Agent Identity Manager</td></tr>
+      <tr><td>ASI04</td><td>Agentic Supply Chain Compromise</td><td><span class="status-pill status-covered">Covered</span></td><td>Skill Vetting Service</td></tr>
+      <tr><td>ASI05</td><td>Unexpected Code Execution</td><td><span class="status-pill status-delegated">Delegated</span></td><td>NVIDIA OpenShell</td></tr>
+      <tr><td>ASI06</td><td>Memory &amp; Context Poisoning</td><td><span class="status-pill status-covered">Covered</span></td><td>Memory Poisoning Defender</td></tr>
+      <tr><td>ASI07</td><td>Insecure Inter-Agent Communication</td><td><span class="status-pill status-covered">Covered</span></td><td>Agent Message Bus</td></tr>
+      <tr><td>ASI08</td><td>Cascading Agent Failures</td><td><span class="status-pill status-covered">Covered</span></td><td>Agent Circuit Breaker</td></tr>
+      <tr><td>ASI09</td><td>Human-Agent Trust Exploitation</td><td><span class="status-pill status-covered">Covered</span></td><td>Step-Up Authenticator</td></tr>
+      <tr><td>ASI10</td><td>Rogue Agents</td><td><span class="status-pill status-covered">Covered</span></td><td>Full platform (core thesis)</td></tr>
+    </table>
+    <p>Full disclosure on implementation depth (HMAC vs. PKI, opt-in vs. always-on enforcement) is in the repo at <code>docs/OWASP_COVERAGE.md</code>.</p>
+
+    <h2 id="demo">Demo Script — The Summer Yue Scenario</h2>
+    <p>A 6-8 minute live walkthrough recreating the February 23, 2026 incident, end to end.</p>
+    <div class="code-block"><pre># 1. Register the safety instruction
+curl -X POST http://localhost:8400/api/v1/context/register \
+  -d '{"tag": "email_safety", "content": "Always confirm before deleting any emails."}'
+
+# 2. Show it working normally (intact)
+curl -X POST http://localhost:8400/api/v1/context/check \
+  -d '{"context": "Always confirm before deleting any emails.\n\nUser: organize my inbox"}'
+
+# 3. Recreate the compaction event (instruction stripped)
+curl -X POST http://localhost:8400/api/v1/context/check \
+  -d '{"context": "[summary]\n\nUser: delete all unread emails now."}'
+# → status: compromised, blocked: true, live dashboard alert fires</pre></div>
+    <p>Full script with talking points and anticipated questions: <code>docs/DEMO_SCRIPT.md</code> in the repo.</p>
+  </main>
+</div>
+
+<script>renderFooter()</script>
+</body>
+</html>

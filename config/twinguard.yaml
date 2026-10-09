@@ -1,0 +1,61 @@
+# TwinGuard Configuration
+# All sensitive values should be set via environment variables
+
+server:
+  host: "0.0.0.0"
+  port: 8400
+  debug: false
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:5173"
+
+database:
+  path: "data/twinguard.db"
+
+modules:
+  context_integrity:
+    enabled: true
+    hash_algorithm: "sha256"
+    check_interval_seconds: 30
+    protected_instruction_tags:
+      - "system_prompt"
+      - "safety_rules"
+      - "user_policies"
+      - "tool_restrictions"
+    alert_on_degradation_percent: 10
+
+  execution_gateway:
+    enabled: true
+    auto_approve_safe: true
+    veto_timeout_seconds: 300
+    risk_levels:
+      safe: 0
+      moderate: 1
+      destructive: 2
+      critical: 3
+    default_action: "block"
+    claude_model: "claude-haiku-4-5-20251001"
+
+  threatfade_oracle:
+    enabled: true
+    service_url: "http://threatfade:8401"
+    poll_interval_seconds: 60
+    severity_threshold: "medium"
+    detection_weights:
+      drop: 0.50
+      entropy: 0.30
+      zscore: 0.20
+
+logging:
+  level: "INFO"
+  format: "json"
+  file: "logs/twinguard.log"
+
+openshell:
+  policy_path: "config/openshell_policy.yaml"
+  gateway_url: "http://localhost:8080"
+
+branding:
+  name: "TwinGuard"
+  company: "Tinlance Limited"
+  version: "0.1.0-alpha"

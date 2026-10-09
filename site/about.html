@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About — TwinGuard</title>
+<meta name="description" content="TwinGuard is built by Tinlance Limited — an AI and cybersecurity engineering studio.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/twinguard.css">
+<style>
+.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:start;margin-top:48px}
+.timeline{display:flex;flex-direction:column;gap:0;margin-top:24px}
+.tl-item{display:flex;gap:20px;padding-bottom:28px;position:relative}
+.tl-item:not(:last-child)::before{content:'';position:absolute;left:5px;top:18px;bottom:0;width:1px;background:var(--border)}
+.tl-dot{width:11px;height:11px;border-radius:50%;background:var(--teal);flex-shrink:0;margin-top:4px;box-shadow:0 0 0 3px rgba(0,229,200,0.15)}
+.tl-content{flex:1}
+.tl-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;color:#fff;margin-bottom:4px}
+.tl-desc{font-size:13px;color:var(--muted);line-height:1.7}
+.value-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:32px}
+.value-card{background:var(--navy2);border:1px solid var(--border);border-radius:14px;padding:22px}
+.value-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:#fff;margin-bottom:6px}
+.value-desc{font-size:13px;color:var(--muted);line-height:1.6}
+.portfolio-strip{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+.portfolio-chip{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);padding:6px 12px;border:1px solid var(--border);border-radius:100px}
+@media(max-width:900px){ .about-grid{grid-template-columns:1fr} .value-grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<script src="/js/partials.js"></script>
+<script>renderNav('about')</script>
+
+<header class="page-header">
+  <div class="page-header-inner">
+    <span class="section-tag">About</span>
+    <h1 class="page-title">Built by Tinlance Limited</h1>
+    <p class="page-sub">An AI and cybersecurity engineering studio. TwinGuard is one piece of a connected ecosystem of security products — all wired through a shared threat intelligence hub.</p>
+  </div>
+</header>
+
+<section>
+  <div class="section-inner">
+    <div class="about-grid">
+      <div>
+        <span class="section-tag">Why we built this</span>
+        <h2 class="section-h2">A real incident, not a hypothetical.</h2>
+        <p style="font-size:14px;color:var(--muted);line-height:1.8;margin-top:16px">
+          On February 23, 2026, an autonomous AI agent deleted a user's entire email inbox after a context compaction event silently stripped its safety instructions. That single incident is the reason TwinGuard exists. NVIDIA OpenShell sandboxes what an agent can <em>touch</em>. Nothing was protecting what an agent <em>reasons over</em> and <em>decides</em>. We built the layer that was missing.
+        </p>
+        <div class="timeline">
+          <div class="tl-item">
+            <div class="tl-dot"></div>
+            <div class="tl-content">
+              <div class="tl-title">ThreatFade — the foundation</div>
+              <div class="tl-desc">A C2 detection engine validated against real Merlin QUIC malware (z-score 14.76, 490K+ packets), Cobalt Strike, and IcedID. Open-source, built from five merged PRs across major security tools.</div>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot"></div>
+            <div class="tl-content">
+              <div class="tl-title">FusionOps — the threat hub</div>
+              <div class="tl-desc">A live SOC platform wrapping ThreatFade in a full detection/triage/remediation pipeline. Every product in the ecosystem routes network threat intelligence through this single hub.</div>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot"></div>
+            <div class="tl-content">
+              <div class="tl-title">TwinGuard — agent containment</div>
+              <div class="tl-desc">Built on NVIDIA OpenShell, consuming ThreatFade via FusionOps as its ThreatFade Oracle. 232 tests, 10/10 OWASP ASI categories represented in code.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <span class="section-tag">How we work</span>
+        <h2 class="section-h2">Test-driven. Honestly scoped.</h2>
+        <div class="value-grid">
+          <div class="value-card">
+            <div class="value-title">Tests before code</div>
+            <div class="value-desc">Every module is built red-green-refactor. Tests are written first, watched to fail, then implemented against.</div>
+          </div>
+          <div class="value-card">
+            <div class="value-title">Honest status, always</div>
+            <div class="value-desc">We document what's MVP-depth vs. production-hardened. No category is claimed "covered" without working code behind it.</div>
+          </div>
+          <div class="value-card">
+            <div class="value-title">Fail-safe by default</div>
+            <div class="value-desc">If a dependency like FusionOps is unreachable, TwinGuard degrades gracefully — it never crashes or silently blocks legitimate agents.</div>
+          </div>
+          <div class="value-card">
+            <div class="value-title">Open-core, always</div>
+            <div class="value-desc">The security-critical core ships Apache 2.0. Enterprise tiers add scale and support, never withhold core protection.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="border-top:1px solid var(--border)">
+  <div class="section-inner">
+    <span class="section-tag">The Tinlance Ecosystem</span>
+    <h2 class="section-h2">TwinGuard doesn't work alone.</h2>
+    <p class="section-sub">Every product in the Tinlance portfolio routes network threat intelligence through one shared hub — FusionOps — so an upgrade to the detection engine improves every connected product automatically.</p>
+    <div class="portfolio-strip">
+      <span class="portfolio-chip">ThreatFade</span>
+      <span class="portfolio-chip">FusionOps</span>
+      <span class="portfolio-chip">TwinGuard</span>
+      <span class="portfolio-chip">AI Shield</span>
+      <span class="portfolio-chip">KalevioAI</span>
+      <span class="portfolio-chip">ReconOS OFE</span>
+      <span class="portfolio-chip">BugFlow Elite</span>
+      <span class="portfolio-chip">FadeReach</span>
+      <span class="portfolio-chip">FederX AI</span>
+      <span class="portfolio-chip">ResonaForge</span>
+    </div>
+  </div>
+</section>
+
+<section class="cta-section" style="text-align:center">
+  <span class="section-tag">Get in touch</span>
+  <h2 class="section-h2">Building AI agents in production?</h2>
+  <p class="section-sub" style="margin:0 auto 24px;text-align:center">We'd like to hear what you're building and how TwinGuard could fit.</p>
+  <a href="mailto:hello@tinlance.com" class="btn-hero">hello@tinlance.com</a>
+</section>
+
+<script>renderFooter()</script>
+</body>
+</html>

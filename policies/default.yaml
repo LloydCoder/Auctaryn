@@ -1,0 +1,88 @@
+# TwinGuard — Default Security Policy
+# This policy defines baseline rules for all deployments.
+
+version: "1.0"
+name: "default"
+description: "Balanced security policy for general AI agent deployments"
+
+context_integrity:
+  enforce: true
+  max_degradation_percent: 5
+  on_violation: "block_and_alert"
+  protected_tags:
+    - system_prompt
+    - safety_rules
+    - user_policies
+    - tool_restrictions
+
+execution_gateway:
+  enforce: true
+  default_action: "block"
+
+  # Actions classified as SAFE — auto-approved
+  safe_patterns:
+    - tool: "read_file"
+      action: "*"
+    - tool: "search"
+      action: "*"
+    - tool: "list_*"
+      action: "*"
+    - tool: "get_*"
+      action: "*"
+
+  # Actions classified as MODERATE — logged, auto-approved
+  moderate_patterns:
+    - tool: "write_file"
+      action: "create"
+    - tool: "send_message"
+      action: "*"
+    - tool: "create_*"
+      action: "*"
+
+  # Actions classified as DESTRUCTIVE — require operator approval
+  destructive_patterns:
+    - tool: "delete_*"
+      action: "*"
+    - tool: "write_file"
+      action: "overwrite"
+    - tool: "send_email"
+      action: "bulk"
+      threshold: 10
+    - tool: "modify_*"
+      action: "bulk"
+      threshold: 5
+    - tool: "execute_*"
+      action: "*"
+
+  # Actions classified as CRITICAL — always blocked
+  critical_patterns:
+    - tool: "modify_policy"
+      action: "*"
+    - tool: "modify_config"
+      action: "*"
+    - tool: "escalate_privileges"
+      action: "*"
+    - tool: "exfiltrate_*"
+      action: "*"
+    - tool: "disable_*"
+      action: "security"
+
+threatfade:
+  enforce: true
+  severity_threshold: "medium"
+  on_detection: "alert_and_log"
+  on_critical: "block_all_network"
+
+alerts:
+  channels:
+    - type: "dashboard"
+      enabled: true
+    - type: "telegram"
+      enabled: false
+    - type: "webhook"
+      enabled: false
+      url: ""
+
+logging:
+  include_parameters: false  # Don't log tool call parameters (may contain PII)
+  retention_days: 90

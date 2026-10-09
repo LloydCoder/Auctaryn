@@ -1,0 +1,152 @@
+import { useState, useEffect, useMemo } from 'react'
+import { Shield, Activity, Network, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
+import ContextIntegrityPanel from './components/ContextIntegrityPanel'
+import ExecutionGatewayPanel from './components/ExecutionGatewayPanel'
+import ThreatFadePanel from './components/ThreatFadePanel'
+import SystemHealth from './components/SystemHealth'
+import AlertFeed from './components/AlertFeed'
+import { fetchHealth } from './utils/api'
+import { useWebSocket } from './hooks/useWebSocket'
+
+const TABS = [
+  { id: 'overview', label: 'Overview', icon: Activity },
+  { id: 'context', label: 'Context Integrity', icon: Shield },
+  { id: 'gateway', label: 'Execution Gateway', icon: AlertTriangle },
+  { id: 'threatfade', label: 'ThreatFade', icon: Network },
+]
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('overview')
+  const [health, setHealth] = useState(null)
+  const [apiConnected, setApiConnected] = useState(false)
+
+  // Live WebSocket streams — these are the real-time feeds the dashboard
+  // was missing: the backend was already broadcasting, nothing was listening.
+  const actionsWs = useWebSocket('/ws/actions')
+  const alertsWs = useWebSocket('/ws/alerts')
+
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const data = await fetchHealth()
+        setHealth(data)
+        setApiConnected(true)
+      } catch {
+        setApiConnected(false)
+      }
+    }
+    checkHealth()
+    const interval = setInterval(checkHealth, 10000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Derive live decisions (excluding the initial "connected" handshake frame)
+  const liveDecisions = useMemo(
+    () => actionsWs.messages.filter(m => m.type === 'gateway_decision' || m.type === 'decision_resolved'),
+    [actionsWs.messages]
+  )
+  const liveAlerts = useMemo(
+    () => alertsWs.messages.filter(m => m.type === 'alert'),
+    [alertsWs.messages]
+  )
+
+  const wsConnected = actionsWs.connected && alertsWs.connected
+  const fullyConnected = apiConnected && wsConnected
+
+  const sendApproval = (decisionId, approved) => {
+    actionsWs.send({ type: 'approve', decision_id: decisionId, approved })
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0a0e17]">
+      {/* Header */}
+      <header className="border-b border-gray-800/50 bg-[#0d1220]/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight text-white">TwinGuard</h1>
+              <p className="text-xs text-gray-500">AI Agent Containment</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm">
+              {fullyConnected ? (
+                <>
+                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                  <span className="text-emerald-400">Live</span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-4 h-4 text-amber-400" />
+                  <span className="text-amber-400">{apiConnected ? 'Reconnecting…' : 'Offline'}</span>
+                </>
+              )}
+            </div>
+            <span className="text-xs text-gray-600 font-mono">
+              v{health?.version || '0.1.0-alpha'}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {/* Navigation */}
+      <nav className="border-b border-gray-800/30 bg-[#0d1220]/40">
+        <div className="max-w-7xl mx-auto px-6 flex gap-1">
+          {TABS.map(tab => {
+            const Icon = tab.icon
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  isActive
+                    ? 'border-emerald-400 text-emerald-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        {activeTab === 'overview' && (
+          <div className="space-y-8">
+            <SystemHealth health={health} connected={apiConnected} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ContextIntegrityPanel compact />
+              <ExecutionGatewayPanel
+                compact
+                liveDecisions={liveDecisions}
+                onApprove={sendApproval}
+              />
+            </div>
+            <AlertFeed liveAlerts={liveAlerts} />
+          </div>
+        )}
+        {activeTab === 'context' && <ContextIntegrityPanel />}
+        {activeTab === 'gateway' && (
+          <ExecutionGatewayPanel liveDecisions={liveDecisions} onApprove={sendApproval} />
+        )}
+        {activeTab === 'threatfade' && <ThreatFadePanel />}
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-800/30 mt-16 py-6">
+        <div className="max-w-7xl mx-auto px-6 flex justify-between text-xs text-gray-600">
+          <span>© 2026 Tinlance Limited</span>
+          <span>Built on NVIDIA OpenShell</span>
+        </div>
+      </footer>
+    </div>
+  )
+}

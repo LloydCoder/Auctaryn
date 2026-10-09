@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TwinGuard — Stop AI Agents Before They Go Rogue</title>
+<meta name="description" content="TwinGuard intercepts every AI agent action, verifies context integrity, and blocks destructive actions in real time. Defense-in-depth for autonomous AI agents.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/twinguard.css">
+<style>
+.hero{min-height:100vh;padding:100px 5% 60px;display:flex;align-items:center}
+.hero-inner{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;width:100%}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid rgba(0,229,200,0.3);border-radius:100px;background:rgba(0,229,200,0.06);margin-bottom:24px}
+.eyebrow-dot{width:6px;height:6px;background:var(--teal);border-radius:50%;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.4)}}
+.eyebrow-text{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--teal);letter-spacing:.08em;text-transform:uppercase}
+.hero h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(36px,4.5vw,58px);font-weight:700;line-height:1.1;letter-spacing:-1.5px;margin-bottom:20px;color:#fff}
+.hero h1 em{font-style:normal;color:var(--teal)}
+.hero h1 .red{color:var(--red)}
+.hero-sub{font-size:17px;color:var(--muted);max-width:480px;line-height:1.7;margin-bottom:32px}
+.hero-sub strong{color:var(--ghost)}
+.hero-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:40px}
+.hero-trust{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.trust-stat .num{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;color:#fff}
+.trust-stat .label{font-size:12px;color:var(--muted)}
+.terminal{background:#0A0F1E;border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,0.6),0 0 0 1px rgba(0,229,200,0.05)}
+.terminal-bar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0D1220;border-bottom:1px solid var(--border)}
+.terminal-dots{display:flex;gap:6px}
+.terminal-dots span{width:10px;height:10px;border-radius:50%;background:#2A3040}
+.terminal-dots span:first-child{background:#FF5F57}
+.terminal-dots span:nth-child(2){background:#FFBD2E}
+.terminal-dots span:nth-child(3){background:#28C840}
+.terminal-title{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)}
+.terminal-live{display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--teal)}
+.live-dot{width:6px;height:6px;background:var(--teal);border-radius:50%;animation:pulse 1.5s ease-in-out infinite}
+.terminal-body{padding:20px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.8;min-height:320px}
+.t-line{display:flex;align-items:flex-start;gap:10px;margin-bottom:2px;opacity:0;animation:fadein .4s forwards}
+@keyframes fadein{to{opacity:1}}
+.t-ts{color:#3A4A5C;min-width:65px;flex-shrink:0}
+.t-tag{padding:1px 7px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:.05em;flex-shrink:0;margin-top:2px}
+.tag-safe{background:rgba(0,229,200,0.15);color:var(--teal)}
+.tag-block{background:rgba(255,45,85,0.15);color:var(--red)}
+.tag-warn{background:rgba(255,184,0,0.15);color:var(--amber)}
+.tag-info{background:rgba(138,150,170,0.15);color:var(--muted)}
+.t-msg{color:var(--ghost);flex:1}
+.t-msg .agent{color:#6B8CFF}
+.t-msg .action{color:var(--amber)}
+.t-msg .score{color:var(--teal);font-weight:600}
+.t-msg .vetoed{color:var(--red);font-weight:700}
+.t-msg .integrity{color:var(--red)}
+.terminal-footer{border-top:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;background:#0D1220;flex-wrap:wrap;gap:6px}
+.tf-stat{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)}
+.tf-stat span{color:var(--teal);font-weight:600}
+.trust-bar{padding:24px 5%;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--navy2)}
+.trust-bar-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.tb-label{font-size:12px;color:var(--muted);font-weight:500;white-space:nowrap}
+.tb-items{display:flex;align-items:center;gap:32px;flex-wrap:wrap}
+.tb-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.incident{background:var(--navy2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.incident-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;margin-top:48px}
+.incident-card{background:#0A0F1E;border:1px solid var(--border);border-radius:16px;padding:28px;position:relative;overflow:hidden}
+.incident-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--red),transparent)}
+.incident-label{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.incident-label::before{content:'';width:6px;height:6px;background:var(--red);border-radius:50%}
+.incident-date{font-size:12px;color:var(--muted);margin-bottom:10px}
+.incident-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:18px;color:#fff;margin-bottom:10px}
+.incident-desc{font-size:14px;color:var(--muted);line-height:1.7}
+.incident-impact{display:flex;gap:16px;margin-top:20px;flex-wrap:wrap}
+.impact-chip{padding:4px 10px;border:1px solid rgba(255,45,85,0.25);border-radius:100px;font-size:12px;color:var(--red);background:rgba(255,45,85,0.08)}
+.feature-list{display:flex;flex-direction:column;gap:20px;margin-top:32px}
+.feature-item{display:flex;gap:16px;align-items:flex-start}
+.feature-icon{width:40px;height:40px;background:var(--teal-glow);border:1px solid rgba(0,229,200,0.25);border-radius:10px;display:grid;place-items:center;font-size:18px;flex-shrink:0;margin-top:2px}
+.feature-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;color:#fff;margin-bottom:4px}
+.feature-desc{font-size:13px;color:var(--muted);line-height:1.6}
+.how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px}
+.how-card{background:var(--navy2);border:1px solid var(--border);border-radius:16px;padding:28px;position:relative}
+.how-num{font-family:'Space Grotesk',sans-serif;font-size:48px;font-weight:700;color:rgba(0,229,200,0.08);line-height:1;margin-bottom:16px}
+.how-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:17px;color:#fff;margin-bottom:10px}
+.how-desc{font-size:14px;color:var(--muted);line-height:1.7}
+.stats-section{background:linear-gradient(135deg,rgba(0,229,200,0.04),rgba(107,140,255,0.04));border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;margin-top:48px;border-radius:16px;overflow:hidden}
+.stat-card{background:var(--navy2);padding:32px 24px;text-align:center}
+.stat-num{font-family:'Space Grotesk',sans-serif;font-size:42px;font-weight:700;color:var(--teal);letter-spacing:-2px;line-height:1}
+.stat-label{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5}
+.stat-sub{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--teal);margin-top:6px;text-transform:uppercase;letter-spacing:.06em}
+.modules-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:48px}
+.module-card{background:var(--navy2);border:1px solid var(--border);border-radius:14px;padding:22px;display:flex;gap:16px}
+.module-icon-wrap{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;font-size:20px;flex-shrink:0}
+.mod-teal{background:rgba(0,229,200,0.1);border:1px solid rgba(0,229,200,0.2)}
+.mod-red{background:rgba(255,45,85,0.1);border:1px solid rgba(255,45,85,0.2)}
+.mod-blue{background:rgba(107,140,255,0.1);border:1px solid rgba(107,140,255,0.2)}
+.mod-amber{background:rgba(255,184,0,0.1);border:1px solid rgba(255,184,0,0.2)}
+.module-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:#fff;margin-bottom:4px}
+.module-desc{font-size:13px;color:var(--muted);line-height:1.6}
+.module-tag{display:inline-block;margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--teal);text-transform:uppercase;letter-spacing:.06em}
+.cta-section{padding:80px 5%;text-align:center;position:relative;overflow:hidden}
+.cta-section::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;height:300px;background:radial-gradient(ellipse,rgba(0,229,200,0.07),transparent 70%);pointer-events:none}
+.cta-inner{max-width:680px;margin:0 auto;position:relative;z-index:1}
+.cta-actions{display:flex;justify-content:center;align-items:center;gap:16px;flex-wrap:wrap;margin-top:32px}
+@media(max-width:768px){
+  .hero-inner{grid-template-columns:1fr;gap:40px}
+  .incident-grid{grid-template-columns:1fr}
+  .how-grid{grid-template-columns:1fr}
+  .modules-grid{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:480px){
+  .stats-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<script src="/js/partials.js"></script>
+<script>renderNav('home')</script>
+
+<section class="hero" id="product">
+  <div class="hero-inner">
+    <div>
+      <div class="hero-eyebrow">
+        <span class="eyebrow-dot"></span>
+        <span class="eyebrow-text">Built on NVIDIA OpenShell · v0.1.0-alpha</span>
+      </div>
+      <h1>Stop AI agents<br>before they <em>go<br>rogue</em><span class="red">.</span></h1>
+      <p class="hero-sub">
+        TwinGuard intercepts every tool call, verifies context integrity, and blocks destructive actions — in real time. <strong>Defense-in-depth for autonomous AI agents.</strong>
+      </p>
+      <div class="hero-actions">
+        <a href="#cta" class="btn-hero">
+          Start free
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a href="https://twinguard.tinlance.com/dashboard" target="_blank" class="btn-demo">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 4.5l4 2.5-4 2.5V4.5z" fill="currentColor"/></svg>
+          Watch live demo
+        </a>
+      </div>
+      <div class="hero-trust">
+        <div class="trust-stat">
+          <span class="num">0%</span>
+          <span class="label">False positive rate<br>in production</span>
+        </div>
+        <div style="width:1px;height:40px;background:var(--border)"></div>
+        <div class="trust-stat">
+          <span class="num">232</span>
+          <span class="label">Tests passing<br>across all modules</span>
+        </div>
+        <div style="width:1px;height:40px;background:var(--border)"></div>
+        <div class="trust-stat">
+          <span class="num">10/10</span>
+          <span class="label">OWASP ASI categories<br>represented in code</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dots"><span></span><span></span><span></span></div>
+          <span class="terminal-title">TwinGuard · Execution Gateway · Live</span>
+          <span class="terminal-live"><span class="live-dot"></span>INTERCEPTING</span>
+        </div>
+        <div class="terminal-body" id="terminal"></div>
+        <div class="terminal-footer">
+          <span class="tf-stat">Actions today: <span>847</span></span>
+          <span class="tf-stat">Vetoed: <span>3</span></span>
+          <span class="tf-stat">Integrity: <span>100%</span></span>
+          <span class="tf-stat">FusionOps: <span>online</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="trust-bar">
+  <div class="trust-bar-inner">
+    <span class="tb-label">VALIDATED AGAINST</span>
+    <div class="tb-items">
+      <div class="tb-item">✓ Merlin QUIC C2 · z=14.76</div>
+      <div class="tb-item">✓ Cobalt Strike · z=7.01</div>
+      <div class="tb-item">✓ IcedID · z=3.89</div>
+      <div class="tb-item">✓ NVIDIA OpenShell runtime</div>
+      <div class="tb-item">✓ OWASP ASI Top 10 2026</div>
+    </div>
+  </div>
+</div>
+
+<section class="incident">
+  <div class="section-inner">
+    <span class="section-tag">The Problem</span>
+    <h2 class="section-h2">AI agents are already deleting<br>your production data.</h2>
+    <p class="section-sub">Real incidents. Real damage. OpenShell sandboxes the runtime — but nothing guards what happens inside the agent's reasoning.</p>
+    <div class="incident-grid">
+      <div>
+        <div class="incident-card" style="margin-bottom:16px">
+          <div class="incident-label">Confirmed incident</div>
+          <div class="incident-date">February 23, 2026 · OpenClaw Agent</div>
+          <div class="incident-title">Bulk email deletion via context compaction</div>
+          <div class="incident-desc">After a context compaction event stripped the "always confirm before deleting" instruction, an autonomous agent deleted a user's entire email inbox. No warning. No confirmation. Irreversible.</div>
+          <div class="incident-impact">
+            <span class="impact-chip">847 emails deleted</span>
+            <span class="impact-chip">Safety instruction stripped</span>
+          </div>
+        </div>
+        <div class="incident-card">
+          <div class="incident-label">CVE-2026-25253</div>
+          <div class="incident-date">January 2026 · OpenClaw Runtime</div>
+          <div class="incident-title">First CVE ever assigned to an agentic AI system</div>
+          <div class="incident-desc">Remote code execution via a crafted skill package. Followed by ClawHavoc — 1,200+ malicious skills deployed across enterprise developer machines.</div>
+          <div class="incident-impact">
+            <span class="impact-chip">RCE confirmed</span>
+            <span class="impact-chip">Enterprise-scale impact</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <span class="section-tag">The Solution</span>
+        <h2 class="section-h2">TwinGuard stops it at<br>every layer.</h2>
+        <div class="feature-list">
+          <div class="feature-item">
+            <div class="feature-icon">🔒</div>
+            <div>
+              <div class="feature-title">Context Integrity Guardian</div>
+              <div class="feature-desc">SHA-256 hashes your safety instructions before every compaction event. If even one instruction is missing — or actively contradicted — afterward, the agent is blocked.</div>
+            </div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">⛔</div>
+            <div>
+              <div class="feature-title">Execution Gateway + Veto Engine</div>
+              <div class="feature-desc">Every tool call is classified by risk level, checked against the agent's identity scopes, and verified against its circuit breaker status before it ever runs.</div>
+            </div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">📡</div>
+            <div>
+              <div class="feature-title">ThreatFade Oracle</div>
+              <div class="feature-desc">Live network threat intelligence from FusionOps feeds severity scores into every gateway decision — the only agent security platform with built-in C2 detection.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="section-inner">
+    <span class="section-tag">Architecture</span>
+    <h2 class="section-h2">Defense-in-depth.<br>Not a single guardrail.</h2>
+    <p class="section-sub">TwinGuard layers independent security mechanisms across the full OWASP Top 10 for Agentic Applications 2026.</p>
+    <div class="how-grid">
+      <div class="how-card">
+        <div class="how-num">01</div>
+        <div class="how-title">OpenShell Kernel Isolation</div>
+        <div class="how-desc">NVIDIA OpenShell wraps the agent in a sandboxed runtime with Landlock filesystem restrictions, seccomp syscall filtering, and network namespace isolation.</div>
+      </div>
+      <div class="how-card">
+        <div class="how-num">02</div>
+        <div class="how-title">Identity, Context &amp; Memory</div>
+        <div class="how-desc">Every agent gets a scoped managed identity. Context Integrity Guardian and Memory Poisoning Defender protect what the agent reasons over and remembers.</div>
+      </div>
+      <div class="how-card">
+        <div class="how-num">03</div>
+        <div class="how-title">Execution Gate + Network Intel</div>
+        <div class="how-desc">Action gating, circuit-breaker isolation for failing agents, signed inter-agent messaging, and live ThreatFade network threat scoring.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="stats-section">
+  <div class="section-inner">
+    <span class="section-tag">By the numbers</span>
+    <h2 class="section-h2">Production-validated.<br>Not theoretical.</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-num">14.76</div>
+        <div class="stat-label">Z-score on Merlin QUIC<br>C2 malware detection</div>
+        <div class="stat-sub">Real PCAP · 490K packets</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">0%</div>
+        <div class="stat-label">False positive rate across<br>100 production runs</div>
+        <div class="stat-sub">ThreatFade engine</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">232</div>
+        <div class="stat-label">Tests passing across<br>all security modules</div>
+        <div class="stat-sub">TDD · Red-Green-Refactor</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">10/10</div>
+        <div class="stat-label">OWASP ASI categories<br>with working code</div>
+        <div class="stat-sub">Top 10 for Agentic Apps 2026</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="section-inner">
+    <span class="section-tag">Security Modules</span>
+    <h2 class="section-h2">Every OWASP ASI category.<br>Real, tested code.</h2>
+    <div class="modules-grid">
+      <div class="module-card">
+        <div class="module-icon-wrap mod-teal">🔒</div>
+        <div>
+          <div class="module-title">Context Integrity Guardian</div>
+          <div class="module-desc">Catches both instruction loss (compaction) and goal hijack (in-context override attempts). ASI01.</div>
+          <span class="module-tag">Live</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon-wrap mod-red">⛔</div>
+        <div>
+          <div class="module-title">Execution Gateway + Veto Engine</div>
+          <div class="module-desc">Risk classification, auto-approve/queue/block, identity + breaker enforcement. ASI02.</div>
+          <span class="module-tag">Live</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon-wrap mod-blue">🪪</div>
+        <div>
+          <div class="module-title">Agent Identity &amp; Privilege</div>
+          <div class="module-desc">Scoped permissions, time-limited tokens, subset-constrained delegation. ASI03.</div>
+          <span class="module-tag">Live</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon-wrap mod-amber">📦</div>
+        <div>
+          <div class="module-title">Skill / Dependency Vetting</div>
+          <div class="module-desc">Signature verification, content-hash pinning, typosquat detection. ASI04.</div>
+          <span class="module-tag">Live</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon-wrap mod-teal">🧬</div>
+        <div>
+          <div class="module-title">Memory Poisoning Defender</div>
+          <div class="module-desc">Adversarial pattern scanning, provenance trust, tamper-evident rollback. ASI06.</div>
+          <span class="module-tag">Live</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon-wrap mod-blue">✉️</div>
+        <div>
+          <div class="module-title">Signed Agent Messaging</div>
+          <div class="module-desc">HMAC-signed inter-agent communication, impersonation rejection. ASI07.</div>
+          <span class="module-tag">Live</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon-wrap mod-red">🔌</div>
+        <div>
+          <div class="module-title">Agent Circuit Breaker</div>
+          <div class="module-desc">Per-agent failure isolation with dependency-aware cascade containment. ASI08.</div>
+          <span class="module-tag">Live</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon-wrap mod-amber">📡</div>
+        <div>
+          <div class="module-title">ThreatFade Oracle</div>
+          <div class="module-desc">Live C2 threat intelligence from FusionOps, MITRE TTP mapping. ASI10.</div>
+          <span class="module-tag">Live</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-section" id="cta">
+  <div class="cta-inner">
+    <span class="section-tag">Get started</span>
+    <h2 class="section-h2">Your AI agents are running.<br>Are they contained?</h2>
+    <p class="section-sub" style="margin:0 auto;text-align:center">Deploy TwinGuard in under 10 minutes. Free tier includes the Context Integrity Guardian — the module that prevents the Summer Yue scenario.</p>
+    <div class="cta-actions">
+      <a href="https://github.com/Tinlance/twinguard" target="_blank" class="btn-hero">Start free on GitHub</a>
+      <a href="mailto:hello@tinlance.com" class="btn-demo">Book a demo call</a>
+    </div>
+  </div>
+</section>
+
+<script>renderFooter()</script>
+
+<script>
+const lines = [
+  {delay:300,  ts:'09:14:32', tag:'INFO', tagClass:'tag-info', msg:'<span class="agent">openclone-agent</span> connected · session <span class="score">s-4f2a</span>'},
+  {delay:900,  ts:'09:14:33', tag:'SAFE', tagClass:'tag-safe', msg:'<span class="action">read_emails</span>:list · risk=SAFE · auto-approved ✓'},
+  {delay:1700, ts:'09:14:35', tag:'SAFE', tagClass:'tag-safe', msg:'<span class="action">search_calendar</span>:query · risk=SAFE · auto-approved ✓'},
+  {delay:2500, ts:'09:14:38', tag:'WARN', tagClass:'tag-warn', msg:'<span class="action">send_email</span>:bulk · params={recipients:47} · <span class="score">risk elevated → DESTRUCTIVE</span>'},
+  {delay:3400, ts:'09:14:38', tag:'WAIT', tagClass:'tag-warn', msg:'Action queued · awaiting operator approval · timeout 300s'},
+  {delay:4200, ts:'09:14:39', tag:'INFO', tagClass:'tag-info', msg:'Checking ThreatFade Oracle → FusionOps ...'},
+  {delay:5100, ts:'09:14:40', tag:'INFO', tagClass:'tag-info', msg:'Oracle response: score=0.12 severity=LOW · no C2 signal detected'},
+  {delay:6000, ts:'09:14:41', tag:'INFO', tagClass:'tag-info', msg:'Identity check → agent-001 authorized for send_email ✓'},
+  {delay:7000, ts:'09:14:55', tag:'SAFE', tagClass:'tag-safe', msg:'Operator approved send_email:bulk · decision_id=d-8b3e · executed ✓'},
+  {delay:8200, ts:'09:15:02', tag:'SAFE', tagClass:'tag-safe', msg:'<span class="action">read_file</span>:get · risk=SAFE · auto-approved ✓'},
+  {delay:9000, ts:'09:15:08', tag:'BLOCK', tagClass:'tag-block', msg:'<span class="action vetoed">CRITICAL:</span> <span class="action">modify_config</span>:write · matches critical pattern'},
+  {delay:9600, ts:'09:15:08', tag:'BLOCK', tagClass:'tag-block', msg:'<span class="vetoed">⛔ VETOED</span> · policy: no_config_modification · agent blocked'},
+  {delay:10400,ts:'09:15:09', tag:'WARN', tagClass:'tag-warn', msg:'Context compaction detected · 8240→4100 tokens (-50%) · rechecking hashes ...'},
+  {delay:11200,ts:'09:15:09', tag:'BLOCK', tagClass:'tag-block', msg:'<span class="integrity">✗ INTEGRITY VIOLATION</span> · email_safety instruction missing after compaction'},
+  {delay:12000,ts:'09:15:09', tag:'BLOCK', tagClass:'tag-block', msg:'<span class="vetoed">⛔ AGENT BLOCKED</span> · Context Integrity Guardian · Summer Yue protection active'},
+];
+const terminal = document.getElementById('terminal');
+function playSequence(){
+  terminal.innerHTML = '';
+  lines.forEach(l => {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 't-line';
+      el.innerHTML = `<span class="t-ts">${l.ts}</span><span class="t-tag ${l.tagClass}">${l.tag}</span><span class="t-msg">${l.msg}</span>`;
+      terminal.appendChild(el);
+      terminal.scrollTop = terminal.scrollHeight;
+    }, l.delay);
+  });
+}
+playSequence();
+setInterval(playSequence, 14500);
+
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if(target){ e.preventDefault(); target.scrollIntoView({behavior:'smooth', block:'start'}); }
+  });
+});
+</script>
+</body>
+</html>
