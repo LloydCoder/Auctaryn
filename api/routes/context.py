@@ -4,7 +4,7 @@ TwinGuard — Context Integrity API Routes
 
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.models import IntegrityCheckResult, IntegrityStatus, CompactionEvent
 from modules.context_integrity.guardian import ContextIntegrityGuardian, generate_alert
@@ -16,11 +16,11 @@ def get_guardian() -> ContextIntegrityGuardian:
     return _guardian
 
 class RegisterRequest(BaseModel):
-    tag: str
-    content: str
+    tag: str = Field(min_length=1, max_length=128)
+    content: str = Field(min_length=1, max_length=32768)
 
 class CheckRequest(BaseModel):
-    context: str
+    context: str = Field(max_length=100000)
 
 @router.get("/status")
 async def get_integrity_status() -> dict:
@@ -43,7 +43,10 @@ async def get_integrity_check(check_id: str) -> IntegrityCheckResult:
 @router.post("/register")
 async def register_protected_instruction(request: RegisterRequest) -> dict:
     guardian = get_guardian()
-    inst = guardian.register_instruction(request.tag, request.content)
+    try:
+        inst = guardian.register_instruction(request.tag, request.content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid protected instruction") from exc
     return {
         "registered": True, "tag": inst.tag, "hash": inst.hash,
         "total_protected": guardian.registry.count(),
@@ -55,7 +58,7 @@ async def run_integrity_check(request: CheckRequest) -> IntegrityCheckResult:
     guardian = get_guardian()
     result = guardian.check(request.context)
 
-    if result.status != IntegrityStatus.INTACT:
+    if result.status != IntegrityStatus.INTACT or result.blocked:
         alert = generate_alert(result)
         if alert:
             from api.websockets.alerts import broadcast_alert
