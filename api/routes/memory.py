@@ -143,9 +143,9 @@ async def get_memory_content(
     agent_id: str | None = Header(default=None, alias="X-Agent-ID"),
     identity_token: str | None = Header(default=None, alias="X-Agent-Identity-Token"),
 ) -> dict:
-    owner = _require_memory_scope(agent_id, identity_token, "memory:read")
+    owner, token_id = _require_memory_scope(agent_id, identity_token, "memory:read")
     defender = get_memory_defender()
-    if not defender.session_owned_by(session_id, owner, token_id)
+    if not defender.session_owned_by(session_id, owner, token_id):
         raise HTTPException(status_code=404, detail="Memory session not found")
     entry = defender.store.get(key)
     if entry is None:
