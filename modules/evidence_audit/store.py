@@ -140,7 +140,7 @@ class EvidenceStore:
                 db.execute("BEGIN IMMEDIATE")
                 row = db.execute("SELECT record_hash FROM evidence_records ORDER BY sequence DESC LIMIT 1").fetchone()
                 previous_hash = row["record_hash"] if row else ZERO_HASH
-                digest = hashlib.sha256(previous_hash.encode("ascii") + b"\n" + serialized.encode("utf-8")).hexdigest()
+                digest = hashlib.sha256(previous_hash.encode("ascii") + bytes([10]) + serialized.encode("utf-8")).hexdigest()
                 signature = self._signature(digest)
                 cursor = db.execute(
                     """INSERT INTO evidence_records
@@ -193,7 +193,7 @@ class EvidenceStore:
             hmac_verified = bool(self.key)
             for row in rows:
                 digest = hashlib.sha256(
-                    previous_hash.encode("ascii") + b"\n" + row["payload_json"].encode("utf-8")
+                    previous_hash.encode("ascii") + bytes([10]) + row["payload_json"].encode("utf-8")
                 ).hexdigest()
                 if row["previous_hash"] != previous_hash or not hmac.compare_digest(digest, row["record_hash"]):
                     return {"valid": False, "records_checked": checked, "failed_sequence": row["sequence"],
