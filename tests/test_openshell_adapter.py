@@ -1,6 +1,8 @@
 """Tests for the NVIDIA OpenShell adapter without requiring a live gateway."""
 
 import asyncio
+import base64
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -10,16 +12,36 @@ from modules.execution_gateway.openshell_adapter import OpenShellRuntimeAdapter,
 from modules.execution_gateway.runtime_adapter import DuplicateExecution, RuntimeAdapterFailure, RuntimeAdapterUnavailable
 
 
+def _envelope(exit_code=0, stdout="sandbox output", stderr="", stdout_truncated=False, stderr_truncated=False):
+    return json.dumps({
+        "exit_code": exit_code,
+        "stdout": base64.b64encode(stdout.encode("utf-8")).decode("ascii"),
+        "stderr": base64.b64encode(stderr.encode("utf-8")).decode("ascii"),
+        "stdout_truncated": stdout_truncated,
+        "stderr_truncated": stderr_truncated,
+    })
+
+
 class FakeOpenShellClient:
-    def __init__(self, exit_code=0, stdout="sandbox output", stderr=""):
+    def __init__(self, exit_code=0, stdout="sandbox output", stderr="", stdout_truncated=False, stderr_truncated=False, sdk_exit_code=0):
         self.exit_code = exit_code
         self.stdout = stdout
         self.stderr = stderr
+        self.stdout_truncated = stdout_truncated
+        self.stderr_truncated = stderr_truncated
+        self.sdk_exit_code = sdk_exit_code
         self.calls = []
 
     def exec(self, sandbox_name, argv, *, workspace):
         self.calls.append((sandbox_name, argv, workspace))
-        return SimpleNamespace(exit_code=self.exit_code, stdout=self.stdout, stderr=self.stderr)
+        return SimpleNamespace(
+            exit_code=self.sdk_exit_code,
+            stdout=_envelope(
+                self.exit_code, self.stdout, self.stderr,
+                self.stdout_truncated, self.stderr_truncated,
+            ),
+            stderr="",
+        )
 
 
 _DEFAULT_ARGV = object()
@@ -46,7 +68,10 @@ def test_adapter_uses_server_configured_sandbox_and_argv_array():
     sandbox_name, argv, workspace = client.calls[0]
     assert sandbox_name == "approved-sandbox"
     assert workspace == "prod"
-    assert argv == ["timeout", "45s", "python", "-c", "print('ok')"]
+    assert argv[:2] == ["python", "-c"]
+    assert json.loads(argv[3]) == ["python", "-c", "print('ok')"]
+    assert argv[4] == "45"
+    assert argv[5] == "1000000"
     assert result.status == "succeeded"
     assert result.adapter == "nvidia-openshell"
 
@@ -92,7 +117,7 @@ def test_adapter_marks_timeout_exit_code():
 
 def test_adapter_bounds_output_and_marks_truncation():
     adapter = OpenShellRuntimeAdapter(
-        FakeOpenShellClient(stdout="x" * 1_000_001), sandbox_name="s", workspace="w"
+        FakeOpenShellClient(stdout="x" * 1_000_000, stdout_truncated=True), sandbox_name="s", workspace="w"
     )
 
     result = asyncio.run(adapter.execute(_tool_call(), idempotency_key="decision-006"))
