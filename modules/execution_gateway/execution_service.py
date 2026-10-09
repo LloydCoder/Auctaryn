@@ -20,6 +20,7 @@ from modules.execution_gateway.runtime_adapter import (
 )
 
 logger = logging.getLogger("execution_gateway.execution_service")
+MAX_CLAIMED_DECISIONS = 100_000
 
 
 class ActionIntentIntegrityError(RuntimeAdapterFailure):
@@ -83,6 +84,10 @@ class ExecutionService:
         get_incident_response_manager().assert_execution_allowed(decision.tool_call.agent_id)
         if decision.id in self._claimed_decisions:
             raise DuplicateExecution("This decision has already been claimed for execution.")
+        if len(self._claimed_decisions) >= MAX_CLAIMED_DECISIONS:
+            raise RuntimeAdapterFailure(
+                "Execution deduplication capacity reached; execution is refused until controlled maintenance."
+            )
 
         self._claimed_decisions.add(decision.id)
         try:
