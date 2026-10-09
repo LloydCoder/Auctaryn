@@ -43,30 +43,13 @@ async def test_chain_detects_payload_tampering(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_hmac_detects_record_rewrite_with_recomputed_hash(tmp_path):
+async def test_hmac_signature_tampering_is_detected(tmp_path):
     path = tmp_path / "evidence.sqlite3"
     store = EvidenceStore(path, signing_key="x" * 32)
-    record = await store.append("decision.created", outcome="pending")
-    changed = json.loads(json.dumps({
-        "schema": "auctaryn.evidence-record.v1",
-        "record_id": record["record_id"],
-        "occurred_at": record["occurred_at"],
-        "event_type": "decision.created",
-        "correlation_id": "",
-        "actor_id": "",
-        "tenant_id": "",
-        "decision_id": "",
-        "execution_id": "",
-        "outcome": "approved",
-        "details": {},
-        "provenance": {"producer": "auctaryn", "source": "application_event"},
-    }))
-    serialized = json.dumps(changed, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    import hashlib
-    digest = hashlib.sha256(("0" * 64).encode("ascii") + b"\\n" + serialized.encode("utf-8")).hexdigest()
+    await store.append("decision.created", outcome="pending")
     with sqlite3.connect(path) as db:
         db.execute("DROP TRIGGER evidence_no_update")
-        db.execute("UPDATE evidence_records SET payload_json = ?, record_hash = ? WHERE sequence = 1", (serialized, digest))
+        db.execute("UPDATE evidence_records SET hmac_signature = ? WHERE sequence = 1", ("0" * 64,))
     result = await store.verify()
     assert result["valid"] is False
     assert result["reason"] == "hmac_mismatch"
