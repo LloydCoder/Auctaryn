@@ -63,6 +63,7 @@ class ToolCallRequest(BaseModel):
     target: str = ""
     agent_id: str = ""
     session_id: str = ""
+    identity_token: str = Field(default="", max_length=128)
 
 
 class ApprovalRequest(BaseModel):
@@ -120,6 +121,7 @@ async def evaluate_tool_call(request: ToolCallRequest) -> ActionClassification:
         tool_name=request.tool_name, action=request.action,
         parameters=request.parameters, target=request.target,
         agent_id=request.agent_id, session_id=request.session_id,
+        identity_token=request.identity_token,
     )
     from modules.execution_gateway.risk_classifier import RiskClassifier
     clf = RiskClassifier()
