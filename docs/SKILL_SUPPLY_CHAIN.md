@@ -44,3 +44,8 @@ Permission scanning rejects critical capabilities and high-risk private-data/net
 - Bind vetting verdicts to the exact runtime-loaded artifact digest and refuse to load any other bytes.
 - Add signed build provenance verification (for example SLSA/in-toto) where producers supply provenance; this module currently verifies publisher signatures and artifact hashes, not SLSA attestations.
 - Independently review the trust bootstrap and recovery process, including compromise and revocation of publisher keys.
+
+
+## Registry operations
+
+Publisher trust and the canonical skill-name registry are administrator-only operations. Unknown permission names are rejected until explicitly reviewed. The registry is currently process-local; durable storage and audit-backed changes remain production requirements.
