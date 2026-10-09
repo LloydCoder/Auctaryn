@@ -21,6 +21,7 @@ MAX_MEMORY_SOURCE_CHARS = 64
 MAX_MEMORY_SESSION_CHARS = 128
 MAX_MEMORY_AGENT_ID_CHARS = 128
 MAX_MEMORY_ENTRIES = 5_000
+MAX_MEMORY_TOTAL_CHARS = 8_388_608
 MAX_MEMORY_SESSIONS = 5_000
 
 POISONING_PATTERNS = [
@@ -98,6 +99,9 @@ def _validate_memory_fields(content: str, source: str, session_id: str, agent_id
         raise ValueError(f"session_id must be at most {MAX_MEMORY_SESSION_CHARS} characters")
     if not isinstance(agent_id, str) or len(agent_id) > MAX_MEMORY_AGENT_ID_CHARS:
         raise ValueError(f"agent_id must be at most {MAX_MEMORY_AGENT_ID_CHARS} characters")
+    for field_name, value in (("source", source), ("session_id", session_id), ("agent_id", agent_id)):
+        if any(ord(char) < 32 or ord(char) == 127 for char in value):
+            raise ValueError(f"{field_name} contains control characters")
 
 
 def scan_for_poisoning(content: str) -> PoisoningScanResult:
@@ -118,10 +122,18 @@ class MemoryStore:
 
     This is not durable storage and is not safe for multi-replica deployments.
     """
-    def __init__(self, max_entries: int = MAX_MEMORY_ENTRIES):
+    def __init__(
+        self,
+        max_entries: int = MAX_MEMORY_ENTRIES,
+        max_total_chars: int = MAX_MEMORY_TOTAL_CHARS,
+    ):
         if not 1 <= max_entries <= MAX_MEMORY_ENTRIES:
             raise ValueError(f"max_entries must be between 1 and {MAX_MEMORY_ENTRIES}")
+        if not 1 <= max_total_chars <= MAX_MEMORY_TOTAL_CHARS:
+            raise ValueError(f"max_total_chars must be between 1 and {MAX_MEMORY_TOTAL_CHARS}")
         self.max_entries = max_entries
+        self.max_total_chars = max_total_chars
+        self._total_chars = 0
         self._entries: dict[str, MemoryEntry] = {}
         self._last_known_good: dict[str, MemoryEntry] = {}
         self._lock = threading.RLock()
@@ -138,12 +150,16 @@ class MemoryStore:
         _validate_memory_fields(content, source, session_id, agent_id)
         if not isinstance(key, str) or not key or len(key) > 128:
             raise ValueError("key must contain 1–128 characters")
+        if any(ord(char) < 32 or ord(char) == 127 for char in key):
+            raise ValueError("key contains control characters")
         if not isinstance(quarantined, bool):
             raise ValueError("quarantined must be a boolean")
         with self._lock:
             if key in self._entries:
                 raise ValueError("memory entry key already exists")
             if len(self._entries) >= self.max_entries:
+                raise ValueError("memory store capacity reached")
+            if self._total_chars + len(content) > self.max_total_chars:
                 raise ValueError("memory store capacity reached")
             entry = MemoryEntry(
                 key=key,
@@ -157,6 +173,7 @@ class MemoryStore:
             entry.integrity_hash = _hash_entry(entry)
             self._entries[key] = entry
             self._last_known_good[key] = copy.deepcopy(entry)
+            self._total_chars += len(content)
             return copy.deepcopy(entry)
 
     def get(self, key: str) -> MemoryEntry | None:
