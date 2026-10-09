@@ -150,3 +150,41 @@ def test_entry_access_rolls_back_tampered_agent_binding(client):
     assert payload["tamper_detected"] is True
     assert payload["rolled_back"] is True
     assert payload["agent_id"] == "memory-agent-binding"
+
+
+
+def test_quarantined_memory_content_is_only_available_to_originating_session(client):
+    headers = _agent_token(client, "memory-content-isolation")
+    owner_session = _session(client, headers)
+    other_session = _session(client, headers)
+    stored = _store(client, headers, owner_session, content="review-only note").json()
+
+    owner_read = client.get(
+        f"/api/v1/memory/content/{stored['entry_id']}/{owner_session}",
+        headers=headers,
+    )
+    assert owner_read.status_code == 200
+    assert owner_read.json()["content"] == "review-only note"
+    assert owner_read.json()["quarantined"] is True
+
+    other_read = client.get(
+        f"/api/v1/memory/content/{stored['entry_id']}/{other_session}",
+        headers=headers,
+    )
+    assert other_read.status_code == 403
+
+
+def test_memory_content_endpoint_never_returns_tampered_content(client):
+    import api.routes.memory as memory_routes
+
+    headers = _agent_token(client, "memory-content-tamper")
+    session_id = _session(client, headers)
+    stored = _store(client, headers, session_id, content="original").json()
+    memory_routes.get_memory_defender().store._entries[stored["entry_id"]].content = "tampered"
+    response = client.get(
+        f"/api/v1/memory/content/{stored['entry_id']}/{session_id}",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["content"] == "original"
+    assert response.json()["integrity_ok"] is True
