@@ -19,7 +19,7 @@ A phase is complete only when its implementation and documentation are reconcile
 | 5 | Sensitive-data guard across classification, interception, Oracle and execution ingress | Secret-pattern and redaction tests; no raw secret in findings or decision history; CI green | Complete on main; CI verified |
 | 6 | Evidence-based health/readiness semantics | Liveness separated from readiness; credentials and runtime dependencies reported separately; CI green | Core change on main; remediation tracked in Phase 7 |
 | 7 | Real bounded OpenShell health probe and truthful readiness | Active gateway health call with timeout; non-empty version required; unavailable/invalid probe fails readiness; tests and docs reconciled | Complete on main; PR #8 full CI green and phase audit passed |
-| 8 | Context-integrity enforcement and trust provenance | Prompt/context manipulation tests; findings bound to enforcement path; false-positive and bypass cases covered | Planned |
+| 8 | Context-integrity detector hardening and baseline provenance | Stored-baseline tamper detection; bounded inputs; goal-hijack detection and false-positive tests; blocked findings alert correctly; no claim that caller-supplied context is a trusted execution attestation | In progress on `security/phase-8-context-integrity`; awaiting CI and forensic audit |
 | 9 | Execution mediation and approval lifecycle hardening | Protected operations are mediated; approvals bind to immutable action intent; expiry, replay and duplicate execution rejected | Planned |
 | 10 | Runtime containment and policy verification | OpenShell policy and sandbox acceptance; filesystem/network/process restrictions verified against a live runtime | Planned |
 | 11 | ThreatFade Oracle resilience and evidence handling | Authentication, schema validation, timeout/circuit-breaker behavior, conservative failure policy | Planned |
@@ -56,5 +56,7 @@ For every phase:
 - Auctaryn's advisory risk contract is not a live Tinlance Agent Platform integration until a separately versioned Platform-side adapter and conformance tests are implemented.
 - SensitiveDataGuard is heuristic defense in depth, not complete DLP.
 - Auctaryn does not prove universal mediation of every external agent tool unless that tool is routed through a supported, configured enforcement adapter.
+
+Additional Phase 8 boundary: context checks analyze the context text submitted to Auctaryn. Without a trusted runtime/harness attestation, submitted text cannot prove which context the agent actually consumed. Phase 8 therefore hardens detection and provenance; Phase 9 must bind trusted runtime observations to immutable execution intent before any context finding is described as an execution-enforcement guarantee.
 
 These limitations must remain visible in documentation until resolved and independently verified.
