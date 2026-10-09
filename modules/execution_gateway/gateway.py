@@ -41,7 +41,7 @@ class ExecutionGateway:
         if self.circuit_breaker is not None:
             if not agent_id or self.circuit_breaker.is_open(agent_id):
                 return GatewayDecision(
-                    id=uuid.uuid4().hex[:12],
+                    id=uuid.uuid4().hex,
                     tool_call=tool_call,
                     risk_level=RiskLevel.CRITICAL,
                     decision=ActionDecision.DENIED,
@@ -52,7 +52,7 @@ class ExecutionGateway:
         if self.identity_manager is not None:
             if not agent_id or not self.identity_manager.is_authorized(agent_id, tool_call.tool_name, token_id=tool_call.identity_token, require_token=True):
                 return GatewayDecision(
-                    id=uuid.uuid4().hex[:12],
+                    id=uuid.uuid4().hex,
                     tool_call=tool_call,
                     risk_level=RiskLevel.CRITICAL,
                     decision=ActionDecision.DENIED,
@@ -247,7 +247,7 @@ class ExecutionGateway:
     def _emit_veto_alert(self, decision: GatewayDecision) -> Alert:
         tc = decision.tool_call
         alert = Alert(
-            id=uuid.uuid4().hex[:12],
+            id=uuid.uuid4().hex,
             severity=Severity.CRITICAL,
             module="execution_gateway",
             title="Critical Action Vetoed",
