@@ -19,6 +19,7 @@ from modules.agent_identity.identity import AgentIdentityManager
 from modules.inter_agent.circuit_breaker import AgentCircuitBreaker
 from modules.execution_gateway.execution_service import ExecutionService, ActionIntentIntegrityError
 from modules.evidence_audit.store import record_evidence, EvidenceStoreError
+from modules.incident_response.manager import IncidentResponseBlocked, get_incident_response_manager
 from modules.execution_gateway.runtime_adapter import (
     DuplicateExecution,
     RuntimeAdapter,
