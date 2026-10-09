@@ -125,18 +125,23 @@ class AgentIdentityManager:
 
     # --- Time-scoped tokens ---
 
-    def issue_token(self, agent_id: str, ttl_seconds: int = 300) -> ScopedToken:
+    def issue_token(self, agent_id: str, ttl_seconds: int = 300, scopes: list[str] | None = None) -> ScopedToken:
         identity = self._identities.get(agent_id)
         if identity is None:
             raise PolicyViolation("unknown_agent", agent_id)
         if not 1 <= ttl_seconds <= 3600:
             raise PolicyViolation("invalid_token_ttl", str(ttl_seconds))
 
+        requested_scopes = set(identity.scopes if scopes is None else scopes)
+        not_held = requested_scopes - identity.scopes
+        if not_held:
+            raise PolicyViolation(f"agent_lacks_scope:{','.join(sorted(not_held))}", agent_id)
+
         now = datetime.now(timezone.utc)
         token = ScopedToken(
             token_id=uuid.uuid4().hex,
             agent_id=agent_id,
-            scopes=set(identity.scopes),
+            scopes=requested_scopes,
             issued_at=now,
             expires_at=now + timedelta(seconds=ttl_seconds),
         )
