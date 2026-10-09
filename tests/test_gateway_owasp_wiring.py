@@ -153,6 +153,25 @@ class TestScopedIdentityCapabilities:
             "delegate", "read_file", token_id=token.token_id, require_token=True
         )
 
+
+    def test_agent_token_is_not_retained_in_decision_history(self):
+        from modules.agent_identity.identity import AgentIdentityManager
+        from modules.execution_gateway.gateway import ExecutionGateway
+
+        manager = AgentIdentityManager()
+        manager.register("agent-secret", owner="test")
+        manager.grant_scope("agent-secret", "read_file")
+        token = manager.issue_token("agent-secret")
+        gateway = ExecutionGateway(identity_manager=manager)
+        decision = gateway.evaluate(ToolCall(
+            tool_name="read_file", action="read",
+            agent_id="agent-secret", identity_token=token.token_id,
+        ))
+
+        assert decision.decision == ActionDecision.APPROVED
+        assert decision.tool_call.identity_token == ""
+        assert gateway.history[0].tool_call.identity_token == ""
+
     def test_expired_token_is_denied(self):
         from datetime import datetime, timedelta, timezone
         from modules.agent_identity.identity import AgentIdentityManager
