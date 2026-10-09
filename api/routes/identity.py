@@ -4,7 +4,7 @@ Exposes the ASI03 Agent Identity & Privilege Manager.
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from modules.agent_identity.identity import AgentIdentityManager
 from core.exceptions import PolicyViolation
@@ -17,20 +17,29 @@ def get_identity_manager() -> AgentIdentityManager:
 
 
 class RegisterRequest(BaseModel):
-    agent_id: str
-    owner: str
+    agent_id: str = Field(min_length=1, max_length=128)
+    owner: str = Field(min_length=1, max_length=256)
 
 
 class ScopeRequest(BaseModel):
-    agent_id: str
-    scope: str
+    agent_id: str = Field(min_length=1, max_length=128)
+    scope: str = Field(min_length=1, max_length=128)
+
+
+class TokenRequest(BaseModel):
+    agent_id: str = Field(min_length=1, max_length=128)
+    ttl_seconds: int = Field(default=300, ge=1, le=3600)
+
+
+class RevokeTokenRequest(BaseModel):
+    token_id: str = Field(min_length=1, max_length=128)
 
 
 class DelegateRequest(BaseModel):
     delegator_agent_id: str
     delegate_agent_id: str
     scopes: list[str]
-    ttl_seconds: int = 300
+    ttl_seconds: int = Field(default=300, ge=1, le=3600)
 
 
 @router.post("/register")
@@ -42,6 +51,29 @@ async def register_agent(request: RegisterRequest) -> dict:
         "owner": identity.owner,
         "scopes": list(identity.scopes),
     }
+
+
+
+
+@router.post("/token")
+async def issue_agent_token(request: TokenRequest) -> dict:
+    """Issue a short-lived, scoped bearer capability for an already-authorized agent."""
+    try:
+        token = get_identity_manager().issue_token(request.agent_id, request.ttl_seconds)
+        return {
+            "token_id": token.token_id,
+            "agent_id": token.agent_id,
+            "scopes": list(token.scopes),
+            "expires_at": token.expires_at.isoformat(),
+        }
+    except PolicyViolation as exc:
+        raise HTTPException(status_code=404, detail="Agent identity not found") from exc
+
+
+@router.post("/token/revoke")
+async def revoke_agent_token(request: RevokeTokenRequest) -> dict:
+    get_identity_manager().revoke_token(request.token_id)
+    return {"revoked": True, "token_id": request.token_id}
 
 
 @router.post("/grant")
