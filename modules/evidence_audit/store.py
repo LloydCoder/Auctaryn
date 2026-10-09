@@ -10,12 +10,31 @@ import os
 import re
 from pathlib import Path
 import sqlite3
+import threading
 from typing import Any
 from uuid import uuid4
 
 ZERO_HASH = "0" * 64
 MAX_PAGE_SIZE = 500
 ALLOWED_DETAIL_KEYS = {"decision", "action_fingerprint", "confidence", "risk_level", "receipt_hash", "runtime_adapter"}
+
+# Per-database process-local locks serialize first-time schema initialization
+# across distinct EvidenceStore instances. SQLite still provides cross-process
+# locking; this avoids avoidable PRAGMA/schema races inside one worker process.
+_INITIALIZATION_LOCKS: dict[str, threading.Lock] = {}
+_INITIALIZATION_LOCKS_GUARD = threading.Lock()
+
+
+def _initialization_lock(path: str) -> threading.Lock:
+    if path == ":memory:":
+        return threading.Lock()
+    key = str(Path(path).expanduser().resolve())
+    with _INITIALIZATION_LOCKS_GUARD:
+        lock = _INITIALIZATION_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _INITIALIZATION_LOCKS[key] = lock
+        return lock
 
 
 class EvidenceStoreError(RuntimeError):
@@ -62,23 +81,26 @@ class EvidenceStore:
         return db
 
     def _init_sync(self):
-        with closing(self._connect()) as db:
-            db.execute("""CREATE TABLE IF NOT EXISTS evidence_records (
-                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-                record_id TEXT NOT NULL UNIQUE,
-                occurred_at TEXT NOT NULL,
-                event_type TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                previous_hash TEXT NOT NULL,
-                record_hash TEXT NOT NULL,
-                hmac_signature TEXT NOT NULL DEFAULT ''
-            )""")
-            db.execute("""CREATE TRIGGER IF NOT EXISTS evidence_no_update
-                BEFORE UPDATE ON evidence_records BEGIN
-                SELECT RAISE(ABORT, 'append-only evidence'); END""")
-            db.execute("""CREATE TRIGGER IF NOT EXISTS evidence_no_delete
-                BEFORE DELETE ON evidence_records BEGIN
-                SELECT RAISE(ABORT, 'append-only evidence'); END""")
+        # Different EvidenceStore objects can initialize the same file concurrently.
+        # Serialize WAL-mode negotiation and idempotent schema/trigger creation.
+        with _initialization_lock(self.path):
+            with closing(self._connect()) as db:
+                db.execute("""CREATE TABLE IF NOT EXISTS evidence_records (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    record_id TEXT NOT NULL UNIQUE,
+                    occurred_at TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    previous_hash TEXT NOT NULL,
+                    record_hash TEXT NOT NULL,
+                    hmac_signature TEXT NOT NULL DEFAULT ''
+                )""")
+                db.execute("""CREATE TRIGGER IF NOT EXISTS evidence_no_update
+                    BEFORE UPDATE ON evidence_records BEGIN
+                    SELECT RAISE(ABORT, 'append-only evidence'); END""")
+                db.execute("""CREATE TRIGGER IF NOT EXISTS evidence_no_delete
+                    BEFORE DELETE ON evidence_records BEGIN
+                    SELECT RAISE(ABORT, 'append-only evidence'); END""")
 
     async def initialize(self):
         async with self._lock:
