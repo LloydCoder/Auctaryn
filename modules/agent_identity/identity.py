@@ -31,6 +31,7 @@ class AgentIdentity:
     identity_id: str
     owner: str
     scopes: set[str] = field(default_factory=set)
+    permissions_version: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -43,6 +44,8 @@ class ScopedToken:
     expires_at: datetime
     revoked: bool = False
     delegator_agent_id: str | None = None
+    identity_version: int = 0
+    delegator_identity_version: int | None = None
 
 
 class AgentIdentityManager:
@@ -82,14 +85,19 @@ class AgentIdentityManager:
         identity = self._identities.get(agent_id)
         if identity is None:
             raise PolicyViolation("unknown_agent", agent_id)
-        identity.scopes.add(scope)
+        if scope not in identity.scopes:
+            identity.scopes.add(scope)
+            identity.permissions_version += 1
         logger.info(f"Granted scope '{scope}' to {agent_id}",
                    extra={"event": "scope_granted", "module_name": "agent_identity"})
 
     def revoke_scope(self, agent_id: str, scope: str) -> None:
         identity = self._identities.get(agent_id)
-        if identity is not None:
-            identity.scopes.discard(scope)
+        if identity is None:
+            raise PolicyViolation("unknown_agent", agent_id)
+        if scope in identity.scopes:
+            identity.scopes.remove(scope)
+            identity.permissions_version += 1
             for token in self._tokens.values():
                 if token.agent_id == agent_id or token.delegator_agent_id == agent_id:
                     token.scopes.discard(scope)
@@ -117,8 +125,16 @@ class AgentIdentityManager:
                 or token.revoked
                 or token.agent_id != agent_id
                 or datetime.now(timezone.utc) >= token.expires_at
+                or token.identity_version != identity.permissions_version
             ):
                 return False
+            if token.delegator_agent_id is not None:
+                delegator = self._identities.get(token.delegator_agent_id)
+                if (
+                    delegator is None
+                    or token.delegator_identity_version != delegator.permissions_version
+                ):
+                    return False
             return any(fnmatch.fnmatch(tool_name, scope) for scope in token.scopes)
 
         return any(fnmatch.fnmatch(tool_name, scope) for scope in identity.scopes)
@@ -133,6 +149,8 @@ class AgentIdentityManager:
             raise PolicyViolation("invalid_token_ttl", str(ttl_seconds))
 
         requested_scopes = set(identity.scopes if scopes is None else scopes)
+        if not requested_scopes:
+            raise PolicyViolation("empty_token_scopes", agent_id)
         not_held = requested_scopes - identity.scopes
         if not_held:
             raise PolicyViolation(f"agent_lacks_scope:{','.join(sorted(not_held))}", agent_id)
@@ -144,6 +162,7 @@ class AgentIdentityManager:
             scopes=requested_scopes,
             issued_at=now,
             expires_at=now + timedelta(seconds=ttl_seconds),
+            identity_version=identity.permissions_version,
         )
         self._tokens[token.token_id] = token
         return token
@@ -152,10 +171,15 @@ class AgentIdentityManager:
         token = self._tokens.get(token_id)
         if token is None:
             return False
-        if token.revoked:
+        if token.revoked or datetime.now(timezone.utc) >= token.expires_at:
             return False
-        if datetime.now(timezone.utc) >= token.expires_at:
+        identity = self._identities.get(token.agent_id)
+        if identity is None or token.identity_version != identity.permissions_version:
             return False
+        if token.delegator_agent_id is not None:
+            delegator = self._identities.get(token.delegator_agent_id)
+            if delegator is None or token.delegator_identity_version != delegator.permissions_version:
+                return False
         return True
 
     def revoke_token(self, token_id: str) -> None:
@@ -202,6 +226,8 @@ class AgentIdentityManager:
             issued_at=now,
             expires_at=now + timedelta(seconds=ttl_seconds),
             delegator_agent_id=delegator_agent_id,
+            identity_version=delegate_identity.permissions_version,
+            delegator_identity_version=delegator.permissions_version,
         )
         self._tokens[token.token_id] = token
 
