@@ -6,6 +6,8 @@ remains the execution security boundary; Auctaryn decisions are an additional
 gate, not a replacement for OpenShell isolation.
 """
 import asyncio
+import base64
+import json
 import os
 import uuid
 from collections.abc import Callable
@@ -24,6 +26,68 @@ MAX_ARGV_COUNT = 128
 MAX_ARG_LENGTH = 8192
 MAX_TOTAL_ARG_LENGTH = 32768
 MAX_OUTPUT_CHARS = 1_000_000
+
+# Output is bounded while being read inside the sandbox, not only after the SDK
+# has already buffered a child process's output. argv is JSON and shell=False.
+BOUNDED_EXEC_WRAPPER = r"""
+import base64, json, os, signal, subprocess, sys, threading
+argv = json.loads(sys.argv[1])
+timeout = int(sys.argv[2])
+cap = int(sys.argv[3])
+buffers = {"stdout": bytearray(), "stderr": bytearray()}
+truncated = {"stdout": False, "stderr": False}
+
+def drain(stream, key):
+    while True:
+        chunk = stream.read(8192)
+        if not chunk:
+            return
+        remaining = cap - len(buffers[key])
+        if remaining > 0:
+            buffers[key].extend(chunk[:remaining])
+        if len(chunk) > max(remaining, 0):
+            truncated[key] = True
+
+try:
+    process = subprocess.Popen(
+        argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
+    )
+except OSError as exc:
+    message = str(exc).encode("utf-8")
+    data = {
+        "exit_code": 127,
+        "stdout": "",
+        "stderr": base64.b64encode(message[:cap]).decode("ascii"),
+        "stdout_truncated": False,
+        "stderr_truncated": len(message) > cap,
+    }
+else:
+    threads = [
+        threading.Thread(target=drain, args=(process.stdout, "stdout"), daemon=True),
+        threading.Thread(target=drain, args=(process.stderr, "stderr"), daemon=True),
+    ]
+    for thread in threads:
+        thread.start()
+    try:
+        exit_code = process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+        exit_code = 124
+    for thread in threads:
+        thread.join()
+    data = {
+        "exit_code": exit_code,
+        "stdout": base64.b64encode(bytes(buffers["stdout"])).decode("ascii"),
+        "stderr": base64.b64encode(bytes(buffers["stderr"])).decode("ascii"),
+        "stdout_truncated": truncated["stdout"],
+        "stderr_truncated": truncated["stderr"],
+    }
+print(json.dumps(data, separators=(",", ":")))
+"""
 
 
 class OpenShellRuntimeAdapter:
@@ -79,10 +143,17 @@ class OpenShellRuntimeAdapter:
         argv = self._validate_argv(tool_call)
         self._seen_idempotency_keys.add(idempotency_key)
 
-        # GNU timeout bounds command lifetime inside the sandbox. No host-side
-        # cancellation is attempted because cancelling an SDK thread would not
-        # prove that the sandboxed process stopped.
-        bounded_argv = ["timeout", f"{self.timeout_seconds}s", *argv]
+        # The wrapper enforces timeout and output caps inside the sandbox.
+        # Host-side thread cancellation is avoided because it would not prove
+        # that the sandboxed process stopped.
+        bounded_argv = [
+            "python",
+            "-c",
+            BOUNDED_EXEC_WRAPPER,
+            json.dumps(argv, separators=(",", ":")),
+            str(self.timeout_seconds),
+            str(MAX_OUTPUT_CHARS),
+        ]
         try:
             result = await asyncio.to_thread(
                 self.client.exec,
@@ -95,20 +166,29 @@ class OpenShellRuntimeAdapter:
                 "OpenShell execution request failed; completion state may be unknown."
             ) from exc
 
-        stdout = getattr(result, "stdout", "")
-        stderr = getattr(result, "stderr", "")
-        exit_code = getattr(result, "exit_code", None)
-        if not isinstance(stdout, str) or not isinstance(stderr, str):
-            raise RuntimeAdapterFailure("OpenShell returned an invalid execution result.")
-        if exit_code is not None and (not isinstance(exit_code, int) or isinstance(exit_code, bool)):
-            raise RuntimeAdapterFailure("OpenShell returned an invalid exit code.")
+        wrapper_stdout = getattr(result, "stdout", "")
+        wrapper_exit_code = getattr(result, "exit_code", None)
+        if not isinstance(wrapper_stdout, str) or wrapper_exit_code != 0:
+            raise RuntimeAdapterFailure(
+                "OpenShell did not return a valid bounded-execution envelope."
+            )
+        try:
+            envelope = json.loads(wrapper_stdout)
+            exit_code = envelope["exit_code"]
+            if not isinstance(exit_code, int) or isinstance(exit_code, bool):
+                raise ValueError("invalid child exit code")
+            stdout = base64.b64decode(envelope["stdout"], validate=True).decode("utf-8", errors="replace")
+            stderr = base64.b64decode(envelope["stderr"], validate=True).decode("utf-8", errors="replace")
+            stdout_truncated = envelope["stdout_truncated"]
+            stderr_truncated = envelope["stderr_truncated"]
+            if not isinstance(stdout_truncated, bool) or not isinstance(stderr_truncated, bool):
+                raise ValueError("invalid truncation flags")
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RuntimeAdapterFailure(
+                "OpenShell returned a malformed bounded-execution envelope."
+            ) from exc
 
-        stdout_truncated = len(stdout) > MAX_OUTPUT_CHARS
-        stderr_truncated = len(stderr) > MAX_OUTPUT_CHARS
-        stdout = stdout[:MAX_OUTPUT_CHARS]
-        stderr = stderr[:MAX_OUTPUT_CHARS]
         status = "timed_out" if exit_code == 124 else ("succeeded" if exit_code == 0 else "failed")
-
         return AdapterExecutionResult(
             execution_id=uuid.uuid4().hex,
             adapter="nvidia-openshell",
@@ -160,8 +240,7 @@ def create_openshell_adapter_from_environment() -> OpenShellRuntimeAdapter | Non
     configured_oidc = [bool(os.getenv(key, "").strip()) for key in oidc_keys]
     if any(configured_oidc) and not all(configured_oidc):
         raise RuntimeAdapterUnavailable(
-            "All OPENSHELL_OIDC_ISSUER, OPENSHELL_OIDC_CLIENT_ID, "
-            "OPENSHELL_OIDC_CLIENT_SECRET, and OPENSHELL_OIDC_AUDIENCE values are required together."
+            "All OpenShell OIDC service credential settings are required together."
         )
     use_user_credentials = os.getenv("OPENSHELL_ALLOW_USER_CREDENTIALS", "").lower() == "true"
     if not all(configured_oidc) and not use_user_credentials:
@@ -170,6 +249,7 @@ def create_openshell_adapter_from_environment() -> OpenShellRuntimeAdapter | Non
             "OPENSHELL_ALLOW_USER_CREDENTIALS=true and are intended only for local development."
         )
 
+    client_context = None
     try:
         from openshell import ClientCredentialsAuth, SandboxClient
 
@@ -188,10 +268,11 @@ def create_openshell_adapter_from_environment() -> OpenShellRuntimeAdapter | Non
         if not getattr(health, "version", None):
             raise RuntimeError("OpenShell health response did not include a version.")
     except Exception as exc:
-        try:
-            client_context.__exit__(type(exc), exc, exc.__traceback__)
-        except Exception:
-            pass
+        if client_context is not None:
+            try:
+                client_context.__exit__(type(exc), exc, exc.__traceback__)
+            except Exception:
+                pass
         raise RuntimeAdapterUnavailable(
             "Could not initialize or verify the configured OpenShell gateway."
         ) from exc
