@@ -143,7 +143,7 @@ class SecureSkillVettingService:
             reasons.append("Publisher signature is invalid or publisher is not trusted")
         permissions = manifest.get("permissions", []) if isinstance(manifest, dict) else []
         permission_result: PermissionScanResult = scan_permissions(permissions)
-        if permission_result.risk_level in ("high", "critical"):
+        if permission_result.risk_level != "low":
             reasons.append(f"Permission risk {permission_result.risk_level}: {permission_result.reason}")
         unknown_permissions = sorted(set(permissions) - _KNOWN_PERMISSIONS) if isinstance(permissions, list) else []
         if unknown_permissions:
@@ -158,6 +158,8 @@ class SecureSkillVettingService:
             current = self._latest.get(name)
             if current and _version_tuple(version) < _version_tuple(current):
                 reasons.append("Version rollback detected")
+            elif current and _version_tuple(version) == _version_tuple(current) and version != current:
+                reasons.append("Version identity changed without a precedence increase")
             pin = self._pins.get((name, version))
             fingerprint = hashlib.sha256(canonical_manifest(manifest)).hexdigest()
             if pin and not hmac.compare_digest(pin, fingerprint):
