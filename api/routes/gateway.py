@@ -191,6 +191,7 @@ async def intercept_action(request: ToolCallRequest) -> GatewayDecision:
     tc = ToolCall(tool_name=request.tool_name, action=request.action, parameters=request.parameters,
                   target=request.target, agent_id=request.agent_id, session_id=request.session_id,
                   identity_token=request.identity_token)
+    get_gateway().data_guard.validate_tool_call(tc)
     decision = get_gateway().evaluate(tc)
     await _broadcast_decision(decision)
     return decision
