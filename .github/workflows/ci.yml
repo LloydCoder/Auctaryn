@@ -66,12 +66,32 @@ jobs:
           bash -n scripts/deploy.sh
           bash -n scripts/rollback.sh
 
-      - name: Validate Compose configuration
+      - name: Validate local Compose configuration
         env:
           AUCTARYN_API_KEY: ci-service-key-that-is-long-enough
           AUCTARYN_ADMIN_API_KEY: ci-admin-key-that-is-different
           THREATFADE_SERVICE_URL: https://threatfade.example.invalid
+          THREATFADE_SERVICE_TOKEN: ci-threatfade-token
         run: docker compose config --quiet
+
+      - name: Validate production Compose override
+        env:
+          AUCTARYN_API_KEY: ci-service-key-that-is-long-enough
+          AUCTARYN_ADMIN_API_KEY: ci-admin-key-that-is-different
+          THREATFADE_SERVICE_URL: https://threatfade.example.invalid
+          THREATFADE_SERVICE_TOKEN: ci-threatfade-token
+        run: |
+          set -euo pipefail
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf "$temp_dir"' EXIT
+          mkdir -p "$temp_dir/openshell/gateways/ci"
+          printf '%064d\n' 0 > "$temp_dir/evidence-hmac.key"
+          printf 'ci\n' > "$temp_dir/openshell/active_gateway"
+          printf '{"endpoint":"https://openshell.example.invalid"}\n' > "$temp_dir/openshell/gateways/ci/metadata.json"
+          export AUCTARYN_IMAGE="ghcr.io/lloydcoder/auctaryn@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          export AUCTARYN_EVIDENCE_HMAC_KEY_FILE="$temp_dir/evidence-hmac.key"
+          export OPENSHELL_SYSTEM_GATEWAY_DIR="$temp_dir/openshell"
+          docker compose -f docker-compose.yml -f docker-compose.production.yml config --quiet
 
       - name: Build API image
         run: docker build -t auctaryn:latest .
