@@ -170,7 +170,10 @@ class MemoryStore:
             trusted_snapshot = self._last_known_good.get(key)
             if entry is None or trusted_snapshot is None:
                 return False
-            current_hash = _hash_entry(entry)
+            try:
+                current_hash = _hash_entry(entry)
+            except (AttributeError, TypeError, ValueError):
+                return False
             return current_hash == trusted_snapshot.integrity_hash == entry.integrity_hash
 
     def rollback(self, key: str) -> bool:
@@ -263,6 +266,9 @@ class MemoryDefender:
         return StorageDecision(allow_storage=True, entry_id=entry_id)
 
     def is_readable_by_session(self, key: str, session_id: str, agent_id: str | None = None) -> bool:
+        if not self.store.verify_integrity(key):
+            if not self.store.rollback(key):
+                return False
         entry = self.store.get(key)
         if entry is None:
             return False
