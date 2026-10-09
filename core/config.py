@@ -89,6 +89,7 @@ def _apply_env_overrides(raw: dict) -> dict:
         "AUCTARYN_DEBUG": ("server", "debug"),
         "TWINGUARD_DB_PATH": ("database", "path"),
         "AUCTARYN_DB_PATH": ("database", "path"),
+        "AUCTARYN_CORS_ORIGINS": ("server", "cors_origins"),
         "THREATFADE_SERVICE_URL": ("modules", "threatfade_oracle", "service_url"),
         "LOG_LEVEL": ("logging", "level"),
     }
@@ -105,6 +106,8 @@ def _apply_env_overrides(raw: dict) -> dict:
                 value = int(value)
             elif final_key == "debug":
                 value = value.lower() in ("true", "1", "yes")
+            elif final_key == "cors_origins":
+                value = [origin.strip() for origin in value.split(",") if origin.strip()]
             current[final_key] = value
 
     return raw
