@@ -5,7 +5,7 @@ Wired to ExecutionGateway + ThreatFade Oracle (Parliament integration)
 """
 
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from core.models import ToolCall, ActionClassification, GatewayDecision
@@ -127,7 +127,7 @@ async def evaluate_tool_call(request: ToolCallRequest) -> ActionClassification:
 
 
 @router.get("/decisions")
-async def list_decisions(limit: int = 50) -> list[GatewayDecision]:
+async def list_decisions(limit: int = Query(50, ge=1, le=500)) -> list[GatewayDecision]:
     return get_gateway().history[-limit:]
 
 
