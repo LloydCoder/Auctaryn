@@ -142,3 +142,36 @@ def test_alert_creation_deduplicates_unresolved_decision_alerts(tmp_path):
                                   decision_id="same-decision", actor_id="agent-a")
     assert first["alert_id"] == second["alert_id"]
     assert len([a for a in manager.list_alerts() if a["decision_id"] == "same-decision"]) == 1
+
+
+def test_quarantine_revokes_tokens_and_release_does_not_restore_them(client):
+    agent_id = "incident-quarantine-api-agent"
+    assert client.post("/api/v1/identity/register", json={"agent_id": agent_id, "owner": "team"}).status_code == 200
+    assert client.post("/api/v1/identity/grant", json={"agent_id": agent_id, "scope": "read_file"}).status_code == 200
+    issued = client.post("/api/v1/identity/token", json={"agent_id": agent_id, "scopes": ["read_file"]})
+    assert issued.status_code == 200
+    token_id = issued.json()["token_id"]
+
+    quarantine = client.post(
+        f"/api/v1/incident/agents/{agent_id}/quarantine",
+        json={"quarantined": True, "reason": "Contain suspected agent compromise"},
+    )
+    assert quarantine.status_code == 200
+    assert quarantine.json()["revoked_token_count"] == 1
+    denied = client.get(
+        f"/api/v1/identity/{agent_id}/authorized/read_file",
+        headers={"X-Agent-Identity-Token": token_id},
+    )
+    assert denied.status_code == 200
+    assert denied.json()["authorized"] is False
+
+    release = client.post(
+        f"/api/v1/incident/agents/{agent_id}/quarantine",
+        json={"quarantined": False, "reason": "Investigation complete"},
+    )
+    assert release.status_code == 200
+    still_denied = client.get(
+        f"/api/v1/identity/{agent_id}/authorized/read_file",
+        headers={"X-Agent-Identity-Token": token_id},
+    )
+    assert still_denied.json()["authorized"] is False
