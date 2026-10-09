@@ -214,6 +214,14 @@ class MemoryStore:
         )
         return True
 
+    def list_quarantined(self, limit: int = 100) -> list[MemoryEntry]:
+        if not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        with self._lock:
+            entries = [copy.deepcopy(entry) for entry in self._entries.values() if entry.quarantined]
+        entries.sort(key=lambda entry: entry.created_at, reverse=True)
+        return entries[:limit]
+
     def delete_session_entries(self, session_id: str, quarantined_only: bool = True) -> int:
         """Remove expired-session quarantine entries and update the aggregate budget."""
         removed = 0
@@ -339,6 +347,8 @@ class MemoryDefender:
             return False
         if agent_id is not None and agent_id != entry.agent_id:
             return False
+        # Quarantined content is never readable by an agent session, including
+        # the originating session. Review access is exposed only to operators.
         if entry.quarantined:
-            return entry.session_id == session_id
+            return False
         return True
