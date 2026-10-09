@@ -1,5 +1,11 @@
 # Auctaryn Context Integrity
 
+## Session-bound gateway enforcement
+
+When protected instructions exist, the gateway requires a session ID and current intact context-check ID, binds the ID into the canonical action-intent fingerprint, and revalidates the context check immediately before runtime-adapter invocation. Check IDs are single-action bindings. Compromised sessions require administrator clearance and a fresh clean check. Session state is bounded to 10,000 tracked sessions; protected-instruction registrations are capped at 1,000; check and compaction histories are capped at 5,000 entries each. When every tracked session is quarantined, the check API returns a safe 503 and gateway actions remain denied.
+
+These controls are in-process and do not provide durable or cross-replica quarantine/replay guarantees. Submitted context text is not proof of the exact context consumed by an external agent; trusted runtime attestation remains a production gate. See the [Phase 8 enforcement audit](../audits/PHASE-08-SESSION-BOUND-ENFORCEMENT.md).
+
 ## Purpose
 
 Auctaryn's Context Integrity Guardian checks whether registered protected instructions remain present in a submitted context snapshot and detects selected goal-hijack patterns. It is a detection and evidence component, not a model-verification oracle.

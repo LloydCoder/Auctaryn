@@ -61,6 +61,8 @@ class ProtectedInstruction(BaseModel):
 
 class IntegrityCheckResult(BaseModel):
     id: str = ""
+    session_id: str = Field(default="", max_length=128)
+    baseline_hash: str = Field(default="", max_length=64)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     status: IntegrityStatus
     instructions_total: int
@@ -91,7 +93,8 @@ class ToolCall(BaseModel):
     parameters: dict[str, Any] = {}
     target: str = ""
     agent_id: str = ""
-    session_id: str = ""
+    session_id: str = Field(default="", max_length=128)
+    context_check_id: str = Field(default="", max_length=64)
     # Bearer capability is consumed only by gateway preflight and excluded from responses.
     identity_token: str = Field(default="", exclude=True, repr=False, max_length=128)
 
@@ -110,6 +113,7 @@ def action_intent_fingerprint(tool_call: ToolCall) -> str:
         "target": tool_call.target,
         "agent_id": tool_call.agent_id,
         "session_id": tool_call.session_id,
+        "context_check_id": tool_call.context_check_id,
     }
     canonical = json.dumps(
         intent, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str

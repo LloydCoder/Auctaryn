@@ -58,6 +58,16 @@ class ExecutionService:
         adapter = self.require_adapter()
         if decision.decision != ActionDecision.APPROVED:
             raise RuntimeAdapterFailure("Only approved decisions may be executed.")
+        # Recheck at the actual adapter boundary, not only when the decision was created.
+        # The guardian permits the same check/action binding but rejects a compromised
+        # session or reuse of the check for a different action.
+        if self.gateway.context_integrity_guard is not None:
+            try:
+                context_denial = self.gateway.context_integrity_guard(decision.tool_call)
+            except Exception:
+                context_denial = "Context integrity preflight unavailable; execution refused."
+            if context_denial:
+                raise ActionIntentIntegrityError(context_denial)
         current_fingerprint = action_intent_fingerprint(decision.tool_call)
         if (
             not decision.action_fingerprint

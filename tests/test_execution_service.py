@@ -230,3 +230,32 @@ def test_api_rejects_execution_of_auto_approved_decision_as_if_operator_approved
 
     assert response.status_code == 409
     assert "explicitly approved by an operator" in response.json()["detail"]
+
+
+def test_context_integrity_is_rechecked_at_runtime_execution_boundary():
+    adapter = FakeRuntimeAdapter()
+    calls = {"count": 0}
+
+    def context_guard(_tool_call):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return None
+        return "Context became compromised before runtime execution."
+
+    gateway = ExecutionGateway(context_integrity_guard=context_guard)
+    service = ExecutionService(gateway, adapter)
+
+    with pytest.raises(RuntimeAdapterFailure, match="Context became compromised"):
+        asyncio.run(service.execute_tool_call(
+            ToolCall(
+                tool_name="read_file",
+                action="read",
+                parameters={"path": "/safe/file.txt"},
+                agent_id="test-agent",
+                session_id="session-a",
+                context_check_id="context-check-a",
+            )
+        ))
+
+    assert calls["count"] == 2
+    assert adapter.calls == []

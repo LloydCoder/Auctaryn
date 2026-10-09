@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from api.security import require_api_key, require_operator_key
+from api.routes.context import get_guardian
 
 from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision
 from modules.execution_gateway.gateway import ExecutionGateway, ApprovalIntentIntegrityError
@@ -28,6 +29,17 @@ router = APIRouter(dependencies=[Depends(require_api_key)])
 _oracle = ThreatFadeOracle()
 _identity_manager = AgentIdentityManager()
 _circuit_breaker = AgentCircuitBreaker(failure_threshold=5, cooldown_seconds=60)
+
+
+def _context_integrity_preflight(tool_call: ToolCall) -> str | None:
+    guardian = get_guardian()
+    if guardian.registry.count() == 0 and not tool_call.context_check_id:
+        return None
+    return guardian.authorize_session_action(
+        tool_call.session_id, tool_call.context_check_id, tool_call.id
+    )
+
+
 # Fail closed: the gateway always has an identity manager. Agents must be
 # registered and granted the requested tool scope before protected actions pass.
 _gateway = ExecutionGateway(
@@ -35,6 +47,7 @@ _gateway = ExecutionGateway(
     oracle=_oracle,
     identity_manager=_identity_manager,
     circuit_breaker=_circuit_breaker,
+    context_integrity_guard=_context_integrity_preflight,
 )
 _execution_service = ExecutionService(_gateway)
 
@@ -69,6 +82,7 @@ class ToolCallRequest(BaseModel):
     target: str = Field(default="", max_length=512)
     agent_id: str = Field(default="", max_length=128)
     session_id: str = Field(default="", max_length=128)
+    context_check_id: str = Field(default="", max_length=64)
     identity_token: str = Field(default="", max_length=128)
 
 class ApprovalRequest(BaseModel):
@@ -111,6 +125,7 @@ async def enable_identity_enforcement() -> dict:
 async def evaluate_tool_call(request: ToolCallRequest) -> ActionClassification:
     tc = ToolCall(tool_name=request.tool_name, action=request.action, parameters=request.parameters,
                   target=request.target, agent_id=request.agent_id, session_id=request.session_id,
+                  context_check_id=request.context_check_id,
                   identity_token=request.identity_token)
     get_gateway().data_guard.validate_tool_call(tc)
     from modules.execution_gateway.risk_classifier import RiskClassifier
@@ -150,6 +165,7 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
     """Evaluate and execute through a trusted adapter; never execute in the API process."""
     tc = ToolCall(tool_name=request.tool_name, action=request.action, parameters=request.parameters,
                   target=request.target, agent_id=request.agent_id, session_id=request.session_id,
+                  context_check_id=request.context_check_id,
                   identity_token=request.identity_token)
     try:
         decision, receipt = await get_execution_service().execute_tool_call(tc)
@@ -181,6 +197,9 @@ async def execute_approved_decision(decision_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Decision not found")
     if decision.decision != ActionDecision.APPROVED or decision.decided_by != "authenticated_operator":
         raise HTTPException(status_code=409, detail="Decision has not been explicitly approved by an operator")
+    context_denial = _context_integrity_preflight(decision.tool_call)
+    if context_denial:
+        raise HTTPException(status_code=409, detail=context_denial)
     try:
         receipt = await service.execute_approved_decision(decision)
     except DuplicateExecution as exc:
@@ -196,6 +215,7 @@ async def execute_approved_decision(decision_id: str) -> dict:
 async def intercept_action(request: ToolCallRequest) -> GatewayDecision:
     tc = ToolCall(tool_name=request.tool_name, action=request.action, parameters=request.parameters,
                   target=request.target, agent_id=request.agent_id, session_id=request.session_id,
+                  context_check_id=request.context_check_id,
                   identity_token=request.identity_token)
     get_gateway().data_guard.validate_tool_call(tc)
     decision = get_gateway().evaluate(tc)
@@ -206,6 +226,7 @@ async def intercept_action(request: ToolCallRequest) -> GatewayDecision:
 async def intercept_action_full(request: ToolCallRequest) -> GatewayDecision:
     tc = ToolCall(tool_name=request.tool_name, action=request.action, parameters=request.parameters,
                   target=request.target, agent_id=request.agent_id, session_id=request.session_id,
+                  context_check_id=request.context_check_id,
                   identity_token=request.identity_token)
     get_gateway().data_guard.validate_tool_call(tc)
     decision = await get_gateway().evaluate_with_oracle(tc)
