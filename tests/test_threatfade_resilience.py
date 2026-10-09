@@ -147,3 +147,16 @@ def test_pcap_client_rejects_unrecognized_file_header():
     client = FusionOpsClient()
     with pytest.raises(ValueError, match="recognized PCAP"):
         asyncio.run(client.detect_pcap(b"not-a-pcap", "capture.pcap"))
+
+
+
+def test_pcap_ingress_limit_rejects_body_before_multipart_parsing(client, monkeypatch):
+    import api.main as main_module
+
+    monkeypatch.setattr(main_module, "PCAP_UPLOAD_REQUEST_LIMIT", 3)
+    response = client.post(
+        "/api/v1/threatfade/analyze",
+        content=b"four",
+        headers={"Content-Type": "application/octet-stream"},
+    )
+    assert response.status_code == 413
