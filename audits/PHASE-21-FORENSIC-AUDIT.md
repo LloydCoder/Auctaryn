@@ -1,6 +1,6 @@
 # Phase 21 forensic audit — operator dashboard and deployment compatibility
 
-**Status:** Implementation submitted for exact-head CI; this is a pre-merge audit, not a completion claim.  
+**Status:** Pre-merge forensic review completed. Exact-head CI passed on `18ac0a2e979e51b05f430f02c1cb8bfcfb037166`; merge and post-merge verification remain required before phase closure.  
 **Scope:** Administrator incident/evidence UI, correct rendering of durable incident alert envelopes, session credential cleanup, server-side authorization regressions, immutable image rollback and deployment documentation.
 
 ## Findings addressed
@@ -22,14 +22,17 @@
 - `tests/test_phase21_operator_console.py`, `tests/test_deployment_rollback.py`: backend authorization, lifecycle and rollback safety tests.
 - `docs/DEPLOYMENT_ROLLBACK.md`, README and roadmap: operator procedure and limitations.
 
-## Acceptance required
+## Exact-head CI acceptance evidence
 
-- [ ] Python 3.11 and 3.12 tests and Ruff pass.
-- [ ] Python 3.12 dependency audit passes.
-- [ ] Dashboard build and dependency audit pass.
-- [ ] Both deployment scripts pass shell syntax checks.
-- [ ] Compose validation, container build and liveness pass.
-- [ ] Exact-head CI is green, merged main CI is green, and final merged files are re-audited.
+- Workflow: [Auctaryn CI run 37958990855](https://github.com/LloydCoder/Auctaryn/actions/runs/37958990855) on `18ac0a2e979e51b05f430f02c1cb8bfcfb037166`.
+- [x] Python 3.11: 492 tests passed; Ruff passed.
+- [x] Python 3.12: 492 tests passed; Ruff passed; `pip-audit` reported no known vulnerabilities.
+- [x] Dashboard production build and dependency audit passed.
+- [x] Both deployment scripts passed `bash -n`.
+- [x] Compose validation, container build and API liveness passed.
+- [ ] Merge and verify the resulting main commit's full workflow before closing Phase 21.
+
+**Non-blocking test warning:** Python 3.12 emitted 280 warnings, including Starlette's deprecation warning for using `httpx` with `starlette.testclient`. Tests still pass, but this dependency compatibility warning is retained for Phase 22 dependency/toolchain hardening rather than hidden with a warning filter.
 
 ## Production limitations
 
@@ -50,4 +53,4 @@
 - Confirm server-side admin checks reject service credentials independent of client navigation.
 - Confirm logout cannot trigger a stale authenticated WebSocket reconnect.
 - Confirm the rollback script never substitutes an unverified image and fails closed when state is missing.
-- Do not close Phase 21 until exact-head and post-merge workflows are green.
+- Close Phase 21 only after merge and a green post-merge main workflow; retain the test-client deprecation as a tracked Phase 22 dependency-hardening item.
