@@ -56,7 +56,7 @@ export AUCTARYN_DEMO_AGENT_TOKEN="$(printf '%s' "$TOKEN_JSON" | jq -r '.token_id
 test -n "$AUCTARYN_DEMO_AGENT_TOKEN" && test "$AUCTARYN_DEMO_AGENT_TOKEN" != "null"
 ```
 
-The service/admin API key and agent scoped token are separate capabilities. The agent token is short-lived and limited to the declared tool scope.
+The service/admin API key and scoped agent token are separate capabilities. The agent token is short-lived and limited to the declared tool scope.
 
 ## Part 3 — Run a clean session-bound context check
 
