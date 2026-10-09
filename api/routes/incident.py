@@ -68,10 +68,12 @@ async def set_agent_quarantine(agent_id: str, request: AgentQuarantineRequest) -
         )
     except (EvidenceStoreError, ValueError) as exc:
         raise HTTPException(status_code=503, detail="Evidence recording unavailable; quarantine unchanged") from exc
-    revoked = identity_manager.revoke_agent_tokens(agent_id) if request.quarantined else 0
     state = get_incident_response_manager().set_agent_quarantine(
         agent_id, request.quarantined, actor, request.reason
     )
+    # Persist containment first: if token revocation then fails, the execution
+    # boundary still blocks the quarantined agent.
+    revoked = identity_manager.revoke_agent_tokens(agent_id) if request.quarantined else 0
     evidence_status = "complete"
     try:
         await record_evidence(
