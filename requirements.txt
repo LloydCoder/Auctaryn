@@ -1,6 +1,7 @@
 # TwinGuard — Python Dependencies
 
 # Core
+cryptography==50.0.2  # Ed25519 publisher-signature verification
 fastapi==0.143.0
 starlette==1.7.0
 uvicorn[standard]==0.34.2
