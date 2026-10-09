@@ -60,6 +60,12 @@ Auctaryn includes a verified single-host SQLite backup and restore utility for i
 
 This is not a complete enterprise DR service: off-host/immutable backup retention, backup monitoring, approved RPO/RTO, scheduled restore drills, multi-replica coordination and durable identity/approval state remain production gates.
 
+## Operator dashboard and rollback
+
+The administrator dashboard includes an **Incidents & Evidence** view for server-authorized emergency-stop status, incident alerts, bounded evidence metadata and evidence-chain verification. The backend remains the authorization boundary; hiding a dashboard tab is not access control. See the [operator dashboard and deployment rollback runbook](docs/DEPLOYMENT_ROLLBACK.md).
+
+Deployments record the running container's immutable image ID before rebuilding. On the deployment host, `bash scripts/rollback.sh` restores that recorded image and requires liveness/readiness checks. CI validates the rollback script and tests guarded rollback paths with mocked Docker commands. A CI mock is not a production-host rollback drill; verify readiness and runtime policy before restoring public traffic.
+
 ## Enterprise authorization boundary
 
 See [`docs/API_AUTHORIZATION_MATRIX.md`](docs/API_AUTHORIZATION_MATRIX.md) for service/admin route permissions. Direct execution is disabled by default; controlled local execution requires `AUCTARYN_ALLOW_DIRECT_EXECUTION=true` plus the distinct administrator credential. In the Platform-integrated production profile, keep it disabled.
