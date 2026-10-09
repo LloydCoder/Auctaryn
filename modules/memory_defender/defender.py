@@ -221,6 +221,8 @@ class MemoryDefender:
     def create_session(self, agent_id: str) -> str:
         if not isinstance(agent_id, str) or not agent_id or len(agent_id) > MAX_MEMORY_AGENT_ID_CHARS:
             raise ValueError("agent_id must contain 1–128 characters")
+        if any(ord(char) < 32 or ord(char) == 127 for char in agent_id):
+            raise ValueError("agent_id contains control characters")
         with self._session_lock:
             if len(self._sessions) >= MAX_MEMORY_SESSIONS:
                 raise ValueError("memory session capacity reached")
