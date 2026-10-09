@@ -33,6 +33,7 @@ jobs:
         uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:
           category: "/language:python-javascript"
+          post-processed-sarif-path: results
       - name: Fail on high or critical CodeQL findings
         if: success()
         run: python scripts/audit_codeql_sarif.py --fail-severity high results/*.sarif
