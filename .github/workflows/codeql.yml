@@ -33,3 +33,14 @@ jobs:
         uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:
           category: "/language:python-javascript"
+      - name: Fail on high or critical CodeQL findings
+        if: success()
+        run: python scripts/audit_codeql_sarif.py --fail-severity high results/*.sarif
+      - name: Retain SARIF reports for forensic review
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: codeql-sarif
+          path: results/*.sarif
+          if-no-files-found: warn
+          retention-days: 14
