@@ -52,7 +52,7 @@ if [ -n "$RUNNING_CONTAINER" ]; then
         exit 1
     fi
     STATE_TMP="$DEPLOY_STATE_DIR/previous-image-id.tmp"
-    printf '%s\\n' "$PREVIOUS_IMAGE_ID" > "$STATE_TMP"
+    printf '%s\n' "$PREVIOUS_IMAGE_ID" > "$STATE_TMP"
     chmod 600 "$STATE_TMP"
     mv -f "$STATE_TMP" "$DEPLOY_STATE_DIR/previous-image-id"
 fi
