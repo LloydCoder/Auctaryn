@@ -70,13 +70,23 @@ jobs:
           artifact-name: auctaryn-container-sbom
           upload-artifact: false
           upload-release-assets: false
-      - name: Scan container image for known vulnerabilities
+      - name: Block fixable high and critical container vulnerabilities
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
         with:
           image: auctaryn:ci
           fail-build: true
           severity-cutoff: high
+          only-fixed: true
           output-format: table
+      - name: Record complete container vulnerability inventory
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
+        with:
+          image: auctaryn:ci
+          fail-build: false
+          severity-cutoff: critical
+          only-fixed: false
+          output-format: json
+          output-file: grype-full.json
       - name: Export exact CI image for provenance
         run: docker save --output auctaryn-image.tar auctaryn:ci
       - name: Upload SBOMs and tested image
@@ -86,6 +96,7 @@ jobs:
           path: |
             auctaryn-source.spdx.json
             auctaryn-container.spdx.json
+            grype-full.json
             auctaryn-image.tar
           if-no-files-found: error
           retention-days: 14
