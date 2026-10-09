@@ -115,8 +115,9 @@ def classify_by_pattern(tool_name: str, action: str, parameters: dict) -> RiskLe
 
 class RiskClassifier:
     """
-    Full risk classifier combining pattern matching with confidence scoring.
-    Phase 2 will add Claude API semantic classification for ambiguous cases.
+    Deterministic risk classifier combining explicit patterns with confidence scoring.
+    Unrecognized actions remain low-confidence and require operator review; optional
+    semantic enrichment must never silently override this local safety decision.
     """
 
     def classify(self, tool_call: ToolCall) -> ActionClassification:
