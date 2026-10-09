@@ -130,61 +130,62 @@ class EvidenceStore:
     def _append_sync(self, event_type: str, *, correlation_id: str = "", actor_id: str = "",
                      tenant_id: str = "", decision_id: str = "", execution_id: str = "",
                      outcome: str = "", details: dict[str, Any] | None = None) -> dict[str, Any]:
-        event_type = self._text(event_type, 96)
-        if not event_type or any(ord(ch) < 32 for ch in event_type):
-            raise ValueError("event_type must be a printable non-empty value")
-        details = details or {}
-        if not isinstance(details, dict) or len(details) > 32:
-            raise ValueError("details must be an object with at most 32 fields")
-        safe_details: dict[str, Any] = {}
-        for key, value in details.items():
-            safe_key = self._text(key, 64)
-            if safe_key not in ALLOWED_DETAIL_KEYS:
-                raise ValueError("detail key is not in the evidence allowlist")
-            if safe_key in {"action_fingerprint", "receipt_hash"}:
-                if not isinstance(value, str) or len(value) != 64 or any(ch not in "0123456789abcdef" for ch in value.lower()):
-                    raise ValueError("fingerprint details must be 64 hexadecimal characters")
-                safe_details[safe_key] = value.lower()
-            elif safe_key in {"decision", "risk_level", "runtime_adapter"}:
-                if not isinstance(value, str) or len(value) > 128 or any(ord(ch) < 32 for ch in value):
-                    raise ValueError("classification details must be short printable strings")
-                safe_details[safe_key] = self._text(value, 128)
-            elif safe_key == "confidence":
-                if not isinstance(value, (int, float)) or isinstance(value, bool) or not 0.0 <= float(value) <= 1.0:
-                    raise ValueError("confidence must be between zero and one")
-                safe_details[safe_key] = float(value)
-            else:
-                raise ValueError("unsupported evidence detail")
-        occurred_at = datetime.now(timezone.utc).isoformat()
-        payload = {
-            "schema": "auctaryn.evidence-record.v1", "record_id": uuid4().hex,
-            "occurred_at": occurred_at, "event_type": event_type,
-            "correlation_id": self._identifier(correlation_id), "actor_id": self._identifier(actor_id),
-            "tenant_id": self._identifier(tenant_id), "decision_id": self._identifier(decision_id),
-            "execution_id": self._identifier(execution_id), "outcome": self._text(outcome, 96),
-            "details": safe_details,
-            "provenance": {"producer": "auctaryn", "source": "application_event"},
-        }
-        serialized = canonical_json(payload).decode("utf-8")
-        try:
-            with closing(self._connect()) as db:
-                db.execute("BEGIN IMMEDIATE")
-                row = db.execute("SELECT record_hash FROM evidence_records ORDER BY sequence DESC LIMIT 1").fetchone()
-                previous_hash = row["record_hash"] if row else ZERO_HASH
-                digest = hashlib.sha256(previous_hash.encode("ascii") + bytes([10]) + serialized.encode("utf-8")).hexdigest()
-                signature = self._signature(digest)
-                cursor = db.execute(
-                    """INSERT INTO evidence_records
-                    (record_id, occurred_at, event_type, payload_json, previous_hash, record_hash, hmac_signature)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (payload["record_id"], occurred_at, event_type, serialized, previous_hash, digest, signature),
-                )
-                sequence = int(cursor.lastrowid)
-                db.commit()
-            return {"sequence": sequence, **payload, "previous_hash": previous_hash,
-                    "record_hash": digest, "hmac_signature": signature, "integrity_mode": self.integrity_mode}
-        except (sqlite3.Error, OSError) as exc:
-            raise EvidenceStoreError("Evidence append failed") from exc
+        with _initialization_lock(self.path):
+            event_type = self._text(event_type, 96)
+            if not event_type or any(ord(ch) < 32 for ch in event_type):
+                raise ValueError("event_type must be a printable non-empty value")
+            details = details or {}
+            if not isinstance(details, dict) or len(details) > 32:
+                raise ValueError("details must be an object with at most 32 fields")
+            safe_details: dict[str, Any] = {}
+            for key, value in details.items():
+                safe_key = self._text(key, 64)
+                if safe_key not in ALLOWED_DETAIL_KEYS:
+                    raise ValueError("detail key is not in the evidence allowlist")
+                if safe_key in {"action_fingerprint", "receipt_hash"}:
+                    if not isinstance(value, str) or len(value) != 64 or any(ch not in "0123456789abcdef" for ch in value.lower()):
+                        raise ValueError("fingerprint details must be 64 hexadecimal characters")
+                    safe_details[safe_key] = value.lower()
+                elif safe_key in {"decision", "risk_level", "runtime_adapter"}:
+                    if not isinstance(value, str) or len(value) > 128 or any(ord(ch) < 32 for ch in value):
+                        raise ValueError("classification details must be short printable strings")
+                    safe_details[safe_key] = self._text(value, 128)
+                elif safe_key == "confidence":
+                    if not isinstance(value, (int, float)) or isinstance(value, bool) or not 0.0 <= float(value) <= 1.0:
+                        raise ValueError("confidence must be between zero and one")
+                    safe_details[safe_key] = float(value)
+                else:
+                    raise ValueError("unsupported evidence detail")
+            occurred_at = datetime.now(timezone.utc).isoformat()
+            payload = {
+                "schema": "auctaryn.evidence-record.v1", "record_id": uuid4().hex,
+                "occurred_at": occurred_at, "event_type": event_type,
+                "correlation_id": self._identifier(correlation_id), "actor_id": self._identifier(actor_id),
+                "tenant_id": self._identifier(tenant_id), "decision_id": self._identifier(decision_id),
+                "execution_id": self._identifier(execution_id), "outcome": self._text(outcome, 96),
+                "details": safe_details,
+                "provenance": {"producer": "auctaryn", "source": "application_event"},
+            }
+            serialized = canonical_json(payload).decode("utf-8")
+            try:
+                with closing(self._connect()) as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    row = db.execute("SELECT record_hash FROM evidence_records ORDER BY sequence DESC LIMIT 1").fetchone()
+                    previous_hash = row["record_hash"] if row else ZERO_HASH
+                    digest = hashlib.sha256(previous_hash.encode("ascii") + bytes([10]) + serialized.encode("utf-8")).hexdigest()
+                    signature = self._signature(digest)
+                    cursor = db.execute(
+                        """INSERT INTO evidence_records
+                        (record_id, occurred_at, event_type, payload_json, previous_hash, record_hash, hmac_signature)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (payload["record_id"], occurred_at, event_type, serialized, previous_hash, digest, signature),
+                    )
+                    sequence = int(cursor.lastrowid)
+                    db.commit()
+                return {"sequence": sequence, **payload, "previous_hash": previous_hash,
+                        "record_hash": digest, "hmac_signature": signature, "integrity_mode": self.integrity_mode}
+            except (sqlite3.Error, OSError) as exc:
+                raise EvidenceStoreError("Evidence append failed") from exc
 
     async def append(self, event_type: str, **kwargs: Any) -> dict[str, Any]:
         await self.initialize()
