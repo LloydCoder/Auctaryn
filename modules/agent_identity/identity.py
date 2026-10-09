@@ -63,6 +63,7 @@ class AgentIdentityManager:
     def __init__(self):
         self._identities: dict[str, AgentIdentity] = {}
         self._tokens: dict[str, ScopedToken] = {}
+        self._last_token_prune_at = datetime.now(timezone.utc)
 
     # --- Identity registration ---
 
@@ -171,11 +172,19 @@ class AgentIdentityManager:
         for token_id, token in list(self._tokens.items()):
             if token.revoked or current >= token.expires_at:
                 self._tokens.pop(token_id, None)
+        self._last_token_prune_at = current
+
+    def _prune_tokens_if_needed(self, now: datetime | None = None) -> None:
+        """Avoid an O(n) token scan on every issuance while pruning at capacity or periodically."""
+        current = now or datetime.now(timezone.utc)
+        age = (current - self._last_token_prune_at).total_seconds()
+        if len(self._tokens) >= MAX_AGENT_TOKENS or age >= 60:
+            self._prune_tokens(current)
 
     # --- Time-scoped tokens ---
 
     def issue_token(self, agent_id: str, ttl_seconds: int = 300, scopes: list[str] | None = None) -> ScopedToken:
-        self._prune_tokens()
+        self._prune_tokens_if_needed()
         identity = self._identities.get(agent_id)
         if identity is None:
             raise PolicyViolation("unknown_agent", agent_id)
@@ -256,7 +265,7 @@ class AgentIdentityManager:
         direct fix for OWASP's confused-deputy example: "Manager delegates
         task, full admin access persists."
         """
-        self._prune_tokens()
+        self._prune_tokens_if_needed()
         if not isinstance(scopes, list) or not 1 <= len(scopes) <= MAX_SCOPES_PER_TOKEN:
             raise PolicyViolation("invalid_delegation_scopes", "Delegation must contain 1–100 scopes")
         if any(not isinstance(scope, str) or not scope.strip() or len(scope) > 256 for scope in scopes):
