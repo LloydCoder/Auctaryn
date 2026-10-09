@@ -35,46 +35,46 @@ class TestGatewayAPI:
         assert r.json()["risk_level"] == "critical"
 
     def test_intercept_safe_auto_approved(self, client):
-        self._register_scope(client, "search-agent", "search_web")
+        token_id = self._register_scope(client, "search-agent", "search_web")
         r = client.post("/api/v1/gateway/intercept", json={
             "tool_name": "search_web", "action": "search",
-            "parameters": {"query": "weather today"}, "agent_id": "search-agent"
+            "parameters": {"query": "weather today"}, "agent_id": "search-agent", "identity_token": token_id
         })
         assert r.status_code == 200
         assert r.json()["decision"] == "approved"
 
     def test_intercept_critical_vetoed(self, client):
-        self._register_scope(client, "policy-agent", "modify_policy")
+        token_id = self._register_scope(client, "policy-agent", "modify_policy")
         r = client.post("/api/v1/gateway/intercept", json={
-            "tool_name": "modify_policy", "action": "update", "agent_id": "policy-agent"
+            "tool_name": "modify_policy", "action": "update", "agent_id": "policy-agent", "identity_token": token_id
         })
         assert r.status_code == 200
         assert r.json()["decision"] == "vetoed"
 
     def test_intercept_destructive_pending(self, client):
-        self._register_scope(client, "delete-email-agent", "delete_emails")
+        token_id = self._register_scope(client, "delete-email-agent", "delete_emails")
         r = client.post("/api/v1/gateway/intercept", json={
             "tool_name": "delete_emails", "action": "bulk_delete",
-            "parameters": {"count": 500, "folder": "inbox"}, "agent_id": "delete-email-agent"
+            "parameters": {"count": 500, "folder": "inbox"}, "agent_id": "delete-email-agent", "identity_token": token_id
         })
         assert r.status_code == 200
         assert r.json()["decision"] == "pending"
 
     def test_pending_queue_populated(self, client):
-        self._register_scope(client, "delete-file-agent", "delete_file")
+        token_id = self._register_scope(client, "delete-file-agent", "delete_file")
         client.post("/api/v1/gateway/intercept", json={
             "tool_name": "delete_file", "action": "delete",
-            "parameters": {"path": "/important.db"}, "agent_id": "delete-file-agent"
+            "parameters": {"path": "/important.db"}, "agent_id": "delete-file-agent", "identity_token": token_id
         })
         r = client.get("/api/v1/gateway/pending")
         assert r.status_code == 200
         assert len(r.json()) >= 1
 
     def test_approve_pending_action(self, client):
-        self._register_scope(client, "approve-delete-agent", "delete_file")
+        token_id = self._register_scope(client, "approve-delete-agent", "delete_file")
         # First create a pending action
         r = client.post("/api/v1/gateway/intercept", json={
-            "tool_name": "delete_file", "action": "delete", "agent_id": "approve-delete-agent"
+            "tool_name": "delete_file", "action": "delete", "agent_id": "approve-delete-agent", "identity_token": token_id
         })
         decision_id = r.json()["id"]
 
