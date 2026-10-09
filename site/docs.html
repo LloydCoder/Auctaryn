@@ -70,7 +70,7 @@
 
   <main class="docs-content">
     <h2 id="quickstart">Quickstart</h2>
-    <p>Clone the repo, install dependencies, and run the full test suite to confirm your environment.</p>
+    <p>Clone the repo, configure distinct high-entropy service and administrator credentials, and run the test suite. Every <code>/api/v1/*</code> route requires a Bearer credential; administrative operations require the administrator key. Runtime action requests additionally require a registered agent and a valid scoped agent token.</p>
     <div class="code-block"><pre>git clone https://github.com/LloydCoder/Auctaryn.git
 cd Auctaryn
 python -m pip install -r requirements.txt
