@@ -46,7 +46,7 @@ npm run dev -- --host 0.0.0.0
 
 ## Implementation roadmap
 
-Auctaryn follows a serial 24-phase security and enterprise-readiness roadmap with explicit CI and forensic acceptance gates. See [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) for phase status and known limitations. A green CI run is necessary but does not certify live runtime security or production readiness.
+Auctaryn follows a serial 24-phase security and enterprise-readiness roadmap with explicit CI and forensic acceptance gates. See [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) for phase status and known limitations, the [forensic audit index](audits/README.md) for all 24 phase reports, and the [final repository-wide audit](audits/FINAL-REPOSITORY-FORENSIC-AUDIT.md) for the cross-phase review. A green CI run is necessary but does not certify live runtime security or production readiness.
 
 ## Tinlance Agent Platform integration
 
