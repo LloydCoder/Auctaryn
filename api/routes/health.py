@@ -40,7 +40,7 @@ async def _runtime_probe_status() -> dict:
     error = None
 
     if not configured:
-        error = "No trusted runtime adapter is configured."
+        error = "Trusted runtime adapter is not configured."
     elif not available:
         error = "Configured runtime adapter has no health probe."
     else:
@@ -93,7 +93,7 @@ async def detailed_health() -> SystemHealth:
         ModuleHealth(
             name="openshell_runtime",
             status=runtime_status,
-            error_message=runtime["error_message"],
+            error_message=runtime["error_message"] or "",
             uptime_seconds=time.time() - _start_time,
         ),
     ]
