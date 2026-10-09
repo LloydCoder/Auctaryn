@@ -1,4 +1,4 @@
-name: Temporary dashboard lockfile bootstrap
+name: Temporary dependency lockfile bootstrap
 
 on:
   push:
@@ -8,11 +8,28 @@ permissions:
   contents: read
 
 jobs:
-  generate-lockfile:
+  generate-lockfiles:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Compile hash-locked Python dependency graph
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check pip-tools==7.5.2
+          pip-compile --generate-hashes --resolver=backtracking --output-file=requirements.lock requirements.txt
+          python - <<'PY'
+          import base64
+          from pathlib import Path
+          data = base64.b64encode(Path("requirements.lock").read_bytes()).decode("ascii")
+          print("PYLOCK_SIZE=" + str(len(data)))
+          for offset in range(0, len(data), 3000):
+              print(f"PYLOCK_B64_{offset // 3000:04d}=" + data[offset:offset + 3000])
+          PY
       - name: Set up Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
@@ -27,7 +44,7 @@ jobs:
           import base64
           from pathlib import Path
           data = base64.b64encode(Path("package-lock.json").read_bytes()).decode("ascii")
-          print("LOCKFILE_SIZE=" + str(len(data)))
+          print("NPMLOCK_SIZE=" + str(len(data)))
           for offset in range(0, len(data), 3000):
-              print(f"LOCKFILE_B64_{offset // 3000:04d}=" + data[offset:offset + 3000])
+              print(f"NPMLOCK_B64_{offset // 3000:04d}=" + data[offset:offset + 3000])
           PY
