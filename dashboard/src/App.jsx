@@ -174,6 +174,19 @@ export default function App() {
                 aria-selected={isActive}
                 aria-controls="dashboard-tabpanel"
                 onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(event) => {
+                  const tabs = Array.from(event.currentTarget.parentElement.querySelectorAll('[role="tab"]'))
+                  const index = tabs.indexOf(event.currentTarget)
+                  let next = index
+                  if (event.key === 'ArrowRight') next = (index + 1) % tabs.length
+                  else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length
+                  else if (event.key === 'Home') next = 0
+                  else if (event.key === 'End') next = tabs.length - 1
+                  else return
+                  event.preventDefault()
+                  tabs[next].focus()
+                  tabs[next].click()
+                }}
                 className={`flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-400 ${
                   isActive
                     ? 'border-emerald-400 text-emerald-400'
