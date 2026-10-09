@@ -22,6 +22,7 @@ def _passed_evidence() -> dict:
         gate.update({
             "status": "passed",
             "evidence_ref": f"evidence://{name}/review",
+            "evidence_sha256": "c" * 64,
             "reviewer": "security-owner",
             "reviewed_at": "2026-10-09T12:00:00Z",
         })
@@ -53,6 +54,7 @@ def test_open_high_finding_and_digest_mismatch_block_production_acceptance() -> 
     post["deployed_digest_verification"].update({
         "status": "passed",
         "evidence_ref": "evidence://deployment/digest-check",
+        "evidence_sha256": "e" * 64,
         "reviewer": "release-operator",
         "reviewed_at": "2026-10-09T12:00:00Z",
         "expected_digest": "sha256:" + "c" * 64,
@@ -61,6 +63,7 @@ def test_open_high_finding_and_digest_mismatch_block_production_acceptance() -> 
     post["rollback_drill"].update({
         "status": "passed",
         "evidence_ref": "evidence://deployment/rollback",
+        "evidence_sha256": "f" * 64,
         "reviewer": "release-operator",
         "reviewed_at": "2026-10-09T12:00:00Z",
     })
@@ -117,4 +120,12 @@ def test_passed_gate_requires_timezone_aware_review_timestamp() -> None:
     errors = validate_release_evidence(evidence, require_passed=True)
     assert any("reviewed_at must include a timezone" in error for error in errors)
 
+
+
+
+def test_passed_gate_requires_evidence_integrity_hash() -> None:
+    evidence = _passed_evidence()
+    evidence["pre_release_gates"]["platform_conformance"]["evidence_sha256"] = ""
+    errors = validate_release_evidence(evidence, require_passed=True)
+    assert any("platform_conformance.evidence_sha256" in error for error in errors)
 
