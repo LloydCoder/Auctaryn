@@ -84,9 +84,9 @@ def test_supply_chain_workflow_has_required_controls() -> None:
     assert "curl" not in dockerfile
     assert "fail-build: true" in supply
     assert "actions/attest@" in supply
-    assert f"actions/upload-artifact@{ "cf430e030ddbb5b0abf93d22962f4752f3646cd9" }" in supply
-    assert f"actions/upload-artifact@{ "cf430e030ddbb5b0abf93d22962f4752f3646cd9" }" in codeql
-    assert f"actions/download-artifact@{ "9000827ccba6bdab643e8b6fd33ac0654aef8333" }" in supply
+    assert "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9" in supply
+    assert "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9" in codeql
+    assert "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333" in supply
     assert "attestations: write" in supply
     assert "security-extended" in codeql
     assert "python,javascript-typescript" in codeql
