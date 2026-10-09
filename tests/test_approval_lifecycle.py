@@ -58,3 +58,12 @@ def test_decision_ids_have_sufficient_entropy_for_references():
 def test_pending_approval_ttl_must_be_positive():
     with pytest.raises(ValueError, match="pending_ttl_seconds must be positive"):
         ExecutionGateway(pending_ttl_seconds=0)
+
+def test_gateway_status_does_not_report_expired_approvals_as_pending():
+    gateway, decision = _pending_gateway(ttl_seconds=60)
+    decision.timestamp = datetime.now(timezone.utc) - timedelta(seconds=61)
+
+    status = gateway.get_status()
+
+    assert status["pending_approvals"] == 0
+    assert gateway.history[0].decision == ActionDecision.TIMEOUT
