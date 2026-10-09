@@ -214,6 +214,21 @@ class MemoryStore:
         )
         return True
 
+    def delete_session_entries(self, session_id: str, quarantined_only: bool = True) -> int:
+        """Remove expired-session quarantine entries and update the aggregate budget."""
+        removed = 0
+        with self._lock:
+            for key, entry in list(self._entries.items()):
+                if entry.session_id != session_id or (quarantined_only and not entry.quarantined):
+                    continue
+                trusted_snapshot = self._last_known_good.pop(key, None)
+                self._entries.pop(key, None)
+                self._total_chars = max(
+                    0, self._total_chars - len(trusted_snapshot.content if trusted_snapshot else entry.content)
+                )
+                removed += 1
+        return removed
+
     def __len__(self) -> int:
         with self._lock:
             return len(self._entries)
@@ -240,6 +255,7 @@ class MemoryDefender:
             for expired_id, session in list(self._sessions.items()):
                 if now >= session.expires_at:
                     del self._sessions[expired_id]
+                    self.store.delete_session_entries(expired_id, quarantined_only=True)
             if len(self._sessions) >= MAX_MEMORY_SESSIONS:
                 raise ValueError("memory session capacity reached")
             session_id = uuid.uuid4().hex
@@ -258,6 +274,7 @@ class MemoryDefender:
                 return False
             if datetime.now(timezone.utc) >= session.expires_at:
                 del self._sessions[session_id]
+                self.store.delete_session_entries(session_id, quarantined_only=True)
                 return False
             if session.agent_id != agent_id:
                 return False
