@@ -22,11 +22,15 @@ class FakeOpenShellClient:
         return SimpleNamespace(exit_code=self.exit_code, stdout=self.stdout, stderr=self.stderr)
 
 
-def _tool_call(argv=None, tool_name="openshell_exec", action="exec"):
+_DEFAULT_ARGV = object()
+
+
+def _tool_call(argv=_DEFAULT_ARGV, tool_name="openshell_exec", action="exec"):
+    selected_argv = ["python", "-c", "print('ok')"] if argv is _DEFAULT_ARGV else argv
     return ToolCall(
         tool_name=tool_name,
         action=action,
-        parameters={"argv": argv if argv is not None else ["python", "-c", "print('ok')"]},
+        parameters={"argv": selected_argv},
         agent_id="openshell-test-agent",
     )
 
