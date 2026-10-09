@@ -37,8 +37,11 @@ async def run_scenario(request: ScenarioRequest) -> ThreatFadeResult:
     """Run a named demo scenario against the live FusionOps engine."""
     try:
         return await get_oracle().run_scenario(request.scenario)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ThreatFadeConnectionError as exc:
+        logger.warning("ThreatFade scenario service unavailable", extra={"error_type": type(exc).__name__})
+        raise HTTPException(status_code=502, detail="ThreatFade scenario service unavailable") from exc
 
 
 @router.post("/analyze")
