@@ -114,6 +114,13 @@ class TestFusionOpsClient:
         client = FusionOpsClient(base_url="https://fusionops.example.test")
         assert client.base_url == "https://fusionops.example.test"
 
+    def test_client_rejects_plaintext_external_endpoint_and_embedded_credentials(self):
+        from modules.threatfade_oracle.client import FusionOpsClient
+        with pytest.raises(ValueError):
+            FusionOpsClient(base_url="http://external.example.test")
+        with pytest.raises(ValueError):
+            FusionOpsClient(base_url="https://user:password@fusionops.example.test")
+
     def test_client_default_url(self):
         from modules.threatfade_oracle.client import FusionOpsClient
         client = FusionOpsClient()
