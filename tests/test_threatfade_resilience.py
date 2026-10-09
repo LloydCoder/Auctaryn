@@ -160,3 +160,36 @@ def test_pcap_ingress_limit_rejects_body_before_multipart_parsing(client, monkey
         headers={"Content-Type": "application/octet-stream"},
     )
     assert response.status_code == 413
+
+
+
+def test_pcap_ingress_limit_counts_chunked_body_without_content_length(monkeypatch):
+    import asyncio
+    import api.main as main_module
+
+    monkeypatch.setattr(main_module, "PCAP_UPLOAD_REQUEST_LIMIT", 3)
+    middleware = main_module.PCAPUploadBodyLimitMiddleware
+    messages = iter([
+        {"type": "http.request", "body": b"ab", "more_body": True},
+        {"type": "http.request", "body": b"cd", "more_body": False},
+    ])
+    sent = []
+
+    async def fake_app(scope, receive, send):
+        while True:
+            message = await receive()
+            if message["type"] == "http.request" and not message.get("more_body", False):
+                break
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok", "more_body": False})
+
+    async def receive():
+        return next(messages)
+
+    async def send(message):
+        sent.append(message)
+
+    asyncio.run(middleware(fake_app)({
+        "type": "http", "method": "POST", "path": "/api/v1/threatfade/analyze", "headers": [],
+    }, receive, send))
+    assert sent[0]["status"] == 413
