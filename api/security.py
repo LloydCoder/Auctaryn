@@ -33,7 +33,9 @@ def credentials_are_strong() -> bool:
         return False
     placeholders = ("replace-with", "change-me", "changeme", "password", "example")
     return all(
-        len(key) >= 32 and not any(marker in key.lower() for marker in placeholders)
+        len(key) >= 32
+        and len(set(key)) >= 12
+        and not any(marker in key.lower() for marker in placeholders)
         for key in (service_key, admin_key)
     )
 
