@@ -35,7 +35,7 @@ jobs:
           pip install ruff
           ruff check --select E4,E7,E9,F core/ api/ modules/
 
-  docker:
+  dashboard-and-container:
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
@@ -43,12 +43,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker image
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build dashboard
+        working-directory: dashboard
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Validate Compose configuration
+        env:
+          AUCTARYN_API_KEY: ci-service-key-that-is-long-enough
+          AUCTARYN_ADMIN_API_KEY: ci-admin-key-that-is-different
+          THREATFADE_SERVICE_URL: https://threatfade.example.invalid
+        run: docker compose config --quiet
+
+      - name: Build API image
         run: docker build -t auctaryn:latest .
 
-      - name: Verify container starts
+      - name: Verify API liveness
         run: |
-          docker run -d --name auctaryn-test -p 8400:8400 twinguard:latest
+          docker run -d --name auctaryn-test -p 127.0.0.1:8400:8400 auctaryn:latest
           sleep 5
-          curl -f http://localhost:8400/health || exit 1
+          curl -f http://127.0.0.1:8400/health
           docker stop auctaryn-test
