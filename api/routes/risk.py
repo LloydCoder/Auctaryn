@@ -10,7 +10,7 @@ from typing import Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from api.routes.gateway import require_api_key
 from core.models import RiskLevel, ToolCall
@@ -23,6 +23,9 @@ CONTRACT_VERSION = "auctaryn-risk-assessment.v1"
 
 
 class RiskAssessmentRequest(BaseModel):
+    # Tenant identity is Platform-authenticated context, not caller-supplied risk metadata.
+    model_config = ConfigDict(extra="forbid")
+
     tool_name: str = Field(min_length=1, max_length=128)
     action: str = Field(min_length=1, max_length=256)
     parameters: dict = Field(default_factory=dict)
