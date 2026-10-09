@@ -37,7 +37,7 @@ The full Auctaryn CI workflow passed on implementation commit `ae969221610586a64
 - API container build: passed.
 - Container liveness check: passed.
 
-The final documentation/status commit must also pass the required workflow before this PR is merged.
+The final documentation/status commit `16168a61d4da4bdeb2b1bff1c474d53c197324cc` also passed the complete required workflow in [CI run 421](https://github.com/LloydCoder/Auctaryn/actions/runs/37930536422); all three jobs completed successfully.
 
 ## Residual risks and explicit non-claims
 
