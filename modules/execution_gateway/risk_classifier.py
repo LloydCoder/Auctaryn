@@ -67,8 +67,17 @@ def _has_bulk_parameters(parameters: dict) -> bool:
     return False
 
 
+def _is_recognized_action(tool_name: str, action: str) -> bool:
+    """Return whether a tool/action pair matches an explicit policy pattern."""
+    for patterns in (CRITICAL_PATTERNS, DESTRUCTIVE_PATTERNS, MODERATE_PATTERNS, SAFE_PATTERNS):
+        if any(_matches(tool_name, action, tool_pattern, action_pattern)
+               for tool_pattern, action_pattern in patterns):
+            return True
+    return False
+
+
 def classify_by_pattern(tool_name: str, action: str, parameters: dict) -> RiskLevel:
-    """Fast pattern-based classification. No external calls."""
+    """Fast pattern-based classification. Unknown actions remain non-approved."""
     # Critical first — always block these
     for tp, ap in CRITICAL_PATTERNS:
         if _matches(tool_name, action, tp, ap):
@@ -97,7 +106,8 @@ def classify_by_pattern(tool_name: str, action: str, parameters: dict) -> RiskLe
         if _matches(tool_name, action, tp, ap):
             return RiskLevel.SAFE
 
-    # Unknown — default to moderate (safe default: require log, not block)
+    # Unknown actions map to MODERATE for schema compatibility, but receive
+    # low confidence and are held for operator review by the VetoEngine.
     return RiskLevel.MODERATE
 
 
@@ -111,14 +121,26 @@ class RiskClassifier:
         risk_level = classify_by_pattern(
             tool_call.tool_name, tool_call.action, tool_call.parameters
         )
-        confidence, reason = self._score(tool_call, risk_level)
+        recognized = _is_recognized_action(
+            tool_call.tool_name, tool_call.action
+        ) or _has_bulk_parameters(tool_call.parameters)
+        if not recognized:
+            confidence = 0.35
+            reason = (
+                f"Unrecognized tool/action '{tool_call.tool_name}:{tool_call.action}'. "
+                "No explicit policy pattern matched; operator approval is required."
+            )
+            matched_pattern = "unrecognized"
+        else:
+            confidence, reason = self._score(tool_call, risk_level)
+            matched_pattern = f"{tool_call.tool_name}:{tool_call.action}"
 
         classification = ActionClassification(
             tool_call=tool_call,
             risk_level=risk_level,
             confidence=confidence,
             reason=reason,
-            matched_pattern=f"{tool_call.tool_name}:{tool_call.action}",
+            matched_pattern=matched_pattern,
         )
 
         logger.info(
@@ -155,7 +177,7 @@ class RiskClassifier:
         if risk_level == RiskLevel.MODERATE:
             return 0.80, (
                 f"Action '{tool}:{action}' is a write/create/update operation. "
-                "Logged and auto-approved."
+                "Operator approval is required before execution."
             )
 
         # SAFE
