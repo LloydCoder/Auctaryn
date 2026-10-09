@@ -267,3 +267,10 @@ def test_memory_provenance_rejects_control_characters():
     from modules.memory_defender.defender import MemoryDefender
     with pytest.raises(ValueError, match="control characters"):
         MemoryDefender().evaluate_for_storage("benign", source="untrusted\nsource")
+
+
+
+def test_memory_session_owner_rejects_control_characters():
+    from modules.memory_defender.defender import MemoryDefender
+    with pytest.raises(ValueError, match="control characters"):
+        MemoryDefender().create_session("agent\nforged")
