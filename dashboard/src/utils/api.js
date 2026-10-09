@@ -20,9 +20,14 @@ export async function validateAdminToken(token) {
 }
 
 async function request(path, options = {}) {
+  const { headers = {}, ...rest } = options
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}), ...options.headers },
-    ...options,
+    ...rest,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
+      ...headers,
+    },
   })
   if (!res.ok) throw new Error(`API error: ${res.status}`)
   return res.json()
@@ -68,3 +73,31 @@ export function connectAlertStream(onMessage) {
   ws.onmessage = (e) => onMessage(JSON.parse(e.data))
   return ws
 }
+
+
+// Incident response — these routes are administrator-only on the server.
+export const fetchIncidentStatus = () => request('/api/v1/incident/status')
+export const fetchIncidentAlerts = (status = '', limit = 100) => {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (status) params.set('status', status)
+  return request(`/api/v1/incident/alerts?${params.toString()}`)
+}
+export const setEmergencyStop = (enabled, reason) =>
+  request('/api/v1/incident/emergency-stop', {
+    method: 'POST',
+    body: JSON.stringify({ enabled, reason }),
+  })
+export const setAgentQuarantine = (agentId, quarantined, reason) =>
+  request(`/api/v1/incident/agents/${encodeURIComponent(agentId)}/quarantine`, {
+    method: 'POST',
+    body: JSON.stringify({ quarantined, reason }),
+  })
+export const transitionIncidentAlert = (alertId, action) =>
+  request(`/api/v1/incident/alerts/${encodeURIComponent(alertId)}/${action}`, {
+    method: 'POST',
+  })
+
+// Forensic evidence is rendered as bounded metadata, never as raw request payloads.
+export const fetchEvidenceRecords = (limit = 100) =>
+  request(`/api/v1/evidence/records?limit=${limit}`)
+export const verifyEvidenceChain = () => request('/api/v1/evidence/verify')
