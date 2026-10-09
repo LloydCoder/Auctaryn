@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from api.security import require_api_key, require_operator_key
 from api.routes.context import get_guardian
+from api.websockets.alerts import broadcast_alert
 
 from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision, action_intent_fingerprint
 from modules.execution_gateway.gateway import ExecutionGateway, ApprovalIntentIntegrityError
