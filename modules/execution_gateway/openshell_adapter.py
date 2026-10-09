@@ -151,12 +151,42 @@ def create_openshell_adapter_from_environment() -> OpenShellRuntimeAdapter | Non
     if not workspace:
         raise RuntimeAdapterUnavailable("OPENSHELL_WORKSPACE must be non-empty.")
 
-    try:
-        from openshell import SandboxClient
+    oidc_keys = (
+        "OPENSHELL_OIDC_ISSUER",
+        "OPENSHELL_OIDC_CLIENT_ID",
+        "OPENSHELL_OIDC_CLIENT_SECRET",
+        "OPENSHELL_OIDC_AUDIENCE",
+    )
+    configured_oidc = [bool(os.getenv(key, "").strip()) for key in oidc_keys]
+    if any(configured_oidc) and not all(configured_oidc):
+        raise RuntimeAdapterUnavailable(
+            "All OPENSHELL_OIDC_ISSUER, OPENSHELL_OIDC_CLIENT_ID, "
+            "OPENSHELL_OIDC_CLIENT_SECRET, and OPENSHELL_OIDC_AUDIENCE values are required together."
+        )
+    use_user_credentials = os.getenv("OPENSHELL_ALLOW_USER_CREDENTIALS", "").lower() == "true"
+    if not all(configured_oidc) and not use_user_credentials:
+        raise RuntimeAdapterUnavailable(
+            "Configure OpenShell OIDC service credentials; user credentials require "
+            "OPENSHELL_ALLOW_USER_CREDENTIALS=true and are intended only for local development."
+        )
 
-        client_context = SandboxClient.from_active_cluster()
+    try:
+        from openshell import ClientCredentialsAuth, SandboxClient
+
+        if all(configured_oidc):
+            auth = ClientCredentialsAuth(
+                issuer=os.environ["OPENSHELL_OIDC_ISSUER"],
+                client_id=os.environ["OPENSHELL_OIDC_CLIENT_ID"],
+                client_secret=lambda: os.environ["OPENSHELL_OIDC_CLIENT_SECRET"],
+                audience=os.environ["OPENSHELL_OIDC_AUDIENCE"],
+            )
+            client_context = SandboxClient.from_active_cluster(client_credentials=auth)
+        else:
+            client_context = SandboxClient.from_active_cluster()
         client = client_context.__enter__()
-        client.health()
+        health = client.health()
+        if not getattr(health, "version", None):
+            raise RuntimeError("OpenShell health response did not include a version.")
     except Exception as exc:
         try:
             client_context.__exit__(type(exc), exc, exc.__traceback__)
