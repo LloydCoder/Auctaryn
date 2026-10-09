@@ -4,7 +4,7 @@ Evaluates agent actions and records enforceable decisions before execution.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from core.models import (
     ToolCall, GatewayDecision, ActionDecision, ActionClassification,
@@ -13,13 +13,19 @@ from core.models import (
 from core.logging import get_logger
 from modules.execution_gateway.risk_classifier import RiskClassifier
 from modules.execution_gateway.veto_engine import VetoEngine
+from modules.execution_gateway.data_guard import SensitiveDataGuard
 
 logger = get_logger("execution_gateway")
 
 
 class ExecutionGateway:
     def __init__(self, auto_approve_safe: bool = True, oracle=None,
-                 identity_manager=None, circuit_breaker=None):
+                 identity_manager=None, circuit_breaker=None,
+                 pending_ttl_seconds: int = 900):
+        if pending_ttl_seconds < 1:
+            raise ValueError("pending_ttl_seconds must be positive")
+        self.pending_ttl_seconds = pending_ttl_seconds
+        self.data_guard = SensitiveDataGuard()
         self.classifier = RiskClassifier()
         self.veto_engine = VetoEngine(auto_approve_safe=auto_approve_safe)
         self.history: list[GatewayDecision] = []
@@ -37,7 +43,7 @@ class ExecutionGateway:
         if self.circuit_breaker is not None:
             if not agent_id or self.circuit_breaker.is_open(agent_id):
                 return GatewayDecision(
-                    id=uuid.uuid4().hex[:12],
+                    id=uuid.uuid4().hex,
                     tool_call=tool_call,
                     risk_level=RiskLevel.CRITICAL,
                     decision=ActionDecision.DENIED,
@@ -48,7 +54,7 @@ class ExecutionGateway:
         if self.identity_manager is not None:
             if not agent_id or not self.identity_manager.is_authorized(agent_id, tool_call.tool_name, token_id=tool_call.identity_token, require_token=True):
                 return GatewayDecision(
-                    id=uuid.uuid4().hex[:12],
+                    id=uuid.uuid4().hex,
                     tool_call=tool_call,
                     risk_level=RiskLevel.CRITICAL,
                     decision=ActionDecision.DENIED,
@@ -64,11 +70,11 @@ class ExecutionGateway:
         self.history.append(decision)
         self.total_processed += 1
         self.total_vetoed += 1
-        self._record_breaker_outcome(decision.tool_call.agent_id, success=False)
         return decision
 
     def evaluate(self, tool_call: ToolCall) -> GatewayDecision:
         """Evaluate a tool call using local policy without Oracle enrichment."""
+        self.data_guard.validate_tool_call(tool_call)
         preflight = self._check_identity_and_breaker(tool_call)
         if preflight is not None:
             return self._record_preflight_denial(preflight)
@@ -83,11 +89,8 @@ class ExecutionGateway:
         if decision.decision in (ActionDecision.VETOED, ActionDecision.DENIED):
             self.total_vetoed += 1
             self._emit_veto_alert(decision)
-            self._record_breaker_outcome(tool_call.agent_id, success=False)
         elif decision.decision == ActionDecision.PENDING:
             self._pending[decision.id] = decision
-        elif decision.decision == ActionDecision.APPROVED:
-            self._record_breaker_outcome(tool_call.agent_id, success=True)
         return decision
 
     def _record_breaker_outcome(self, agent_id: str, success: bool) -> None:
@@ -98,8 +101,13 @@ class ExecutionGateway:
         else:
             self.circuit_breaker.record_failure(agent_id)
 
+    def record_execution_outcome(self, agent_id: str, *, success: bool) -> None:
+        """Update the circuit breaker only from actual runtime execution outcomes."""
+        self._record_breaker_outcome(agent_id, success)
+
     async def evaluate_with_oracle(self, tool_call: ToolCall) -> GatewayDecision:
         """Apply the same mandatory preflight checks before optional Oracle enrichment."""
+        self.data_guard.validate_tool_call(tool_call)
         preflight = self._check_identity_and_breaker(tool_call)
         if preflight is not None:
             return self._record_preflight_denial(preflight)
@@ -118,11 +126,8 @@ class ExecutionGateway:
         if decision.decision in (ActionDecision.VETOED, ActionDecision.DENIED):
             self.total_vetoed += 1
             self._emit_veto_alert(decision)
-            self._record_breaker_outcome(tool_call.agent_id, success=False)
         elif decision.decision == ActionDecision.PENDING:
             self._pending[decision.id] = decision
-        elif decision.decision == ActionDecision.APPROVED:
-            self._record_breaker_outcome(tool_call.agent_id, success=True)
         return decision
 
     async def _enrich_with_oracle(self, tool_call: ToolCall,
@@ -164,11 +169,44 @@ class ExecutionGateway:
             return escalated
         return decision
 
+    @staticmethod
+    def _as_utc(value: datetime) -> datetime:
+        """Normalize legacy naive timestamps to UTC for safe age comparisons."""
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    def _expire_pending(self, now: datetime | None = None) -> None:
+        """Expire unapproved actions without executing them and update decision history."""
+        current_time = now or datetime.now(timezone.utc)
+        expiry = timedelta(seconds=self.pending_ttl_seconds)
+        for decision_id, pending in list(self._pending.items()):
+            created_at = self._as_utc(pending.timestamp)
+            if current_time - created_at < expiry:
+                continue
+
+            self._pending.pop(decision_id, None)
+            timed_out = GatewayDecision(
+                id=pending.id,
+                timestamp=current_time,
+                tool_call=pending.tool_call,
+                risk_level=pending.risk_level,
+                decision=ActionDecision.TIMEOUT,
+                reason="Approval window expired; action was not approved or executed.",
+                decided_by="approval_timeout",
+            )
+            for index, history_item in enumerate(self.history):
+                if history_item.id == decision_id:
+                    self.history[index] = timed_out
+                    break
+
     def get_pending(self) -> list[GatewayDecision]:
+        self._expire_pending()
         return list(self._pending.values())
 
     def resolve_pending(self, decision_id: str, approved: bool,
                         reason: str = "", operator: str = "operator") -> GatewayDecision:
+        self._expire_pending()
         if decision_id not in self._pending:
             raise KeyError(f"No pending decision with id {decision_id}")
 
@@ -197,6 +235,7 @@ class ExecutionGateway:
         return resolved
 
     def get_status(self) -> dict:
+        self._expire_pending()
         return {
             "status": "active",
             "total_processed": self.total_processed,
@@ -210,7 +249,7 @@ class ExecutionGateway:
     def _emit_veto_alert(self, decision: GatewayDecision) -> Alert:
         tc = decision.tool_call
         alert = Alert(
-            id=uuid.uuid4().hex[:12],
+            id=uuid.uuid4().hex,
             severity=Severity.CRITICAL,
             module="execution_gateway",
             title="Critical Action Vetoed",

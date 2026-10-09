@@ -1,60 +1,84 @@
-"""
-TwinGuard — Execution Gateway API Routes
-Wired to ExecutionGateway + ThreatFade Oracle (Parliament integration)
-+ real-time WebSocket broadcast on every decision.
-"""
+"""Auctaryn execution gateway API.
 
+All HTTP routes require a configured service bearer key. Mutating security
+controls and human approvals additionally require the operator bearer key.
+Deploy behind TLS; static keys are bootstrap controls, not a replacement for
+enterprise identity-provider integration.
+"""
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
 
-from core.models import ToolCall, ActionClassification, GatewayDecision
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from pydantic import BaseModel, Field
+from api.security import configured_for, extract_bearer, token_role
+
+from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision
 from modules.execution_gateway.gateway import ExecutionGateway
 from modules.threatfade_oracle.oracle import ThreatFadeOracle
 from modules.agent_identity.identity import AgentIdentityManager
 from modules.inter_agent.circuit_breaker import AgentCircuitBreaker
+from modules.execution_gateway.execution_service import ExecutionService
+from modules.execution_gateway.runtime_adapter import (
+    DuplicateExecution,
+    RuntimeAdapter,
+    RuntimeAdapterFailure,
+    RuntimeAdapterUnavailable,
+)
 
-router = APIRouter()
+async def require_api_key(authorization: str | None = Header(default=None)) -> None:
+    role = token_role(extract_bearer(authorization))
+    if role in ("api", "admin"):
+        return
+    if not configured_for("api"):
+        raise HTTPException(status_code=503, detail="API authentication is not configured correctly")
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Valid bearer token required",
+                        headers={"WWW-Authenticate": "Bearer"})
 
+async def require_operator_key(authorization: str | None = Header(default=None)) -> None:
+    role = token_role(extract_bearer(authorization))
+    if role == "admin":
+        return
+    if not configured_for("admin"):
+        raise HTTPException(status_code=503, detail="Administrator authentication is not configured correctly")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator bearer token required",
+                        headers={"WWW-Authenticate": "Bearer"})
+
+router = APIRouter(dependencies=[Depends(require_api_key)])
 _oracle = ThreatFadeOracle()
 _identity_manager = AgentIdentityManager()
 _circuit_breaker = AgentCircuitBreaker(failure_threshold=5, cooldown_seconds=60)
-
-# Identity enforcement is opt-in at the gateway level: passing the manager
-# into ExecutionGateway is what makes it load-bearing (tested directly in
-# test_gateway_owasp_wiring.py). The production singleton here defaults
-# to NOT enforcing identity yet, so existing deployments aren't broken by
-# agents that haven't been registered. Call enable_strict_identity() once
-# your agent fleet is registered to turn enforcement on.
+# Fail closed: the gateway always has an identity manager. Agents must be
+# registered and granted the requested tool scope before protected actions pass.
 _gateway = ExecutionGateway(
     auto_approve_safe=True,
     oracle=_oracle,
     identity_manager=_identity_manager,
     circuit_breaker=_circuit_breaker,
 )
+_execution_service = ExecutionService(_gateway)
 
+
+def get_execution_service() -> ExecutionService:
+    # Keep the service bound to the current gateway when tests or lifecycle
+    # management replace the gateway instance.
+    _execution_service.gateway = _gateway
+    return _execution_service
+
+
+def configure_runtime_adapter(adapter: RuntimeAdapter | None) -> None:
+    """Configure a trusted adapter from deployment/startup code, never via HTTP."""
+    _execution_service.adapter = adapter
 
 def get_gateway() -> ExecutionGateway:
     return _gateway
 
-
 def get_identity_manager() -> AgentIdentityManager:
     return _identity_manager
-
 
 def get_circuit_breaker() -> AgentCircuitBreaker:
     return _circuit_breaker
 
-
 def enable_strict_identity_enforcement() -> None:
-    """
-    Turn on ASI03 identity enforcement at the gateway level. After this
-    call, any tool_call without a registered agent_id + matching scope
-    will be denied outright. Intended to be called once an operator has
-    finished registering their known agent fleet via /api/v1/identity.
-    """
     _gateway.identity_manager = _identity_manager
-
 
 class ToolCallRequest(BaseModel):
     tool_name: str = Field(min_length=1, max_length=128)
@@ -65,126 +89,134 @@ class ToolCallRequest(BaseModel):
     session_id: str = Field(default="", max_length=128)
     identity_token: str = Field(default="", max_length=128)
 
-
 class ApprovalRequest(BaseModel):
     decision_id: str = Field(min_length=1, max_length=64)
     approved: bool
     reason: str = Field(default="", max_length=500)
 
-
 async def _broadcast_decision(decision: GatewayDecision) -> None:
-    """Push a gateway decision to all connected dashboard clients."""
     from api.websockets.actions import broadcast_action
     await broadcast_action({
-        "type": "gateway_decision",
-        "id": decision.id,
+        "type": "gateway_decision", "id": decision.id,
         "timestamp": decision.timestamp.isoformat(),
-        "tool_name": decision.tool_call.tool_name,
-        "action": decision.tool_call.action,
-        "risk_level": decision.risk_level.value,
-        "decision": decision.decision.value,
-        "reason": decision.reason,
-        "decided_by": decision.decided_by,
+        "tool_name": decision.tool_call.tool_name, "action": decision.tool_call.action,
+        "risk_level": decision.risk_level.value, "decision": decision.decision.value,
+        "reason": decision.reason, "decided_by": decision.decided_by,
     })
-
     if decision.decision.value == "vetoed":
         from api.websockets.alerts import broadcast_alert
         await broadcast_alert({
-            "type": "alert",
-            "severity": "critical",
-            "module": "execution_gateway",
+            "type": "alert", "severity": "critical", "module": "execution_gateway",
             "title": "Action Vetoed",
             "message": f"{decision.tool_call.tool_name}:{decision.tool_call.action} — {decision.reason}",
             "timestamp": decision.timestamp.isoformat(),
         })
 
-
 @router.get("/status")
 async def get_gateway_status() -> dict:
-    status = get_gateway().get_status()
-    status["timestamp"] = datetime.now(timezone.utc).isoformat()
-    status["identity_enforcement_enabled"] = get_gateway().identity_manager is not None
-    status["circuit_breaker_enabled"] = get_gateway().circuit_breaker is not None
-    return status
+    result = get_gateway().get_status()
+    result["timestamp"] = datetime.now(timezone.utc).isoformat()
+    result["identity_enforcement_enabled"] = get_gateway().identity_manager is not None
+    result["circuit_breaker_enabled"] = get_gateway().circuit_breaker is not None
+    return result
 
-
-@router.post("/identity-enforcement/enable")
+@router.post("/identity-enforcement/enable", dependencies=[Depends(require_operator_key)])
 async def enable_identity_enforcement() -> dict:
-    """Turn on ASI03 strict identity enforcement at the gateway level."""
     enable_strict_identity_enforcement()
     return {"identity_enforcement_enabled": True}
 
-
 @router.post("/evaluate")
 async def evaluate_tool_call(request: ToolCallRequest) -> ActionClassification:
-    tc = ToolCall(
-        tool_name=request.tool_name, action=request.action,
-        parameters=request.parameters, target=request.target,
-        agent_id=request.agent_id, session_id=request.session_id,
-        identity_token=request.identity_token,
-    )
+    tc = ToolCall(tool_name=request.tool_name, action=request.action, parameters=request.parameters,
+                  target=request.target, agent_id=request.agent_id, session_id=request.session_id,
+                  identity_token=request.identity_token)
     from modules.execution_gateway.risk_classifier import RiskClassifier
-    clf = RiskClassifier()
-    return clf.classify(tc)
-
+    return RiskClassifier().classify(tc)
 
 @router.get("/decisions")
 async def list_decisions(limit: int = Query(50, ge=1, le=500)) -> list[GatewayDecision]:
     return get_gateway().history[-limit:]
 
-
 @router.get("/decisions/{decision_id}")
 async def get_decision(decision_id: str) -> GatewayDecision:
-    for d in get_gateway().history:
-        if d.id == decision_id:
-            return d
-    raise HTTPException(status_code=404, detail=f"Decision {decision_id} not found")
-
+    for decision in get_gateway().history:
+        if decision.id == decision_id:
+            return decision
+    raise HTTPException(status_code=404, detail="Decision not found")
 
 @router.get("/pending")
 async def list_pending_approvals() -> list[GatewayDecision]:
     return get_gateway().get_pending()
 
-
-@router.post("/approve")
+@router.post("/approve", dependencies=[Depends(require_operator_key)])
 async def approve_action(request: ApprovalRequest) -> dict:
     try:
         resolved = get_gateway().resolve_pending(
-            request.decision_id, request.approved, request.reason, operator="api_admin"
+            request.decision_id, request.approved, request.reason, operator="authenticated_operator"
         )
         await _broadcast_decision(resolved)
-        return {
-            "decision_id": resolved.id,
-            "result": resolved.decision.value,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
+        return {"decision_id": resolved.id, "result": resolved.decision.value,
+                "timestamp": datetime.now(timezone.utc).isoformat()}
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"Pending decision {request.decision_id} not found")
+        raise HTTPException(status_code=404, detail="Pending decision not found")
+
+@router.post("/execute")
+async def execute_tool_call(request: ToolCallRequest) -> dict:
+    """Evaluate and execute through a trusted adapter; never execute in the API process."""
+    tc = ToolCall(tool_name=request.tool_name, action=request.action, parameters=request.parameters,
+                  target=request.target, agent_id=request.agent_id, session_id=request.session_id,
+                  identity_token=request.identity_token)
+    try:
+        decision, receipt = await get_execution_service().execute_tool_call(tc)
+    except RuntimeAdapterUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except DuplicateExecution as exc:
+        raise HTTPException(status_code=409, detail="Decision already claimed for execution") from exc
+    except RuntimeAdapterFailure as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "decision": decision.model_dump(mode="json"),
+        "execution": receipt.model_dump(mode="json") if receipt is not None else None,
+    }
+
+
+@router.post("/execute/approved/{decision_id}", dependencies=[Depends(require_operator_key)])
+async def execute_approved_decision(decision_id: str) -> dict:
+    """Execute the exact immutable decision after an administrator approved it."""
+    service = get_execution_service()
+    try:
+        service.require_adapter()
+    except RuntimeAdapterUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    decision = next((item for item in get_gateway().history if item.id == decision_id), None)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    if decision.decision != ActionDecision.APPROVED or decision.decided_by != "authenticated_operator":
+        raise HTTPException(status_code=409, detail="Decision has not been explicitly approved by an operator")
+    try:
+        receipt = await service.execute_approved_decision(decision)
+    except DuplicateExecution as exc:
+        raise HTTPException(status_code=409, detail="Decision already claimed for execution") from exc
+    except RuntimeAdapterFailure as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"decision_id": decision.id, "execution": receipt.model_dump(mode="json")}
 
 
 @router.post("/intercept")
 async def intercept_action(request: ToolCallRequest) -> GatewayDecision:
-    """Pattern-only interception — classify AND decide, no Oracle call (fast path)."""
-    tc = ToolCall(
-        tool_name=request.tool_name, action=request.action,
-        parameters=request.parameters, target=request.target,
-        agent_id=request.agent_id, session_id=request.session_id,
-        identity_token=request.identity_token,
-    )
+    tc = ToolCall(tool_name=request.tool_name, action=request.action, parameters=request.parameters,
+                  target=request.target, agent_id=request.agent_id, session_id=request.session_id,
+                  identity_token=request.identity_token)
     decision = get_gateway().evaluate(tc)
     await _broadcast_decision(decision)
     return decision
 
-
 @router.post("/intercept/full")
 async def intercept_action_full(request: ToolCallRequest) -> GatewayDecision:
-    """Full Parliament interception — pattern classification + ThreatFade Oracle enrichment."""
-    tc = ToolCall(
-        tool_name=request.tool_name, action=request.action,
-        parameters=request.parameters, target=request.target,
-        agent_id=request.agent_id, session_id=request.session_id,
-        identity_token=request.identity_token,
-    )
+    tc = ToolCall(tool_name=request.tool_name, action=request.action, parameters=request.parameters,
+                  target=request.target, agent_id=request.agent_id, session_id=request.session_id,
+                  identity_token=request.identity_token)
     decision = await get_gateway().evaluate_with_oracle(tc)
     await _broadcast_decision(decision)
     return decision

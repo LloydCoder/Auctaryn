@@ -16,6 +16,9 @@ from core.logging import setup_logging
 from api.security import configured_for, extract_bearer, token_role
 from api.routes import health, context, gateway, threatfade, identity, skills, memory
 from api.websockets import actions, alerts
+from modules.execution_gateway.openshell_adapter import create_openshell_adapter_from_environment
+from modules.execution_gateway.runtime_adapter import RuntimeAdapterUnavailable
+from modules.execution_gateway.data_guard import SensitiveDataBlocked
 
 
 startup_time: float = 0.0
@@ -33,8 +36,38 @@ async def lifespan(app: FastAPI):
 
     Path("data").mkdir(exist_ok=True)
     Path("logs").mkdir(exist_ok=True)
-    yield
-    logger.info("Auctaryn shutting down", extra={"event": "shutdown"})
+
+    runtime_adapter = None
+    try:
+        runtime_adapter = create_openshell_adapter_from_environment()
+        gateway.configure_runtime_adapter(runtime_adapter)
+        if runtime_adapter is not None:
+            logger.info(
+                "OpenShell runtime adapter configured",
+                extra={"event": "runtime_adapter_ready", "adapter": "nvidia-openshell"},
+            )
+    except RuntimeAdapterUnavailable as exc:
+        gateway.configure_runtime_adapter(None)
+        logger.error(
+            "Runtime adapter unavailable; governed execution remains disabled (%s)",
+            str(exc),
+            extra={"event": "runtime_adapter_unavailable"},
+        )
+
+    try:
+        yield
+    finally:
+        gateway.configure_runtime_adapter(None)
+        if runtime_adapter is not None:
+            try:
+                runtime_adapter.close()
+            except Exception as exc:
+                logger.warning(
+                    "Runtime adapter shutdown failed (%s)",
+                    type(exc).__name__,
+                    extra={"event": "runtime_adapter_shutdown_failed"},
+                )
+        logger.info("Auctaryn shutting down", extra={"event": "shutdown"})
 
 
 def _requires_admin(path: str) -> bool:
@@ -65,6 +98,20 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         lifespan=lifespan,
     )
+
+    @app.exception_handler(SensitiveDataBlocked)
+    async def sensitive_data_blocked_handler(request: Request, exc: SensitiveDataBlocked):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {
+                    "code": "sensitive_data_blocked",
+                    "message": str(exc),
+                    "paths": list(exc.paths),
+                    "additional_count": exc.additional_count,
+                }
+            },
+        )
 
     app.add_middleware(
         CORSMiddleware,

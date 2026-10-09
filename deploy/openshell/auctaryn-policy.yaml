@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+# Auctaryn restrictive baseline for OpenShell sandbox execution.
+# No outbound network destinations are permitted until an operator adds an
+# explicit, reviewed network_policies entry. OpenShell remains the authority
+# for filesystem, process, and network enforcement.
+
+version: 1
+
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /bin
+    - /usr
+    - /lib
+    - /proc
+    - /dev/urandom
+    - /etc
+    - /var/log
+  read_write:
+    - /sandbox
+    - /tmp
+    - /dev/null
+
+landlock:
+  compatibility: hard_requirement
+
+network_policies: {}

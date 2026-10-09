@@ -9,6 +9,23 @@ import pytest
 
 
 class TestAgentIdentityAPI:
+    def test_registration_rejects_owner_conflict_with_http_409(self, client):
+        first = client.post("/api/v1/identity/register", json={
+            "agent_id": "owner-conflict-agent", "owner": "tenant-a"
+        })
+        assert first.status_code == 200
+
+        conflict = client.post("/api/v1/identity/register", json={
+            "agent_id": "owner-conflict-agent", "owner": "tenant-b"
+        })
+        assert conflict.status_code == 409
+        assert conflict.json()["detail"] == "Agent identity is already bound to a different owner"
+
+        identity = client.get("/api/v1/identity/owner-conflict-agent")
+        assert identity.status_code == 200
+        assert identity.json()["owner"] == "tenant-a"
+        assert identity.json()["identity_id"] == first.json()["identity_id"]
+
     def test_register_and_authorize(self, client):
         client.post("/api/v1/identity/register", json={"agent_id": "agent-x", "owner": "user-1"})
         client.post("/api/v1/identity/grant", json={"agent_id": "agent-x", "scope": "read_file"})

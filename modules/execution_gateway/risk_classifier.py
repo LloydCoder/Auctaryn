@@ -39,12 +39,14 @@ MODERATE_PATTERNS = [
     (r"execute_.*|run_.*", r".*"),
 ]
 
+READ_ONLY_ACTION_PATTERN = r"^(read|list|get|fetch|search|find|query|view|show|preview|inspect|describe|head|stat|check|status|count)(?:_.*)?$"
+
 SAFE_PATTERNS = [
-    (r"read_.*|.*_read", r".*"),
-    (r"list_.*|.*_list|get_.*|.*_get|fetch_.*|.*_fetch", r".*"),
-    (r"search_.*|.*_search|find_.*|.*_find|query_.*|.*_query", r".*"),
-    (r"view_.*|show_.*|display_.*|preview_.*", r".*"),
-    (r".*", r"read|list|get|fetch|search|find|query|view|show"),
+    (r"read_.*|.*_read", READ_ONLY_ACTION_PATTERN),
+    (r"list_.*|.*_list|get_.*|.*_get|fetch_.*|.*_fetch", READ_ONLY_ACTION_PATTERN),
+    (r"search_.*|.*_search|find_.*|.*_find|query_.*|.*_query", READ_ONLY_ACTION_PATTERN),
+    (r"view_.*|show_.*|display_.*|preview_.*", READ_ONLY_ACTION_PATTERN),
+    (READ_ONLY_ACTION_PATTERN, r"read|list|get|fetch|search|find|query|view|show"),
 ]
 
 # Bulk thresholds — parameters that elevate risk
@@ -67,8 +69,17 @@ def _has_bulk_parameters(parameters: dict) -> bool:
     return False
 
 
+def _is_recognized_action(tool_name: str, action: str) -> bool:
+    """Return whether a tool/action pair matches an explicit policy pattern."""
+    for patterns in (CRITICAL_PATTERNS, DESTRUCTIVE_PATTERNS, MODERATE_PATTERNS, SAFE_PATTERNS):
+        if any(_matches(tool_name, action, tool_pattern, action_pattern)
+               for tool_pattern, action_pattern in patterns):
+            return True
+    return False
+
+
 def classify_by_pattern(tool_name: str, action: str, parameters: dict) -> RiskLevel:
-    """Fast pattern-based classification. No external calls."""
+    """Fast pattern-based classification. Unknown actions remain non-approved."""
     # Critical first — always block these
     for tp, ap in CRITICAL_PATTERNS:
         if _matches(tool_name, action, tp, ap):
@@ -97,28 +108,42 @@ def classify_by_pattern(tool_name: str, action: str, parameters: dict) -> RiskLe
         if _matches(tool_name, action, tp, ap):
             return RiskLevel.SAFE
 
-    # Unknown — default to moderate (safe default: require log, not block)
+    # Unknown actions map to MODERATE for schema compatibility, but receive
+    # low confidence and are held for operator review by the VetoEngine.
     return RiskLevel.MODERATE
 
 
 class RiskClassifier:
     """
-    Full risk classifier combining pattern matching with confidence scoring.
-    Phase 2 will add Claude API semantic classification for ambiguous cases.
+    Deterministic risk classifier combining explicit patterns with confidence scoring.
+    Unrecognized actions remain low-confidence and require operator review; optional
+    semantic enrichment must never silently override this local safety decision.
     """
 
     def classify(self, tool_call: ToolCall) -> ActionClassification:
         risk_level = classify_by_pattern(
             tool_call.tool_name, tool_call.action, tool_call.parameters
         )
-        confidence, reason = self._score(tool_call, risk_level)
+        recognized = _is_recognized_action(
+            tool_call.tool_name, tool_call.action
+        ) or _has_bulk_parameters(tool_call.parameters)
+        if not recognized:
+            confidence = 0.35
+            reason = (
+                f"Unrecognized tool/action '{tool_call.tool_name}:{tool_call.action}'. "
+                "No explicit policy pattern matched; operator approval is required."
+            )
+            matched_pattern = "unrecognized"
+        else:
+            confidence, reason = self._score(tool_call, risk_level)
+            matched_pattern = f"{tool_call.tool_name}:{tool_call.action}"
 
         classification = ActionClassification(
             tool_call=tool_call,
             risk_level=risk_level,
             confidence=confidence,
             reason=reason,
-            matched_pattern=f"{tool_call.tool_name}:{tool_call.action}",
+            matched_pattern=matched_pattern,
         )
 
         logger.info(
@@ -155,7 +180,7 @@ class RiskClassifier:
         if risk_level == RiskLevel.MODERATE:
             return 0.80, (
                 f"Action '{tool}:{action}' is a write/create/update operation. "
-                "Logged and auto-approved."
+                "Operator approval is required before execution."
             )
 
         # SAFE

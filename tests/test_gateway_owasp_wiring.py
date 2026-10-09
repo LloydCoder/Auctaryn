@@ -1,5 +1,5 @@
 """
-TwinGuard — Gateway OWASP Module Wiring Tests (TDD)
+Auctaryn — Gateway security module wiring tests
 Closes the gap flagged previously: Agent Identity and Circuit Breaker
 existed as standalone modules but were never consulted inside the
 actual Gateway decision path. This makes them load-bearing.
@@ -90,8 +90,8 @@ class TestCircuitBreakerEnforcement:
         assert decision.decision == ActionDecision.DENIED
         assert "breaker" in decision.reason.lower() or "isolated" in decision.reason.lower()
 
-    def test_vetoed_decision_records_a_failure_on_the_breaker(self):
-        """A critical/vetoed action counts as a failure signal for that agent."""
+    def test_vetoed_decision_does_not_record_runtime_failure_on_the_breaker(self):
+        """A policy veto is not a runtime execution failure signal."""
         from modules.execution_gateway.gateway import ExecutionGateway
         from modules.inter_agent.circuit_breaker import AgentCircuitBreaker
 
@@ -103,7 +103,7 @@ class TestCircuitBreakerEnforcement:
         gw.evaluate(tc1)
         gw.evaluate(tc2)
 
-        assert breaker.is_open("bad-agent") is True
+        assert breaker.is_open("bad-agent") is False
 
     def test_approved_decision_does_not_trip_breaker(self):
         from modules.execution_gateway.gateway import ExecutionGateway

@@ -1,0 +1,211 @@
+"""Tests for the NVIDIA OpenShell adapter without requiring a live gateway."""
+
+import asyncio
+import base64
+import json
+import subprocess
+import sys
+from types import SimpleNamespace
+
+import pytest
+
+from core.models import ToolCall
+from modules.execution_gateway.openshell_adapter import BOUNDED_EXEC_WRAPPER, OpenShellRuntimeAdapter, create_openshell_adapter_from_environment
+from modules.execution_gateway.runtime_adapter import DuplicateExecution, RuntimeAdapterFailure, RuntimeAdapterUnavailable
+
+
+def _envelope(exit_code=0, stdout="sandbox output", stderr="", stdout_truncated=False, stderr_truncated=False):
+    return json.dumps({
+        "exit_code": exit_code,
+        "stdout": base64.b64encode(stdout.encode("utf-8")).decode("ascii"),
+        "stderr": base64.b64encode(stderr.encode("utf-8")).decode("ascii"),
+        "stdout_truncated": stdout_truncated,
+        "stderr_truncated": stderr_truncated,
+    })
+
+
+class FakeOpenShellClient:
+    def __init__(self, exit_code=0, stdout="sandbox output", stderr="", stdout_truncated=False, stderr_truncated=False, sdk_exit_code=0):
+        self.exit_code = exit_code
+        self.stdout = stdout
+        self.stderr = stderr
+        self.stdout_truncated = stdout_truncated
+        self.stderr_truncated = stderr_truncated
+        self.sdk_exit_code = sdk_exit_code
+        self.calls = []
+
+    def exec(self, sandbox_name, argv, *, workspace):
+        self.calls.append((sandbox_name, argv, workspace))
+        return SimpleNamespace(
+            exit_code=self.sdk_exit_code,
+            stdout=_envelope(
+                self.exit_code, self.stdout, self.stderr,
+                self.stdout_truncated, self.stderr_truncated,
+            ),
+            stderr="",
+        )
+
+
+_DEFAULT_ARGV = object()
+
+
+def _tool_call(argv=_DEFAULT_ARGV, tool_name="openshell_exec", action="exec"):
+    selected_argv = ["python", "-c", "print('ok')"] if argv is _DEFAULT_ARGV else argv
+    return ToolCall(
+        tool_name=tool_name,
+        action=action,
+        parameters={"argv": selected_argv},
+        agent_id="openshell-test-agent",
+    )
+
+
+def test_adapter_uses_server_configured_sandbox_and_argv_array():
+    client = FakeOpenShellClient()
+    adapter = OpenShellRuntimeAdapter(
+        client, sandbox_name="approved-sandbox", workspace="prod", timeout_seconds=45
+    )
+
+    result = asyncio.run(adapter.execute(_tool_call(), idempotency_key="decision-001"))
+
+    sandbox_name, argv, workspace = client.calls[0]
+    assert sandbox_name == "approved-sandbox"
+    assert workspace == "prod"
+    assert argv[:2] == ["python", "-c"]
+    assert json.loads(argv[3]) == ["python", "-c", "print('ok')"]
+    assert argv[4] == "45"
+    assert argv[5] == "1000000"
+    assert result.status == "succeeded"
+    assert result.adapter == "nvidia-openshell"
+
+
+def test_adapter_rejects_unknown_tool_or_action():
+    adapter = OpenShellRuntimeAdapter(FakeOpenShellClient(), sandbox_name="s", workspace="w")
+
+    with pytest.raises(RuntimeAdapterFailure):
+        asyncio.run(adapter.execute(
+            _tool_call(tool_name="shell", action="exec"), idempotency_key="decision-002"
+        ))
+
+
+@pytest.mark.parametrize("argv", [None, [], ["python", ""], ["python", 4], ["x" * 9000], ["x"] * 129])
+def test_adapter_rejects_malformed_or_unbounded_argv(argv):
+    adapter = OpenShellRuntimeAdapter(FakeOpenShellClient(), sandbox_name="s", workspace="w")
+
+    with pytest.raises(RuntimeAdapterFailure):
+        asyncio.run(adapter.execute(_tool_call(argv=argv), idempotency_key="decision-003"))
+
+
+def test_adapter_rejects_duplicate_idempotency_key():
+    client = FakeOpenShellClient()
+    adapter = OpenShellRuntimeAdapter(client, sandbox_name="s", workspace="w")
+    asyncio.run(adapter.execute(_tool_call(), idempotency_key="decision-004"))
+
+    with pytest.raises(DuplicateExecution):
+        asyncio.run(adapter.execute(_tool_call(), idempotency_key="decision-004"))
+
+    assert len(client.calls) == 1
+
+
+def test_adapter_marks_timeout_exit_code():
+    adapter = OpenShellRuntimeAdapter(
+        FakeOpenShellClient(exit_code=124), sandbox_name="s", workspace="w"
+    )
+
+    result = asyncio.run(adapter.execute(_tool_call(), idempotency_key="decision-005"))
+
+    assert result.status == "timed_out"
+    assert result.exit_code == 124
+
+
+def test_adapter_bounds_output_and_marks_truncation():
+    adapter = OpenShellRuntimeAdapter(
+        FakeOpenShellClient(stdout="x" * 1_000_000, stdout_truncated=True), sandbox_name="s", workspace="w"
+    )
+
+    result = asyncio.run(adapter.execute(_tool_call(), idempotency_key="decision-006"))
+
+    assert len(result.stdout) == 1_000_000
+    assert result.stdout_truncated is True
+
+
+def test_openshell_adapter_is_disabled_unless_explicitly_enabled(monkeypatch):
+    monkeypatch.delenv("AUCTARYN_RUNTIME_ADAPTER", raising=False)
+    assert create_openshell_adapter_from_environment() is None
+
+
+def test_enabled_adapter_requires_sandbox_name(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_RUNTIME_ADAPTER", "openshell")
+    monkeypatch.delenv("OPENSHELL_SANDBOX_NAME", raising=False)
+
+    with pytest.raises(RuntimeAdapterUnavailable, match="OPENSHELL_SANDBOX_NAME is required"):
+        create_openshell_adapter_from_environment()
+
+def test_enabled_adapter_rejects_invalid_timeout_before_connecting(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_RUNTIME_ADAPTER", "openshell")
+    monkeypatch.setenv("OPENSHELL_SANDBOX_NAME", "sandbox")
+    monkeypatch.setenv("OPENSHELL_EXECUTION_TIMEOUT_SECONDS", "0")
+
+    with pytest.raises(RuntimeAdapterUnavailable, match="between 1 and 3600"):
+        create_openshell_adapter_from_environment()
+
+def test_enabled_adapter_requires_service_credentials_or_explicit_local_override(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_RUNTIME_ADAPTER", "openshell")
+    monkeypatch.setenv("OPENSHELL_SANDBOX_NAME", "sandbox")
+    monkeypatch.setenv("OPENSHELL_WORKSPACE", "default")
+    monkeypatch.delenv("OPENSHELL_OIDC_ISSUER", raising=False)
+    monkeypatch.delenv("OPENSHELL_OIDC_CLIENT_ID", raising=False)
+    monkeypatch.delenv("OPENSHELL_OIDC_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("OPENSHELL_OIDC_AUDIENCE", raising=False)
+    monkeypatch.delenv("OPENSHELL_ALLOW_USER_CREDENTIALS", raising=False)
+
+    with pytest.raises(RuntimeAdapterUnavailable, match="Configure OpenShell OIDC service credentials"):
+        create_openshell_adapter_from_environment()
+
+
+def test_enabled_adapter_rejects_partial_oidc_credentials(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_RUNTIME_ADAPTER", "openshell")
+    monkeypatch.setenv("OPENSHELL_SANDBOX_NAME", "sandbox")
+    monkeypatch.setenv("OPENSHELL_OIDC_CLIENT_ID", "service-client")
+    monkeypatch.delenv("OPENSHELL_OIDC_ISSUER", raising=False)
+    monkeypatch.delenv("OPENSHELL_OIDC_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("OPENSHELL_OIDC_AUDIENCE", raising=False)
+
+    with pytest.raises(RuntimeAdapterUnavailable, match="required together"):
+        create_openshell_adapter_from_environment()
+
+def test_bounded_exec_wrapper_runs_argv_without_shell():
+    child_argv = [sys.executable, "-c", "print('bounded-ok')"]
+    completed = subprocess.run(
+        [sys.executable, "-c", BOUNDED_EXEC_WRAPPER, json.dumps(child_argv), "3", "1000"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    envelope = json.loads(completed.stdout)
+    output = base64.b64decode(envelope["stdout"]).decode("utf-8")
+
+    assert envelope["exit_code"] == 0
+    assert output.strip() == "bounded-ok"
+    assert envelope["stdout_truncated"] is False
+
+
+def test_bounded_exec_wrapper_caps_output_and_kills_timed_out_process():
+    child_argv = [
+        sys.executable,
+        "-c",
+        "import time; print('x' * 10000, flush=True); time.sleep(5)",
+    ]
+    completed = subprocess.run(
+        [sys.executable, "-c", BOUNDED_EXEC_WRAPPER, json.dumps(child_argv), "1", "100"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    envelope = json.loads(completed.stdout)
+    output = base64.b64decode(envelope["stdout"])
+
+    assert envelope["exit_code"] == 124
+    assert len(output) <= 100
+    assert envelope["stdout_truncated"] is True

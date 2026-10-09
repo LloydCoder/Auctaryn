@@ -68,7 +68,7 @@ class VetoEngine:
         elapsed_ms = (time.monotonic() - start) * 1000
 
         gd = GatewayDecision(
-            id=uuid.uuid4().hex[:12],
+            id=uuid.uuid4().hex,
             tool_call=tc,
             risk_level=risk,
             decision=decision,
