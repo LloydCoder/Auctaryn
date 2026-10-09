@@ -58,9 +58,14 @@ die() { echo "Deployment refused: $*" >&2; exit 1; }
 [[ "$DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]] || die "AUCTARYN_DOMAIN must be a valid DNS hostname."
 [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || die "AUCTARYN_RELEASE_TAG must be a version tag such as v1.2.3."
 [[ "$IMAGE_REF" =~ ^ghcr\.io/lloydcoder/auctaryn@sha256:[a-f0-9]{64}$ ]] || die "AUCTARYN_IMAGE must be the exact lowercase GHCR image digest from the release manifest."
-if [[ "${#API_KEY}" -lt 32 || "${#ADMIN_KEY}" -lt 32 || "$API_KEY" == "$ADMIN_KEY" || "$API_KEY" == *replace-with* || "$ADMIN_KEY" == *replace-with* ]]; then
-    die "AUCTARYN_API_KEY and AUCTARYN_ADMIN_API_KEY must be distinct 32+ character secrets."
+API_KEY_UNIQUE_CHARS="$(printf '%s' "$API_KEY" | fold -w1 | sort -u | wc -l)"
+ADMIN_KEY_UNIQUE_CHARS="$(printf '%s' "$ADMIN_KEY" | fold -w1 | sort -u | wc -l)"
+if [[ "${#API_KEY}" -lt 32 || "${#ADMIN_KEY}" -lt 32 || "$API_KEY" == "$ADMIN_KEY" || "$API_KEY_UNIQUE_CHARS" -lt 12 || "$ADMIN_KEY_UNIQUE_CHARS" -lt 12 ]]; then
+    die "AUCTARYN_API_KEY and AUCTARYN_ADMIN_API_KEY must be distinct 32+ character secrets with at least 12 unique characters."
 fi
+case "$API_KEY $ADMIN_KEY" in
+    *replace-with*|*change-me*|*changeme*|*password*|*example*) die "API credentials must not contain placeholder values." ;;
+esac
 [[ "$THREATFADE_URL" == https://* && "$THREATFADE_URL" != *replace-with* ]] || die "THREATFADE_SERVICE_URL must be a real HTTPS endpoint."
 [[ -n "$THREATFADE_TOKEN" && "$THREATFADE_TOKEN" != *replace-with* ]] || die "THREATFADE_SERVICE_TOKEN is required for external ThreatFade."
 [[ "$RUNTIME_ADAPTER" == "openshell" ]] || die "Production requires AUCTARYN_RUNTIME_ADAPTER=openshell."
