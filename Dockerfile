@@ -1,19 +1,19 @@
-FROM python:3.12-slim
+# Pin the multi-platform index digest; tags are labels, not immutable identities.
+FROM python:3.12.15-alpine3.24@sha256:7a63cb93468d7ce5f24b1332a8f7a27f444b3221b0a3d6b5573036b78d937c78
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Minimal system dependency for liveness checks and diagnostics.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser
+# Create the non-root runtime identity without adding an unused network client.
+# Pin the zlib security fix identified by Grype (CVE-2026-85091).
+RUN apk add --no-cache 'zlib=1.3.2-r1' \
+    && adduser -D -u 10001 -s /sbin/nologin appuser
 
 # Python deps
-COPY requirements.txt .
-RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
+COPY requirements.lock .
+RUN pip install --no-cache-dir --disable-pip-version-check --require-hashes -r requirements.lock
 
 # Application code (read-only to the runtime user).
 COPY core/ core/

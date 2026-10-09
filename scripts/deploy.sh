@@ -38,7 +38,7 @@ export AUCTARYN_DOMAIN="${DOMAIN}"
 
 # 3. Build the dashboard with same-origin HTTPS/WSS URLs; never bake API secrets into Vite.
 echo "Building dashboard assets..."
-(cd dashboard && VITE_API_URL="https://${DOMAIN}" VITE_WS_URL="wss://${DOMAIN}" npm install --silent && VITE_API_URL="https://${DOMAIN}" VITE_WS_URL="wss://${DOMAIN}" npm run build -- --base=/dashboard/)
+(cd dashboard && VITE_API_URL="https://${DOMAIN}" VITE_WS_URL="wss://${DOMAIN}" npm ci --no-audit --no-fund && VITE_API_URL="https://${DOMAIN}" VITE_WS_URL="wss://${DOMAIN}" npm run build -- --base=/dashboard/)
 
 # 4. Capture the currently running immutable image ID before rebuilding so rollback
 # remains possible even after the mutable auctaryn:latest tag moves.

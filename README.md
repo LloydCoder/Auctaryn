@@ -37,7 +37,7 @@ docker compose --env-file .env up -d --build api
 
 # Dashboard (local dev; run in another terminal)
 cd dashboard
-npm install
+npm ci
 npm run dev -- --host 0.0.0.0
 # Open the Vite URL shown in the terminal (normally http://localhost:5173).
 ```
@@ -127,7 +127,7 @@ Run `python -m pytest tests/redteam -v` for the repeatable OWASP ASI01–ASI10 r
 - Linux (kernel >= 5.13 for Landlock)
 - Docker + Docker Compose
 - Python 3.11+
-- Node.js 18+
+- Node.js 22+ (dashboard dependency-lock generation and CI)
 - NVIDIA OpenShell v0.1.0+
 
 ## Tech Stack
@@ -176,3 +176,8 @@ Built by [Chinaemerem Nkwachukwu](https://github.com/LloydCoder)
 ---
 
 *Securing AI agents. Nigeria-1. World-0.* 💚
+
+
+## Secure software supply chain
+
+Auctaryn's supply-chain gates run through [CodeQL](.github/workflows/codeql.yml) and [the supply-chain workflow](.github/workflows/supply-chain.yml). Python direct dependencies are declared in `requirements.txt` and hash-locked in `requirements.lock`; dashboard dependencies are committed in `dashboard/package-lock.json`. CI installs the npm graph with `npm ci`, audits dependencies, scans secrets and the built container, generates SPDX SBOMs, and attests tested artifacts on pushes to `main`. See [the supply-chain policy](docs/SUPPLY_CHAIN.md) and [Phase 22 forensic audit](audits/PHASE-22-FORENSIC-AUDIT.md) for exact-head evidence, scope, exception handling and the remaining production-release boundary.
