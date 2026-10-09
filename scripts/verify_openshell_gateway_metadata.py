@@ -47,6 +47,8 @@ def validate_endpoint(metadata: object) -> str:
         address = ipaddress.ip_address(host)
     except ValueError:
         address = None
+        if re.fullmatch(r"[0-9.]+", host):
+            raise ValueError("gateway_endpoint numeric host is not a canonical IP address")
         try:
             ascii_host = host.encode("idna").decode("ascii")
         except UnicodeError as exc:
