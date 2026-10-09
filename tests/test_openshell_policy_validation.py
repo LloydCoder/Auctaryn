@@ -33,6 +33,12 @@ def test_baseline_rejects_best_effort_landlock():
     assert any("hard_requirement" in error for error in validate_baseline_policy(policy))
 
 
+def test_baseline_rejects_broad_readable_paths():
+    policy, _ = load_and_validate_baseline(POLICY_PATH)
+    policy["filesystem_policy"]["read_only"].append("/")
+    assert any("unapproved readable path" in error for error in validate_baseline_policy(policy))
+
+
 def test_baseline_rejects_unapproved_writable_paths():
     policy, _ = load_and_validate_baseline(POLICY_PATH)
     policy["filesystem_policy"]["read_write"].append("/")
