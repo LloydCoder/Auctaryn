@@ -230,3 +230,12 @@ def test_service_credential_cannot_invoke_direct_execution_even_when_enabled(mon
         json={"tool_name": "read_file", "action": "read", "parameters": {"path": "/safe/file"}, "agent_id": "redteam"},
     )
     assert response.status_code == 403
+
+
+def test_weak_api_keys_are_rejected_when_strong_keys_are_required(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_REQUIRE_STRONG_API_KEYS", "true")
+    monkeypatch.setenv("AUCTARYN_API_KEY", "weak-service")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "weak-admin")
+    response = _client().get("/api/v1/gateway/status", headers={"Authorization": "Bearer weak-service"})
+    assert response.status_code == 503
+    assert "not configured" in response.json()["detail"]
