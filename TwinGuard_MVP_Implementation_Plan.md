@@ -1,3 +1,7 @@
+> **Historical planning document — not current implementation status.** This file preserves the original TwinGuard MVP proposal. Its proposed modules, deployment claims, false-positive targets, pricing, and statements such as “intercepts every tool call” are not evidence of current capability. The canonical project is **Auctaryn**; use [the current implementation roadmap](docs/IMPLEMENTATION_ROADMAP.md), [security risk register](docs/SECURITY_RISK_REGISTER.md), and [production release acceptance](docs/PRODUCTION_RELEASE_ACCEPTANCE.md) for verified status and open gates.
+
+---
+
 # TwinGuard MVP — Implementation Plan
 
 **Version:** 1.0  
