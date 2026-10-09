@@ -1,0 +1,497 @@
+{
+  "schema_version": "auctaryn-standards-traceability.v1",
+  "updated": "2026-10-09",
+  "policy": "Mappings identify evidence paths and limitations. They are not certification claims; independent and live-production evidence is explicitly marked as required.",
+  "standards": [
+    {
+      "id": "OWASP-ASI-2026",
+      "name": "OWASP Top 10 for Agentic Applications 2026",
+      "source_url": "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/",
+      "claim_limit": "Local control-path evidence only; not OWASP certification or proof of universal execution mediation."
+    },
+    {
+      "id": "NIST-SSDF-1.1",
+      "name": "NIST SP 800-218 Secure Software Development Framework",
+      "source_url": "https://csrc.nist.gov/pubs/sp/800/218/final",
+      "claim_limit": "Mapped implementation evidence does not assert organizational SSDF conformity or independent assessment."
+    },
+    {
+      "id": "NIST-AI-RMF-1.0",
+      "name": "NIST AI Risk Management Framework 1.0",
+      "source_url": "https://www.nist.gov/itl/ai-risk-management-framework",
+      "claim_limit": "Govern/Map/Measure/Manage are organizing functions, not a security certification."
+    },
+    {
+      "id": "MITRE-ATLAS",
+      "name": "MITRE ATLAS adversarial threat knowledge base",
+      "source_url": "https://atlas.mitre.org/",
+      "claim_limit": "Mappings remain tactic-level unless a tested technique identifier is explicitly recorded."
+    }
+  ],
+  "controls": [
+    {
+      "id": "OWASP-ASI01",
+      "standard_id": "OWASP-ASI-2026",
+      "title": "Agent Goal Hijack",
+      "status": "partial",
+      "evidence_level": "local-regression",
+      "implementation_paths": [
+        "modules/context_integrity/guardian.py"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_asi01_goal_hijack_is_detected"
+        }
+      ],
+      "residual_risk": "Heuristic detection is not semantic proof; universal external-agent context mediation is not established.",
+      "release_gate": true
+    },
+    {
+      "id": "OWASP-ASI02",
+      "standard_id": "OWASP-ASI-2026",
+      "title": "Tool Misuse and Exploitation",
+      "status": "partial",
+      "evidence_level": "local-regression",
+      "implementation_paths": [
+        "modules/execution_gateway/gateway.py",
+        "modules/execution_gateway/risk_findings.py"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_asi02_unknown_tool_action_is_not_auto_approved"
+        }
+      ],
+      "residual_risk": "Auctaryn risk findings are advisory; local gateway paths do not prove universal mediation of all external tools.",
+      "release_gate": true
+    },
+    {
+      "id": "OWASP-ASI03",
+      "standard_id": "OWASP-ASI-2026",
+      "title": "Agent Identity and Privilege Abuse",
+      "status": "partial",
+      "evidence_level": "local-regression",
+      "implementation_paths": [
+        "modules/agent_identity/identity.py"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_asi03_token_cannot_exceed_granted_scope"
+        }
+      ],
+      "residual_risk": "Identity/token state is not proven durable or multi-replica safe; Platform remains authoritative.",
+      "release_gate": true
+    },
+    {
+      "id": "OWASP-ASI04",
+      "standard_id": "OWASP-ASI-2026",
+      "title": "Agentic Supply Chain Compromise",
+      "status": "partial",
+      "evidence_level": "workflow-evidence",
+      "implementation_paths": [
+        "modules/skill_vetting/secure_vetting.py",
+        ".github/workflows/supply-chain.yml",
+        "requirements.lock",
+        "dashboard/package-lock.json"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_asi04_signed_manifest_tampering_is_rejected"
+        },
+        {
+          "path": "tests/test_supply_chain_controls.py",
+          "name": "test_supply_chain_workflow_has_required_controls"
+        }
+      ],
+      "residual_risk": "Publisher trust and key lifecycle are local; SBOM/attestation do not prove the deployed host runs the attested image.",
+      "release_gate": true
+    },
+    {
+      "id": "OWASP-ASI05",
+      "standard_id": "OWASP-ASI-2026",
+      "title": "Unexpected Code Execution",
+      "status": "partial",
+      "evidence_level": "local-regression",
+      "implementation_paths": [
+        "modules/execution_gateway/openshell_adapter.py",
+        "scripts/verify_openshell_policy.py"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_asi05_shell_command_string_is_rejected_by_runtime_adapter"
+        }
+      ],
+      "residual_risk": "CI uses fake clients; live OpenShell identity, effective policy, filesystem isolation and egress denial require deployment acceptance.",
+      "release_gate": true
+    },
+    {
+      "id": "OWASP-ASI06",
+      "standard_id": "OWASP-ASI-2026",
+      "title": "Memory and Context Poisoning",
+      "status": "partial",
+      "evidence_level": "local-regression",
+      "implementation_paths": [
+        "modules/memory_defender/defender.py",
+        "modules/context_integrity/guardian.py"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_asi06_poisoning_pattern_is_detected_and_quarantined"
+        }
+      ],
+      "residual_risk": "Detection is heuristic and state is not a guarantee over every external or persistent memory system.",
+      "release_gate": true
+    },
+    {
+      "id": "OWASP-ASI07",
+      "standard_id": "OWASP-ASI-2026",
+      "title": "Insecure Inter-Agent Communication",
+      "status": "partial",
+      "evidence_level": "local-regression",
+      "implementation_paths": [
+        "modules/inter_agent/secure_messaging.py"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_asi07_tampered_message_payload_is_rejected"
+        }
+      ],
+      "residual_risk": "Production transport, managed key service and durable replay state remain external acceptance gates.",
+      "release_gate": true
+    },
+    {
+      "id": "OWASP-ASI08",
+      "standard_id": "OWASP-ASI-2026",
+      "title": "Cascading Agent Failures",
+      "status": "partial",
+      "evidence_level": "local-regression",
+      "implementation_paths": [
+        "modules/inter_agent/circuit_breaker.py"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_asi08_open_circuit_breaker_fails_closed"
+        }
+      ],
+      "residual_risk": "In-memory breaker state does not establish distributed fleet-wide containment.",
+      "release_gate": true
+    },
+    {
+      "id": "OWASP-ASI09",
+      "standard_id": "OWASP-ASI-2026",
+      "title": "Human-Agent Trust Exploitation",
+      "status": "external-evidence-required",
+      "evidence_level": "contract-only",
+      "implementation_paths": [
+        "modules/execution_gateway/step_up_auth.py"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_asi09_step_up_challenge_is_single_use"
+        }
+      ],
+      "residual_risk": "A real IdP/MFA assertion is not yet bound to every privileged approval and runtime action.",
+      "release_gate": true
+    },
+    {
+      "id": "OWASP-ASI10",
+      "standard_id": "OWASP-ASI-2026",
+      "title": "Rogue Agents",
+      "status": "partial",
+      "evidence_level": "local-regression",
+      "implementation_paths": [
+        "modules/incident_response/manager.py",
+        "modules/execution_gateway/gateway.py"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_asi10_emergency_stop_blocks_agent_execution"
+        }
+      ],
+      "residual_risk": "Emergency stop blocks new execution checks but is not proof of terminating already-running external processes.",
+      "release_gate": true
+    },
+    {
+      "id": "SSDF-PO.3",
+      "standard_id": "NIST-SSDF-1.1",
+      "title": "Support toolchains and build environments",
+      "status": "mapped-local-evidence",
+      "evidence_level": "workflow-evidence",
+      "implementation_paths": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/supply-chain.yml",
+        ".github/workflows/codeql.yml"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/test_supply_chain_controls.py",
+          "name": "test_all_external_github_actions_are_pinned_to_full_commit_shas"
+        }
+      ],
+      "residual_risk": "GitHub-hosted runner isolation and organization-level policy are outside repository-only evidence.",
+      "release_gate": false
+    },
+    {
+      "id": "SSDF-PS.1",
+      "standard_id": "NIST-SSDF-1.1",
+      "title": "Protect all software components from tampering and unauthorized access",
+      "status": "mapped-local-evidence",
+      "evidence_level": "workflow-evidence",
+      "implementation_paths": [
+        "requirements.lock",
+        "dashboard/package-lock.json",
+        "Dockerfile"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/test_supply_chain_controls.py",
+          "name": "test_python_lock_contains_hashes_and_direct_pins"
+        },
+        {
+          "path": "tests/test_supply_chain_controls.py",
+          "name": "test_npm_lockfile_matches_manifest"
+        }
+      ],
+      "residual_risk": "Dependency review uses lockfile and audit gates; no GitHub Dependency Review action is enabled.",
+      "release_gate": false
+    },
+    {
+      "id": "SSDF-PS.2",
+      "standard_id": "NIST-SSDF-1.1",
+      "title": "Provide mechanisms for verifying software release integrity",
+      "status": "partial",
+      "evidence_level": "workflow-evidence",
+      "implementation_paths": [
+        ".github/workflows/supply-chain.yml",
+        "docs/SUPPLY_CHAIN.md"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/test_supply_chain_controls.py",
+          "name": "test_supply_chain_workflow_has_required_controls"
+        }
+      ],
+      "residual_risk": "CI archive/SBOM attestations exist; production OCI publication and deployed digest verification do not yet.",
+      "release_gate": true
+    },
+    {
+      "id": "SSDF-PW.5",
+      "standard_id": "NIST-SSDF-1.1",
+      "title": "Create source code using secure coding practices",
+      "status": "mapped-local-evidence",
+      "evidence_level": "workflow-evidence",
+      "implementation_paths": [
+        ".github/workflows/codeql.yml",
+        "scripts/audit_codeql_sarif.py"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/test_supply_chain_controls.py",
+          "name": "test_supply_chain_workflow_has_required_controls"
+        }
+      ],
+      "residual_risk": "Static analysis cannot establish absence of all vulnerabilities or replace human review.",
+      "release_gate": false
+    },
+    {
+      "id": "SSDF-PW.7",
+      "standard_id": "NIST-SSDF-1.1",
+      "title": "Review and analyze human-readable code",
+      "status": "partial",
+      "evidence_level": "local-regression",
+      "implementation_paths": [
+        "tests/redteam/test_agentic_redteam_benchmark.py",
+        "docs/RED_TEAM_BENCHMARK.md"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_manifest_is_complete_and_every_scenario_has_a_test"
+        }
+      ],
+      "residual_risk": "Internal tests are not independent penetration testing.",
+      "release_gate": true
+    },
+    {
+      "id": "SSDF-PW.8",
+      "standard_id": "NIST-SSDF-1.1",
+      "title": "Test executable code",
+      "status": "mapped-local-evidence",
+      "evidence_level": "workflow-evidence",
+      "implementation_paths": [
+        ".github/workflows/ci.yml",
+        "Dockerfile"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/test_supply_chain_controls.py",
+          "name": "test_deployment_uses_committed_npm_lockfile"
+        }
+      ],
+      "residual_risk": "CI liveness checks do not prove production runtime policy or workload behavior.",
+      "release_gate": true
+    },
+    {
+      "id": "SSDF-RV.1",
+      "standard_id": "NIST-SSDF-1.1",
+      "title": "Identify and confirm vulnerabilities on an ongoing basis",
+      "status": "mapped-local-evidence",
+      "evidence_level": "workflow-evidence",
+      "implementation_paths": [
+        ".github/workflows/supply-chain.yml",
+        "scripts/audit_grype_report.py"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/test_supply_chain_controls.py",
+          "name": "test_supply_chain_workflow_has_required_controls"
+        }
+      ],
+      "residual_risk": "Findings vary with vulnerability database freshness; scheduled and release-time scans remain required.",
+      "release_gate": false
+    },
+    {
+      "id": "SSDF-RV.2",
+      "standard_id": "NIST-SSDF-1.1",
+      "title": "Assess, prioritize and remediate vulnerabilities",
+      "status": "mapped-local-evidence",
+      "evidence_level": "workflow-evidence",
+      "implementation_paths": [
+        "scripts/audit_grype_report.py",
+        "docs/SUPPLY_CHAIN.md"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/test_supply_chain_controls.py",
+          "name": "test_supply_chain_workflow_has_required_controls"
+        }
+      ],
+      "residual_risk": "Live exploitability and deployment-specific reachability require contextual assessment.",
+      "release_gate": false
+    },
+    {
+      "id": "SSDF-RV.3",
+      "standard_id": "NIST-SSDF-1.1",
+      "title": "Analyze vulnerabilities to identify root causes",
+      "status": "partial",
+      "evidence_level": "local-regression",
+      "implementation_paths": [
+        "audits/PHASE-22-FORENSIC-AUDIT.md",
+        "docs/SECURITY_RISK_REGISTER.md"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/test_supply_chain_controls.py",
+          "name": "test_python_lock_contains_hashes_and_direct_pins"
+        }
+      ],
+      "residual_risk": "Root-cause analyses for external penetration-test findings do not exist until an external review is performed.",
+      "release_gate": true
+    },
+    {
+      "id": "AI-RMF-GOVERN",
+      "standard_id": "NIST-AI-RMF-1.0",
+      "title": "Govern — policies, accountability and risk oversight",
+      "status": "mapped-local-evidence",
+      "evidence_level": "documentation-and-tests",
+      "implementation_paths": [
+        "docs/SECURITY_MODEL.md",
+        "docs/SECURITY_RISK_REGISTER.md"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/test_incident_response.py",
+          "name": "test_emergency_stop_persists_and_blocks_execution"
+        }
+      ],
+      "residual_risk": "Organizational risk acceptance and independent sign-off require accountable human owners.",
+      "release_gate": true
+    },
+    {
+      "id": "AI-RMF-MAP",
+      "standard_id": "NIST-AI-RMF-1.0",
+      "title": "Map — context, impacts and intended use",
+      "status": "mapped-local-evidence",
+      "evidence_level": "documentation-and-tests",
+      "implementation_paths": [
+        "docs/OWASP_COVERAGE.md",
+        "docs/INDEPENDENT_ASSURANCE_PLAN.md"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_manifest_is_complete_and_every_scenario_has_a_test"
+        }
+      ],
+      "residual_risk": "Deployment-specific system boundaries and impact analysis must be confirmed by the deploying organization.",
+      "release_gate": true
+    },
+    {
+      "id": "AI-RMF-MEASURE",
+      "standard_id": "NIST-AI-RMF-1.0",
+      "title": "Measure — evaluate and monitor risk",
+      "status": "partial",
+      "evidence_level": "workflow-evidence",
+      "implementation_paths": [
+        ".github/workflows/codeql.yml",
+        ".github/workflows/supply-chain.yml",
+        "docs/RED_TEAM_BENCHMARK.md"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_manifest_is_complete_and_every_scenario_has_a_test"
+        }
+      ],
+      "residual_risk": "The local benchmark does not measure production false negatives or live runtime containment.",
+      "release_gate": true
+    },
+    {
+      "id": "AI-RMF-MANAGE",
+      "standard_id": "NIST-AI-RMF-1.0",
+      "title": "Manage — prioritize and treat risks",
+      "status": "mapped-local-evidence",
+      "evidence_level": "documentation-and-tests",
+      "implementation_paths": [
+        "docs/SECURITY_RISK_REGISTER.md",
+        "modules/incident_response/manager.py"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/test_incident_response.py",
+          "name": "test_agent_quarantine_is_scoped_and_recoverable"
+        }
+      ],
+      "residual_risk": "Risk acceptance, external remediation verification and operational drills require human owners.",
+      "release_gate": true
+    },
+    {
+      "id": "MITRE-ATLAS-TACTIC-MAPPING",
+      "standard_id": "MITRE-ATLAS",
+      "title": "Tactic-level mapping for deterministic agentic red-team scenarios",
+      "status": "mapped-local-evidence",
+      "evidence_level": "benchmark-registry",
+      "implementation_paths": [
+        "security_benchmarks/agentic_redteam/manifest.json",
+        "docs/RED_TEAM_BENCHMARK.md"
+      ],
+      "test_cases": [
+        {
+          "path": "tests/redteam/test_agentic_redteam_benchmark.py",
+          "name": "test_manifest_is_complete_and_every_scenario_has_a_test"
+        }
+      ],
+      "residual_risk": "Mappings are tactic-level only; no verified technique-level coverage or exhaustive attack-chain claim is made.",
+      "release_gate": true
+    }
+  ]
+}
