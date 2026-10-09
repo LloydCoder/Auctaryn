@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose a specific improvement to Auctaryn.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Who is affected and what is difficult or missing?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe observable behavior or acceptance criteria.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Include alternatives and trade-offs if known.
+    validations:
+      required: false
+  - type: textarea
+    id: architecture
+    attributes:
+      label: Security and architecture impact
+      description: Consider identity, policy, approvals, execution, evidence, runtime trust, TADL, and Agent OS.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and the roadmap.
+          required: true
+        - label: I understand risk assessment is not itself an authorization decision.
+          required: true
