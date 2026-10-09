@@ -29,6 +29,20 @@ def _require_memory_scope(
     return agent_id, identity_token
 
 
+def _require_any_memory_scope(
+    agent_id: str | None, identity_token: str | None, scopes: tuple[str, ...]
+) -> tuple[str, str]:
+    if not agent_id or not identity_token:
+        raise HTTPException(status_code=403, detail="Scoped agent identity is required")
+    manager = get_identity_manager()
+    if not any(
+        manager.is_authorized(agent_id, scope, token_id=identity_token, require_token=True)
+        for scope in scopes
+    ):
+        raise HTTPException(status_code=403, detail="Agent token lacks required memory scope")
+    return agent_id, identity_token
+
+
 class StoreRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     content: str = Field(min_length=1, max_length=MAX_MEMORY_CONTENT_CHARS)
@@ -41,7 +55,9 @@ async def create_memory_session(
     agent_id: str | None = Header(default=None, alias="X-Agent-ID"),
     identity_token: str | None = Header(default=None, alias="X-Agent-Identity-Token"),
 ) -> dict:
-    owner, token_id = _require_memory_scope(agent_id, identity_token, "memory:write")
+    owner, token_id = _require_any_memory_scope(
+        agent_id, identity_token, ("memory:read", "memory:write")
+    )
     try:
         session_id = get_memory_defender().create_session(owner, token_id)
     except ValueError as exc:
