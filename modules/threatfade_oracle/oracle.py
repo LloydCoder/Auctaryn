@@ -8,13 +8,17 @@ rather than crashing or blocking legitimate agent actions.
 """
 
 from datetime import datetime, timezone
+import threading
+import time
 
 from pydantic import ValidationError
 
 from core.models import ToolCall, ThreatFadeResult, Severity
 from core.exceptions import ThreatFadeConnectionError
 from core.logging import get_logger
-from modules.threatfade_oracle.client import FusionOpsClient, generate_synthetic_signal, MAX_SOURCE_LABEL_LENGTH
+from modules.threatfade_oracle.client import (
+    FusionOpsClient, generate_synthetic_signal, MAX_SOURCE_LABEL_LENGTH, VALID_SCENARIOS,
+)
 from modules.threatfade_oracle.parliament_adapter import (
     to_threatfade_result, should_escalate,
 )
@@ -34,6 +38,43 @@ class ThreatFadeOracle:
         self.history: list[ThreatFadeResult] = []
         self.raw_results: list[dict] = []
         self.max_history = 1000
+        self.oracle_failure_threshold = 5
+        self.oracle_reset_timeout = 30.0
+        self._oracle_consecutive_failures = 0
+        self._oracle_open_until = 0.0
+        self._oracle_half_open_probe = False
+        self._oracle_breaker_lock = threading.Lock()
+
+    def _begin_oracle_call(self) -> bool:
+        with self._oracle_breaker_lock:
+            now = time.monotonic()
+            if self._oracle_open_until <= 0:
+                return True
+            if now < self._oracle_open_until or self._oracle_half_open_probe:
+                return False
+            self._oracle_half_open_probe = True
+            return True
+
+    def _record_oracle_success(self) -> None:
+        with self._oracle_breaker_lock:
+            self._oracle_consecutive_failures = 0
+            self._oracle_open_until = 0.0
+            self._oracle_half_open_probe = False
+
+    def _record_oracle_failure(self) -> None:
+        with self._oracle_breaker_lock:
+            self._oracle_consecutive_failures += 1
+            self._oracle_half_open_probe = False
+            if self._oracle_consecutive_failures >= self.oracle_failure_threshold:
+                self._oracle_open_until = time.monotonic() + self.oracle_reset_timeout
+
+    def _oracle_breaker_state(self) -> str:
+        with self._oracle_breaker_lock:
+            if self._oracle_open_until <= 0:
+                return "closed"
+            if time.monotonic() < self._oracle_open_until:
+                return "open"
+            return "half_open"
 
     def _record_result(self, result: ThreatFadeResult, raw_result: dict | None = None) -> None:
         self.history.append(result)
@@ -66,6 +107,12 @@ class ThreatFadeOracle:
         """
         timestamps, values = generate_synthetic_signal(tool_call)
         source_label = f"twinguard:{tool_call.tool_name}:{tool_call.action}"[:MAX_SOURCE_LABEL_LENGTH]
+        if not self._begin_oracle_call():
+            fallback = self._fallback_result(source_label)
+            self._record_result(fallback)
+            logger.warning("ThreatFade Oracle circuit breaker is open",
+                           extra={"event": "oracle_circuit_open"})
+            return fallback
 
         try:
             full_result = await self.client.detect_json(
@@ -73,6 +120,7 @@ class ThreatFadeOracle:
             )
             result = to_threatfade_result(full_result)
         except (ThreatFadeConnectionError, ValidationError, KeyError, TypeError, ValueError) as exc:
+            self._record_oracle_failure()
             logger.warning(
                 "ThreatFade Oracle unavailable or returned invalid analysis; using INFO fallback",
                 extra={"event": "oracle_fallback", "module_name": "threatfade_oracle",
@@ -82,6 +130,7 @@ class ThreatFadeOracle:
             self._record_result(fallback)
             return fallback
 
+        self._record_oracle_success()
         self._record_result(result, full_result)
         if should_escalate(full_result):
             logger.warning(
@@ -93,11 +142,20 @@ class ThreatFadeOracle:
 
     async def run_scenario(self, scenario: str) -> ThreatFadeResult:
         """Run a named demo scenario directly against FusionOps."""
-        full_result = await self.client.detect_scenario(scenario)
+        if not isinstance(scenario, str) or scenario not in VALID_SCENARIOS:
+            raise ValueError("Invalid ThreatFade scenario.")
+        if not self._begin_oracle_call():
+            raise ThreatFadeConnectionError("ThreatFade Oracle circuit breaker is open.")
         try:
+            full_result = await self.client.detect_scenario(scenario)
             result = to_threatfade_result(full_result)
+        except ThreatFadeConnectionError:
+            self._record_oracle_failure()
+            raise
         except (ValidationError, KeyError, TypeError, ValueError) as exc:
+            self._record_oracle_failure()
             raise ThreatFadeConnectionError("FusionOps returned an invalid scenario analysis.") from exc
+        self._record_oracle_success()
         self._record_result(result, full_result)
         return result
 
@@ -113,6 +171,7 @@ class ThreatFadeOracle:
             "base_url": self.client.base_url,
             "total_analyses": len(self.history),
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "oracle_circuit_breaker": self._oracle_breaker_state(),
         }
 
     def get_recent_results(self, limit: int = 50) -> list[ThreatFadeResult]:
