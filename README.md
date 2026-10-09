@@ -37,7 +37,7 @@ docker compose --env-file .env up -d --build api
 
 # Dashboard (local dev; run in another terminal)
 cd dashboard
-npm install
+npm ci
 npm run dev -- --host 0.0.0.0
 # Open the Vite URL shown in the terminal (normally http://localhost:5173).
 ```
@@ -127,7 +127,7 @@ Run `python -m pytest tests/redteam -v` for the repeatable OWASP ASI01–ASI10 r
 - Linux (kernel >= 5.13 for Landlock)
 - Docker + Docker Compose
 - Python 3.11+
-- Node.js 18+
+- Node.js 22+ (dashboard dependency-lock generation and CI)
 - NVIDIA OpenShell v0.1.0+
 
 ## Tech Stack
