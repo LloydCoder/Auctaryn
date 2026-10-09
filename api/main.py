@@ -19,9 +19,77 @@ from api.websockets import actions, alerts
 from modules.execution_gateway.openshell_adapter import create_openshell_adapter_from_environment
 from modules.execution_gateway.runtime_adapter import RuntimeAdapterUnavailable
 from modules.execution_gateway.data_guard import SensitiveDataBlocked
+from modules.threatfade_oracle.client import MAX_PCAP_BYTES
+
+PCAP_UPLOAD_REQUEST_LIMIT = MAX_PCAP_BYTES + 64 * 1024
 
 
 startup_time: float = 0.0
+
+
+class RequestBodyLimitExceeded(Exception):
+    """Raised when a bounded PCAP request exceeds its ingress body limit."""
+
+
+class PCAPUploadBodyLimitMiddleware:
+    """Enforce a route-specific ASGI body limit before multipart parsing can spool data."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if not (
+            scope.get("type") == "http"
+            and scope.get("method") == "POST"
+            and scope.get("path") == "/api/v1/threatfade/analyze"
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        headers = {key.lower(): value for key, value in scope.get("headers", [])}
+        content_length = headers.get(b"content-length")
+        if content_length:
+            try:
+                declared_length = int(content_length)
+            except ValueError:
+                await self._reject(send, 400, "Invalid Content-Length")
+                return
+            if declared_length < 0 or declared_length > PCAP_UPLOAD_REQUEST_LIMIT:
+                await self._reject(send, 413, "PCAP request exceeds size limit")
+                return
+
+        total_bytes = 0
+        response_started = False
+
+        async def limited_receive():
+            nonlocal total_bytes
+            message = await receive()
+            if message.get("type") == "http.request":
+                total_bytes += len(message.get("body", b""))
+                if total_bytes > PCAP_UPLOAD_REQUEST_LIMIT:
+                    raise RequestBodyLimitExceeded()
+            return message
+
+        async def tracked_send(message):
+            nonlocal response_started
+            if message.get("type") == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await self.app(scope, limited_receive, tracked_send)
+        except RequestBodyLimitExceeded:
+            if not response_started:
+                await self._reject(send, 413, "PCAP request exceeds size limit")
+
+    @staticmethod
+    async def _reject(send, status_code: int, detail: str):
+        body = ('{"detail":"' + detail + '"}').encode("utf-8")
+        await send({
+            "type": "http.response.start",
+            "status": status_code,
+            "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode("ascii"))],
+        })
+        await send({"type": "http.response.body", "body": body, "more_body": False})
 
 
 @asynccontextmanager
@@ -141,6 +209,8 @@ def create_app() -> FastAPI:
         if required_role == "admin" and role != "admin":
             return JSONResponse(status_code=403, content={"detail": "Administrator credential required"})
         return await call_next(request)
+
+    app.add_middleware(PCAPUploadBodyLimitMiddleware)
 
     app.include_router(health.router, tags=["Health"])
     app.include_router(context.router, prefix="/api/v1/context", tags=["Context Integrity"])

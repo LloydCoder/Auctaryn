@@ -1,0 +1,195 @@
+"""Regression tests for ThreatFade resilience, input validation and advisory boundaries."""
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+from core.exceptions import ThreatFadeConnectionError
+from core.models import Severity, ToolCall
+from modules.threatfade_oracle.client import FusionOpsClient, MAX_PCAP_BYTES
+from modules.threatfade_oracle.oracle import OracleCircuitBreaker, ThreatFadeOracle
+
+
+def _analysis_payload(severity="INFO"):
+    return {
+        "detection": {
+            "severity": severity, "score": 0.1, "entropy": 2.0,
+            "drop_ratio": 0.1, "z_outlier": 0.2, "detected": False,
+        },
+        "triage": {"confidence": 0.2, "escalate": False},
+    }
+
+
+def _response(payload, *, content=b"{}"):
+    return SimpleNamespace(
+        headers={"content-length": str(len(content))},
+        content=content,
+        json=lambda: payload,
+    )
+
+
+def test_synthetic_signal_is_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("AUCTARYN_THREATFADE_ALLOW_SYNTHETIC_SIGNAL", raising=False)
+    oracle = ThreatFadeOracle()
+    oracle.client.detect_json = AsyncMock(side_effect=AssertionError("must not call upstream"))
+    result = asyncio.run(oracle.analyze(ToolCall(
+        tool_name="delete_file", action="delete", agent_id="agent-test",
+    )))
+    assert result.severity == Severity.INFO
+    assert result.source_file == "synthetic-analysis-disabled"
+    oracle.client.detect_json.assert_not_awaited()
+
+
+def test_analysis_response_rejects_unknown_severity():
+    with pytest.raises(ThreatFadeConnectionError, match="invalid severity"):
+        FusionOpsClient._parse_json_response(_response(_analysis_payload("UNRECOGNIZED")), analysis=True)
+
+
+def test_analysis_response_rejects_nan_scores():
+    payload = _analysis_payload()
+    payload["detection"]["score"] = float("nan")
+    with pytest.raises(ThreatFadeConnectionError, match="invalid score"):
+        FusionOpsClient._parse_json_response(_response(payload), analysis=True)
+
+
+def test_response_size_limit_rejects_oversized_content():
+    with pytest.raises(ThreatFadeConnectionError, match="size limit"):
+        FusionOpsClient._parse_json_response(_response({}, content=b"x" * (MAX_PCAP_BYTES + 1)))
+
+
+def test_circuit_breaker_opens_after_threshold_and_resets_on_success():
+    breaker = OracleCircuitBreaker(failure_threshold=2, cooldown_seconds=60)
+    assert breaker.allow_request() is True
+    breaker.record_failure()
+    assert breaker.allow_request() is True
+    breaker.record_failure()
+    assert breaker.allow_request() is False
+    breaker.reset()
+    assert breaker.allow_request() is True
+    breaker.record_failure()
+    breaker.record_success()
+    assert breaker.allow_request() is True
+
+
+def test_threatfade_service_token_is_sent_as_bearer_header(monkeypatch):
+    monkeypatch.setenv("THREATFADE_SERVICE_TOKEN", "service-test-token")
+    client = FusionOpsClient(base_url="https://threatfade.example")
+    assert client._headers["Authorization"] == "Bearer service-test-token"
+
+
+def test_threatfade_service_token_rejects_control_characters(monkeypatch):
+    monkeypatch.setenv("THREATFADE_SERVICE_TOKEN", "bad\nvalue")
+    with pytest.raises(ValueError, match="invalid characters"):
+        FusionOpsClient(base_url="https://threatfade.example")
+
+
+def test_pcap_client_rejects_path_like_filename_and_oversized_payload():
+    client = FusionOpsClient()
+    with pytest.raises(ValueError, match="filename"):
+        asyncio.run(client.detect_pcap(b"pcap", "../capture.pcap"))
+    with pytest.raises(ValueError, match="between 1 byte"):
+        asyncio.run(client.detect_pcap(b"x" * (MAX_PCAP_BYTES + 1), "capture.pcap"))
+
+
+def test_events_limit_is_bounded():
+    client = FusionOpsClient()
+    with pytest.raises(ValueError, match="between 1 and 200"):
+        asyncio.run(client.get_events(100_000))
+
+
+
+def test_pcap_api_rejects_oversized_upload_before_forwarding(client, monkeypatch):
+    import api.routes.threatfade as route_module
+
+    monkeypatch.setattr(route_module, "MAX_PCAP_BYTES", 3)
+    response = client.post(
+        "/api/v1/threatfade/analyze",
+        files={"file": ("capture.pcap", b"four", "application/octet-stream")},
+    )
+    assert response.status_code == 413
+
+
+
+def test_invalid_scenario_does_not_trip_upstream_circuit_breaker(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_THREATFADE_ALLOW_SYNTHETIC_SIGNAL", "true")
+    oracle = ThreatFadeOracle()
+    with pytest.raises(ValueError, match="Invalid ThreatFade scenario"):
+        asyncio.run(oracle.run_scenario("not-a-real-scenario"))
+    assert oracle.circuit_breaker._failures == 0
+
+
+
+def test_external_threatfade_endpoint_requires_service_token(monkeypatch):
+    monkeypatch.delenv("THREATFADE_SERVICE_TOKEN", raising=False)
+    with pytest.raises(ValueError, match="required for external ThreatFade"):
+        FusionOpsClient(base_url="https://threatfade.example")
+
+
+
+def test_cancelled_half_open_probe_releases_circuit_breaker(monkeypatch):
+    import asyncio
+
+    monkeypatch.setattr("modules.threatfade_oracle.oracle.time.monotonic", lambda: 100.0)
+    oracle = ThreatFadeOracle()
+    oracle.circuit_breaker = OracleCircuitBreaker(failure_threshold=1, cooldown_seconds=60)
+    oracle.circuit_breaker.record_failure()
+    oracle.circuit_breaker._opened_at = 0.0
+    oracle.client.detect_scenario = AsyncMock(side_effect=asyncio.CancelledError())
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(oracle.run_scenario("mixed"))
+    assert oracle.circuit_breaker._probe_in_flight is False
+    assert oracle.circuit_breaker._failures == 2
+
+
+
+def test_pcap_client_rejects_unrecognized_file_header():
+    client = FusionOpsClient()
+    with pytest.raises(ValueError, match="recognized PCAP"):
+        asyncio.run(client.detect_pcap(b"not-a-pcap", "capture.pcap"))
+
+
+
+def test_pcap_ingress_limit_rejects_body_before_multipart_parsing(client, monkeypatch):
+    import api.main as main_module
+
+    monkeypatch.setattr(main_module, "PCAP_UPLOAD_REQUEST_LIMIT", 3)
+    response = client.post(
+        "/api/v1/threatfade/analyze",
+        content=b"four",
+        headers={"Content-Type": "application/octet-stream"},
+    )
+    assert response.status_code == 413
+
+
+
+def test_pcap_ingress_limit_counts_chunked_body_without_content_length(monkeypatch):
+    import asyncio
+    import api.main as main_module
+
+    monkeypatch.setattr(main_module, "PCAP_UPLOAD_REQUEST_LIMIT", 3)
+    middleware = main_module.PCAPUploadBodyLimitMiddleware
+    messages = iter([
+        {"type": "http.request", "body": b"ab", "more_body": True},
+        {"type": "http.request", "body": b"cd", "more_body": False},
+    ])
+    sent = []
+
+    async def fake_app(scope, receive, send):
+        while True:
+            message = await receive()
+            if message["type"] == "http.request" and not message.get("more_body", False):
+                break
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok", "more_body": False})
+
+    async def receive():
+        return next(messages)
+
+    async def send(message):
+        sent.append(message)
+
+    asyncio.run(middleware(fake_app)({
+        "type": "http", "method": "POST", "path": "/api/v1/threatfade/analyze", "headers": [],
+    }, receive, send))
+    assert sent[0]["status"] == 413

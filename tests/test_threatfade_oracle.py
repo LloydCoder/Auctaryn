@@ -109,8 +109,9 @@ SAMPLE_CRITICAL_RESULT = {
 class TestFusionOpsClient:
     """HTTP client for the live FusionOps API."""
 
-    def test_client_initialization(self):
+    def test_client_initialization(self, monkeypatch):
         from modules.threatfade_oracle.client import FusionOpsClient
+        monkeypatch.setenv("THREATFADE_SERVICE_TOKEN", "test-service-token")
         client = FusionOpsClient(base_url="https://fusionops.example.test")
         assert client.base_url == "https://fusionops.example.test"
 
@@ -290,8 +291,8 @@ class TestParliamentAdapter:
 
 class TestSyntheticSignalGeneration:
     """
-    For MVP, TwinGuard derives entropy signal data from tool call parameters
-    rather than capturing real network traffic (that's Phase 2 with OpenShell hooks).
+    This helper is demo/test-only. Synthetic values are not observed network telemetry
+    and production Oracle analysis disables this path by default.
     """
 
     def test_generate_signal_from_tool_call(self):
