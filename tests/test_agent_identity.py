@@ -46,7 +46,7 @@ class TestAgentIdentityRegistration:
         identity = mgr.register("agent-001", owner="user-1")
         assert identity.scopes == set()
 
-    def test_duplicate_registration_cannot_change_identity_owner(self):
+    def test_duplicate_registration_cannot_change_identity_owner(self, caplog):
         from modules.agent_identity.identity import AgentIdentityManager
         from core.exceptions import PolicyViolation
 
@@ -60,6 +60,10 @@ class TestAgentIdentityRegistration:
         assert persisted is not None
         assert persisted.identity_id == original.identity_id
         assert persisted.owner == "tenant-a"
+        assert any(
+            getattr(record, "event", None) == "identity_owner_conflict"
+            for record in caplog.records
+        )
 
 
 class TestScopedPermissions:
