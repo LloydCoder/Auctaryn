@@ -118,6 +118,11 @@ def test_adapter_uses_server_configured_sandbox_and_argv_array():
     assert result.adapter == "nvidia-openshell"
 
 
+def test_adapter_rejects_invalid_sandbox_identifier():
+    with pytest.raises(ValueError, match="unsupported characters"):
+        OpenShellRuntimeAdapter(FakeOpenShellClient(), sandbox_name="--help", workspace="default")
+
+
 def test_adapter_rejects_unknown_tool_or_action():
     adapter = OpenShellRuntimeAdapter(FakeOpenShellClient(), sandbox_name="s", workspace="w")
 
@@ -180,6 +185,14 @@ def test_enabled_adapter_requires_sandbox_name(monkeypatch):
     with pytest.raises(RuntimeAdapterUnavailable, match="OPENSHELL_SANDBOX_NAME is required"):
         create_openshell_adapter_from_environment()
 
+def test_enabled_adapter_rejects_invalid_sandbox_name_before_connecting(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_RUNTIME_ADAPTER", "openshell")
+    monkeypatch.setenv("OPENSHELL_SANDBOX_NAME", "--help")
+
+    with pytest.raises(RuntimeAdapterUnavailable, match="must use only letters"):
+        create_openshell_adapter_from_environment()
+
+
 def test_enabled_adapter_rejects_invalid_timeout_before_connecting(monkeypatch):
     monkeypatch.setenv("AUCTARYN_RUNTIME_ADAPTER", "openshell")
     monkeypatch.setenv("OPENSHELL_SANDBOX_NAME", "sandbox")
@@ -212,6 +225,64 @@ def test_enabled_adapter_rejects_partial_oidc_credentials(monkeypatch):
 
     with pytest.raises(RuntimeAdapterUnavailable, match="required together"):
         create_openshell_adapter_from_environment()
+
+def test_enabled_adapter_fails_closed_when_baseline_policy_is_invalid(monkeypatch):
+    import modules.execution_gateway.openshell_adapter as adapter_module
+    from modules.execution_gateway.policy_validation import PolicyValidationError
+
+    monkeypatch.setenv("AUCTARYN_RUNTIME_ADAPTER", "openshell")
+    monkeypatch.setenv("OPENSHELL_SANDBOX_NAME", "sandbox")
+    monkeypatch.setenv("OPENSHELL_WORKSPACE", "default")
+    monkeypatch.setenv("OPENSHELL_ALLOW_USER_CREDENTIALS", "true")
+
+    def invalid_baseline(_path):
+        raise PolicyValidationError("unsafe baseline")
+
+    monkeypatch.setattr(adapter_module, "load_and_validate_baseline", invalid_baseline)
+    with pytest.raises(RuntimeAdapterUnavailable, match="baseline policy"):
+        create_openshell_adapter_from_environment()
+
+
+def test_enabled_adapter_validates_baseline_and_retains_source_digest(monkeypatch):
+    import sys
+    import types
+    import modules.execution_gateway.openshell_adapter as adapter_module
+
+    class FakeCredentials:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    class FakeClientContext:
+        def __enter__(self):
+            return FakeOpenShellClient()
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    class FakeSandboxClient:
+        @staticmethod
+        def from_active_cluster(*, client_credentials):
+            assert isinstance(client_credentials, FakeCredentials)
+            return FakeClientContext()
+
+    fake_sdk = types.ModuleType("openshell")
+    fake_sdk.ClientCredentialsAuth = FakeCredentials
+    fake_sdk.SandboxClient = FakeSandboxClient
+    monkeypatch.setitem(sys.modules, "openshell", fake_sdk)
+
+    monkeypatch.setenv("AUCTARYN_RUNTIME_ADAPTER", "openshell")
+    monkeypatch.setenv("OPENSHELL_SANDBOX_NAME", "sandbox")
+    monkeypatch.setenv("OPENSHELL_WORKSPACE", "default")
+    monkeypatch.setenv("OPENSHELL_OIDC_ISSUER", "https://issuer.example")
+    monkeypatch.setenv("OPENSHELL_OIDC_CLIENT_ID", "service-client")
+    monkeypatch.setenv("OPENSHELL_OIDC_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("OPENSHELL_OIDC_AUDIENCE", "openshell-api")
+
+    adapter = adapter_module.create_openshell_adapter_from_environment()
+    assert adapter is not None
+    assert len(adapter.baseline_policy_sha256) == 64
+    adapter.close()
+
 
 def test_bounded_exec_wrapper_runs_argv_without_shell():
     child_argv = [sys.executable, "-c", "print('bounded-ok')"]

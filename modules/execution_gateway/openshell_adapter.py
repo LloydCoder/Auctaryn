@@ -9,12 +9,18 @@ import asyncio
 import base64
 import json
 import os
+import re
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
 from core.models import ToolCall
+from modules.execution_gateway.policy_validation import (
+    PolicyValidationError,
+    default_baseline_path,
+    load_and_validate_baseline,
+)
 from modules.execution_gateway.runtime_adapter import (
     AdapterExecutionResult,
     DuplicateExecution,
@@ -101,9 +107,14 @@ class OpenShellRuntimeAdapter:
         workspace: str,
         timeout_seconds: int = 60,
         close_callback: Callable[[], None] | None = None,
+        baseline_policy_sha256: str | None = None,
     ):
-        if not sandbox_name.strip() or not workspace.strip():
-            raise ValueError("sandbox_name and workspace must be non-empty")
+        if not isinstance(sandbox_name, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", sandbox_name
+        ):
+            raise ValueError("sandbox_name contains unsupported characters")
+        if not isinstance(workspace, str) or not workspace.strip() or len(workspace) > 128:
+            raise ValueError("workspace must be non-empty and at most 128 characters")
         if not 1 <= timeout_seconds <= 3600:
             raise ValueError("timeout_seconds must be between 1 and 3600")
         self.client = client
@@ -111,6 +122,7 @@ class OpenShellRuntimeAdapter:
         self.workspace = workspace
         self.timeout_seconds = timeout_seconds
         self.close_callback = close_callback
+        self.baseline_policy_sha256 = baseline_policy_sha256
         self._seen_idempotency_keys: set[str] = set()
 
     @property
@@ -237,9 +249,9 @@ def create_openshell_adapter_from_environment() -> OpenShellRuntimeAdapter | Non
 
     sandbox_name = os.getenv("OPENSHELL_SANDBOX_NAME", "").strip()
     workspace = os.getenv("OPENSHELL_WORKSPACE", "default").strip()
-    if not sandbox_name:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", sandbox_name):
         raise RuntimeAdapterUnavailable(
-            "OPENSHELL_SANDBOX_NAME is required when AUCTARYN_RUNTIME_ADAPTER=openshell."
+            "OPENSHELL_SANDBOX_NAME is required and must use only letters, digits, dot, underscore or hyphen."
         )
     try:
         timeout_seconds = int(os.getenv("OPENSHELL_EXECUTION_TIMEOUT_SECONDS", "60"))
@@ -271,6 +283,13 @@ def create_openshell_adapter_from_environment() -> OpenShellRuntimeAdapter | Non
             "Configure OpenShell OIDC service credentials; user credentials require "
             "OPENSHELL_ALLOW_USER_CREDENTIALS=true and are intended only for local development."
         )
+
+    try:
+        _, baseline_policy_sha256 = load_and_validate_baseline(default_baseline_path())
+    except (OSError, PolicyValidationError) as exc:
+        raise RuntimeAdapterUnavailable(
+            "The checked-in OpenShell baseline policy is missing or failed security validation."
+        ) from exc
 
     client_context = None
     try:
@@ -306,4 +325,5 @@ def create_openshell_adapter_from_environment() -> OpenShellRuntimeAdapter | Non
         workspace=workspace,
         timeout_seconds=timeout_seconds,
         close_callback=lambda: client_context.__exit__(None, None, None),
+        baseline_policy_sha256=baseline_policy_sha256,
     )

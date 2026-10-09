@@ -4,6 +4,10 @@ Auctaryn's runtime adapter is opt-in. It is not a replacement for OpenShell's po
 
 ## Restrictive baseline
 
+When the OpenShell adapter is enabled through environment configuration, Auctaryn validates the repository-owned baseline YAML before initializing the SDK client. Startup fails closed if the policy is missing or malformed, Landlock is not set to `hard_requirement`, read/write paths exceed the explicit allowlists, required read-only system paths are missing, or the baseline introduces network rules. The validated source SHA-256 is retained on the adapter for diagnostics.
+
+This is static validation of the checked-in baseline only. It does not prove that the active remote sandbox is enforcing the same effective policy, including provider-composed rules. OpenShell's official policy tooling distinguishes the base policy from the effective policy; operators must inspect the effective policy with `openshell policy get <sandbox> --full` or `openshell sandbox get <sandbox> --policy-only` before production enablement. See [NVIDIA's policy management guide](https://docs.nvidia.com/openshell/dev/how-it-works/policies/manage-policies).
+
 The checked-in policy at `deploy/openshell/auctaryn-policy.yaml`:
 
 - requires Landlock enforcement (`hard_requirement`);
@@ -42,6 +46,23 @@ CI tests the probe contract with fake clients. It does not prove connectivity to
 Auctaryn's `SensitiveDataGuard` runs before identity/risk processing and before execution. It blocks obvious raw credentials in sensitive parameter fields, common token/key formats, and URLs containing embedded user credentials. Error responses report field paths only, never the detected value.
 
 Values such as `vault://...` and `secret://...` are accepted as opaque references; Auctaryn does not resolve them or inject the underlying secret. A production integration must resolve such references through Tinlance Agent Platform's governed secret mechanism or an OpenShell provider profile, with endpoint-bound access. Never place a raw credential in a tool-call payload, command-line argument, log, or sandbox policy. The guard is defense in depth, not a substitute for a secret broker or DLP system.
+
+## Effective-policy pin verification
+
+After independently reviewing the active policy, capture the effective policy from the intended authenticated gateway:
+
+```bash
+openshell sandbox get "$OPENSHELL_SANDBOX_NAME" --policy-only > effective-policy.yaml
+sha256sum effective-policy.yaml
+```
+
+Review the policy content and digest through the normal change-approval process; do not trust a digest calculated from an unreviewed current policy. Set `AUCTARYN_EXPECTED_EFFECTIVE_POLICY_SHA256` to the approved 64-character digest and run:
+
+```bash
+python scripts/verify_openshell_policy.py
+```
+
+The verifier calls the documented OpenShell CLI with an argv list, a 10-second timeout and `shell=False`; it fails if the CLI fails or the effective-policy digest differs. Run it in the same authenticated CLI context as the gateway used by Auctaryn's SDK. This is an operator-run drift check, not a live check performed by every API request, and CI cannot run it without an actual gateway.
 
 ## Required production acceptance
 
