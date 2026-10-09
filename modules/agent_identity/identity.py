@@ -92,20 +92,30 @@ class AgentIdentityManager:
             logger.info(f"Revoked scope '{scope}' from {agent_id}",
                        extra={"event": "scope_revoked", "module_name": "agent_identity"})
 
-    def is_authorized(self, agent_id: str, tool_name: str) -> bool:
-        """
-        Check if an agent has a scope matching the requested tool.
-        Unregistered agents are NEVER authorized — this is the core
-        confused-deputy defense.
-        """
+    def is_authorized(
+        self,
+        agent_id: str,
+        tool_name: str,
+        token_id: str | None = None,
+        require_token: bool = False,
+    ) -> bool:
+        """Check identity and tool scope; runtime gateway calls require a scoped token."""
         identity = self._identities.get(agent_id)
         if identity is None:
             return False
 
-        for scope in identity.scopes:
-            if fnmatch.fnmatch(tool_name, scope):
-                return True
-        return False
+        if require_token:
+            token = self._tokens.get(token_id or "")
+            if (
+                token is None
+                or token.revoked
+                or token.agent_id != agent_id
+                or datetime.now(timezone.utc) >= token.expires_at
+            ):
+                return False
+            return any(fnmatch.fnmatch(tool_name, scope) for scope in token.scopes)
+
+        return any(fnmatch.fnmatch(tool_name, scope) for scope in identity.scopes)
 
     # --- Time-scoped tokens ---
 
@@ -113,6 +123,8 @@ class AgentIdentityManager:
         identity = self._identities.get(agent_id)
         if identity is None:
             raise PolicyViolation("unknown_agent", agent_id)
+        if not 1 <= ttl_seconds <= 3600:
+            raise PolicyViolation("invalid_token_ttl", str(ttl_seconds))
 
         now = datetime.now(timezone.utc)
         token = ScopedToken(
@@ -158,17 +170,19 @@ class AgentIdentityManager:
         if delegate_identity is None:
             raise PolicyViolation("unknown_delegate", delegate_agent_id)
 
+        if not 1 <= ttl_seconds <= 3600:
+            raise PolicyViolation("invalid_token_ttl", str(ttl_seconds))
         requested = set(scopes)
+        if not requested:
+            raise PolicyViolation("empty_delegation", delegate_agent_id)
         not_held = requested - delegator.scopes
         if not_held:
             raise PolicyViolation(
                 f"delegator_lacks_scope:{','.join(not_held)}", delegator_agent_id
             )
 
-        # Grant only the delegated subset, time-scoped via a token
-        for scope in requested:
-            delegate_identity.scopes.add(scope)
-
+        # Delegated scopes live only in this expiring token; never mutate
+        # the delegate's durable identity scopes.
         now = datetime.now(timezone.utc)
         token = ScopedToken(
             token_id=uuid.uuid4().hex,
