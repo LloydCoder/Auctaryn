@@ -271,6 +271,18 @@ async def execute_approved_decision(decision_id: str) -> dict:
     context_denial = _context_integrity_preflight(decision.tool_call)
     if context_denial:
         raise HTTPException(status_code=409, detail=context_denial)
+    fingerprint = action_intent_fingerprint(decision.tool_call)
+    try:
+        await record_evidence(
+            "execution.requested",
+            correlation_id=fingerprint,
+            actor_id=decision.tool_call.agent_id,
+            decision_id=decision.id,
+            outcome="approved_execution_requested",
+            details={"action_fingerprint": fingerprint, "decision": decision.decision.value},
+        )
+    except (EvidenceStoreError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="Evidence recording unavailable; execution not started") from exc
     try:
         receipt = await service.execute_approved_decision(decision)
     except DuplicateExecution as exc:
@@ -279,7 +291,25 @@ async def execute_approved_decision(decision_id: str) -> dict:
         raise HTTPException(status_code=409, detail="Action intent integrity check failed; execution refused") from exc
     except RuntimeAdapterFailure as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return {"decision_id": decision.id, "execution": receipt.model_dump(mode="json")}
+    evidence_status = "complete"
+    try:
+        await record_evidence(
+            "execution.receipt",
+            correlation_id=fingerprint,
+            actor_id=decision.tool_call.agent_id,
+            decision_id=decision.id,
+            execution_id=receipt.execution_id,
+            outcome=receipt.status,
+            details={
+                "runtime_adapter": receipt.adapter,
+                "receipt_hash": receipt.stdout_sha256,
+                "action_fingerprint": fingerprint,
+            },
+        )
+    except (EvidenceStoreError, ValueError):
+        evidence_status = "terminal_record_failed"
+    return {"decision_id": decision.id, "execution": receipt.model_dump(mode="json"),
+            "evidence_status": evidence_status}
 
 
 @router.post("/intercept")
