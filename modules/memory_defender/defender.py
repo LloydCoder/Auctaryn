@@ -320,7 +320,7 @@ class MemoryDefender:
         entry = self.store.get(key)
         if entry is None:
             return False
-        if entry.agent_id and agent_id != entry.agent_id:
+        if agent_id is not None and agent_id != entry.agent_id:
             return False
         if entry.quarantined:
             return entry.session_id == session_id
