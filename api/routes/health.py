@@ -45,9 +45,23 @@ async def _runtime_probe_status() -> dict:
         error = "Configured runtime adapter has no health probe."
     else:
         try:
-            result = probe()
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + RUNTIME_PROBE_TIMEOUT_SECONDS
+            if inspect.iscoroutinefunction(probe):
+                result = await asyncio.wait_for(
+                    probe(), timeout=RUNTIME_PROBE_TIMEOUT_SECONDS
+                )
+            else:
+                # A synchronous adapter must not block the event loop or bypass
+                # the same bounded health-probe deadline used for async adapters.
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(probe), timeout=RUNTIME_PROBE_TIMEOUT_SECONDS
+                )
             if inspect.isawaitable(result):
-                result = await asyncio.wait_for(result, timeout=RUNTIME_PROBE_TIMEOUT_SECONDS)
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    raise asyncio.TimeoutError()
+                result = await asyncio.wait_for(result, timeout=remaining)
             passed = result is True
             if not passed:
                 error = "Runtime health probe did not return True."
