@@ -2,7 +2,7 @@
 
 **Supported-path governance and runtime integration for autonomous AI agents**
 
-Built on [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) — defense-in-depth for autonomous AI agents.
+Designed to integrate with [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) as a defense-in-depth runtime boundary.
 
 Auctaryn adds heuristic context checks and risk-based decisions to supported agent paths, with optional ThreatFade advisory signals and a configured OpenShell runtime adapter. Tinlance Agent Platform remains authoritative for identity, tenant binding, policy, approvals and governed execution.
 
@@ -102,7 +102,7 @@ The dashboard requires an administrator API key at sign-in. REST API clients use
 ## Security configuration
 
 - Generate two different secrets, for example with `openssl rand -hex 32`, and set `AUCTARYN_API_KEY` and `AUCTARYN_ADMIN_API_KEY` in `.env`.
-- All `/api/v1/*` HTTP endpoints require a Bearer credential. Ordinary API request bodies are capped at 2 MiB before parsing; PCAP ingress has a separate bounded allowance. Identity management, approval, pending-decision, and decision-history endpoints require the administrator credential.
+- All `/api/v1/*` HTTP endpoints require a Bearer credential. Strong-key mode is enabled by default and rejects distinct service/admin keys shorter than 32 characters, low-diversity values and obvious placeholders; production Compose forces it on. Ordinary API request bodies are capped at 2 MiB before parsing; PCAP ingress has a separate bounded allowance. Identity management, approval, pending-decision, and decision-history endpoints require the administrator credential.
 - Before intercepting actions, an administrator registers an agent, grants tool scopes, and issues a short-lived token via `POST /api/v1/identity/token`. Gateway interception requests must include both `agent_id` and `identity_token`. Tokens expire within one hour maximum. Any permission change increments the identity's permission version and invalidates existing issued capabilities; delegated capabilities also become invalid when the delegator's permission version changes. Reissue capabilities after any scope change.
 - Gateway decisions carry an internal canonical fingerprint of the action intent (tool, action, parameters, target, agent and session). A pending action is denied if its intent changes before approval, and execution rechecks the fingerprint immediately before calling the trusted runtime adapter. The fingerprint is excluded from public serialization; it is mutation detection, not a signature or durable audit guarantee. Approval and execution-deduplication state remain in process memory. See [Approval Lifecycle](docs/APPROVAL_LIFECYCLE.md).
 - Agent registration is idempotent only for the same owner. Re-registering an existing `agent_id` under a different owner is rejected with a policy violation; resolve ownership conflicts through an explicit, audited administrative workflow rather than silently reassigning the identity.
