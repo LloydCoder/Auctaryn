@@ -90,7 +90,8 @@ class ToolCall(BaseModel):
     parameters: dict[str, Any] = {}
     target: str = ""
     agent_id: str = ""
-    session_id: str = ""
+    session_id: str = Field(default="", max_length=128)
+    context_check_id: str = Field(default="", max_length=64)
     # Bearer capability is consumed only by gateway preflight and excluded from responses.
     identity_token: str = Field(default="", exclude=True, repr=False, max_length=128)
 
