@@ -16,7 +16,8 @@
 5. Only APPROVED decisions can reach a configured runtime adapter. Pending, denied, vetoed, expired, or unknown decisions do not execute.
 6. The OpenShell adapter uses a server-configured sandbox and workspace, accepts a bounded argv array, and does not invoke a host shell. A bounded supervisor runs inside the sandbox to cap runtime and captured output.
 7. Runtime receipts correlate to the decision ID and expose output hashes plus truncation indicators, not raw stdout/stderr.
-8. Pending approvals expire after 15 minutes by default and can be resolved once. Approval state, identities, tokens, and execution deduplication remain in process memory in the current repository; they are not durable or multi-replica safe.
+8. Pending approvals expire after 15 minutes by default and can be resolved once. The canonical action-intent fingerprint is rechecked when a pending action is approved and immediately before runtime execution; a changed intent is denied and never forwarded.
+9. The fingerprint is an internal mutation-detection binding, not a signature or durable audit record. Approval state, identities, tokens, and execution deduplication remain in process memory in the current repository; they are not durable or multi-replica safe.
 
 ## Context-integrity trust boundary
 
