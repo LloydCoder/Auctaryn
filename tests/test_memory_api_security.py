@@ -116,3 +116,21 @@ def test_memory_api_rejects_oversized_content(client):
     session_id = _session(client, headers)
     response = _store(client, headers, session_id, content="x" * 32769)
     assert response.status_code == 422
+
+
+
+def test_readability_check_rolls_back_tampered_quarantine_metadata(client):
+    import api.routes.memory as memory_routes
+
+    headers = _agent_token(client, "memory-read-tamper")
+    owner_session = _session(client, headers)
+    other_session = _session(client, headers)
+    stored = _store(client, headers, owner_session).json()
+    memory_routes.get_memory_defender().store._entries[stored["entry_id"]].quarantined = False
+    response = client.get(
+        f"/api/v1/memory/readable/{stored['entry_id']}/{other_session}",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["readable"] is False
+    assert memory_routes.get_memory_defender().store.get(stored["entry_id"]).quarantined is True
