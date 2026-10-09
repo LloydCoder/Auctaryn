@@ -98,17 +98,44 @@ jobs:
           subject-name: ${{ steps.build.outputs.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
-      - name: Attest image SBOM
+      - name: Create immutable release manifest
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          TESTED_COMMIT="$(jq -r '.tested_commit' release/release-evidence.json)"
+          SOURCE_SBOM_SHA256="$(sha256sum auctaryn-source.spdx.json | cut -d' ' -f1)"
+          CONTAINER_SBOM_SHA256="$(sha256sum auctaryn-container.spdx.json | cut -d' ' -f1)"
+          jq \
+            --arg release_tag "$GITHUB_REF_NAME" \
+            --arg source_commit "$GITHUB_SHA" \
+            --arg tested_commit "$TESTED_COMMIT" \
+            --arg image "$IMAGE" \
+            --arg digest "$DIGEST" \
+            --arg source_sbom_sha256 "$SOURCE_SBOM_SHA256" \
+            --arg container_sbom_sha256 "$CONTAINER_SBOM_SHA256" \
+            '. as $e | {
+              schema_version: "auctaryn-release-manifest.v1",
+              release_tag: $release_tag,
+              source_commit: $source_commit,
+              tested_commit: $tested_commit,
+              image: $image,
+              image_digest: $digest,
+              sboms: {
+                source: {path: "auctaryn-source.spdx.json", sha256: $source_sbom_sha256},
+                container: {path: "auctaryn-container.spdx.json", sha256: $container_sbom_sha256}
+              },
+              workflow_runs: ($e.workflow_runs | with_entries(.value |= {run_id, head_sha, url}))
+            }' release/release-evidence.json > release-manifest.json
+      - name: Attest release manifest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
-          subject-name: ${{ steps.build.outputs.image }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-          sbom-path: auctaryn-container.spdx.json
-          push-to-registry: true
+          subject-path: release-manifest.json
       - name: Verify registry digest and attestation
         run: |
           OBSERVED="$(docker buildx imagetools inspect "$IMAGE:$GITHUB_REF_NAME" --format '{{.Manifest.Digest}}')"
           test "$OBSERVED" = "${{ steps.build.outputs.digest }}"
           gh attestation verify "oci://$IMAGE:$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY"
+          gh attestation verify release-manifest.json -R "$GITHUB_REPOSITORY"
       - name: Create GitHub release with SBOMs
-        run: gh release create "$GITHUB_REF_NAME" auctaryn-source.spdx.json auctaryn-container.spdx.json --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" release-manifest.json auctaryn-source.spdx.json auctaryn-container.spdx.json --generate-notes --verify-tag

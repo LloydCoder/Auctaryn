@@ -82,3 +82,5 @@ def test_release_workflow_is_tag_gated_and_verifies_published_attestation() -> N
     assert "python scripts/verify_release_evidence.py release/release-evidence.json --require-passed" in workflow
     assert "push-to-registry: true" in workflow
     assert "gh attestation verify" in workflow
+    assert "release-manifest.json" in workflow
+    assert "--verify-tag" in workflow

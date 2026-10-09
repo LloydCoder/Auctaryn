@@ -18,7 +18,7 @@ Update release/release-evidence.json with evidence references and reviewer metad
 
 1. Complete the pre-release evidence manifest and commit only that manifest after the tested commit. The workflow rejects any intervening source/configuration change outside release/release-evidence.json.
 2. Create a version tag (vX.Y.Z) on the evidence commit. Do not tag while any gate remains pending.
-3. The workflow validates the manifest, verifies exact-head CI/CodeQL/supply-chain runs, builds the image using the pinned Docker base and security-patched zlib, publishes the version-tagged image to GHCR, generates source and image SPDX SBOMs, issues provenance and SBOM attestations, verifies the published digest/attestation, and creates a GitHub release with SBOM assets.
+3. The workflow validates the manifest, verifies exact-head CI/CodeQL/supply-chain runs, builds the image using the pinned Docker base and security-patched zlib, publishes the version-tagged image to GHCR, generates source and image SPDX SBOMs, writes an immutable release manifest containing the image digest, tested commit, workflow run IDs and SBOM checksums, attests the manifest and image, verifies the published digest/attestations, and creates a GitHub release with the manifest and SBOM assets.
 4. Verify image provenance independently before deployment with the GitHub CLI: gh attestation verify oci://ghcr.io/lloydcoder/auctaryn:vX.Y.Z -R LloydCoder/Auctaryn.
 
 ## Post-deployment acceptance
