@@ -100,6 +100,35 @@ class TestThreatFadeAPI:
         assert len(r.json()) >= 1
 
 
+    def test_pcap_upload_is_bounded_before_oracle_call(self, client, monkeypatch):
+        import api.routes.threatfade as threatfade_routes
+        monkeypatch.setattr(threatfade_routes, "MAX_PCAP_BYTES", 4)
+        response = client.post(
+            "/api/v1/threatfade/analyze",
+            files={"file": ("sample.pcap", b"12345", "application/octet-stream")},
+        )
+        assert response.status_code == 413
+
+    def test_pcap_failure_does_not_expose_upstream_exception(self, client, monkeypatch):
+        import api.routes.threatfade as threatfade_routes
+        from core.exceptions import ThreatFadeConnectionError
+
+        class FakeClient:
+            async def detect_pcap(self, content, filename):
+                raise ThreatFadeConnectionError("internal-host-secret")
+
+        class FakeOracle:
+            client = FakeClient()
+
+        monkeypatch.setattr(threatfade_routes, "get_oracle", lambda: FakeOracle())
+        response = client.post(
+            "/api/v1/threatfade/analyze",
+            files={"file": ("sample.pcap", b"pcap", "application/octet-stream")},
+        )
+        assert response.status_code == 502
+        assert "internal-host-secret" not in response.text
+
+
 class TestParliamentEscalation:
     """The key integration: gateway preflight, local policy, and Oracle escalation."""
 
