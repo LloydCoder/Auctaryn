@@ -1,5 +1,5 @@
 """
-TwinGuard — Agent Identity & Privilege Module Tests (TDD)
+Auctaryn — Agent Identity & Privilege Module Tests (TDD)
 Maps to OWASP ASI03:2026 — Agent Identity & Privilege Abuse.
 
 Core principle (OWASP "Least Agency"): agents must have their own
