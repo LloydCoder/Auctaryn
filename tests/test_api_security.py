@@ -239,3 +239,11 @@ def test_weak_api_keys_are_rejected_when_strong_keys_are_required(monkeypatch):
     response = _client().get("/api/v1/gateway/status", headers={"Authorization": "Bearer weak-service"})
     assert response.status_code == 503
     assert "not configured" in response.json()["detail"]
+
+
+def test_repeated_character_keys_are_not_strong(monkeypatch):
+    from api.security import credentials_are_strong
+
+    monkeypatch.setenv("AUCTARYN_API_KEY", "a" * 64)
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "b" * 64)
+    assert credentials_are_strong() is False
