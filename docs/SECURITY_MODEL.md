@@ -44,3 +44,14 @@ Recognized secret references (for example vault://...) are treated as opaque ide
 ## Deployment acceptance
 
 CI verifies unit and API behavior, the bounded supervisor script, dashboard build, container build, compose configuration, dependency audit, and liveness. Production readiness still requires a live OpenShell gateway integration test and verification of the effective sandbox policy, network restrictions, filesystem restrictions, service authentication, and operational recovery procedures.
+
+
+## ThreatFade Oracle trust and failure boundary
+
+ThreatFade is an advisory signal source, not an authorization authority. The upstream response is untrusted input: analysis responses must contain detection and triage objects, a recognized severity, finite numeric fields, and correctly typed control flags. Malformed or unavailable responses are treated as upstream failures; the gateway retains its conservative local decision and never turns a pending/destructive action into an approval because of a fallback.
+
+Synthetic signals derived from tool-call parameters are not observed network telemetry. They are disabled by default and may only be enabled explicitly for demos or tests with `AUCTARYN_THREATFADE_ALLOW_SYNTHETIC_SIGNAL=true`. Do not cite synthetic-mode results as threat evidence or use them to certify detection performance.
+
+The client disables redirects, validates the configured URL, applies bounded timeouts, constrains signal and event sizes, limits PCAP uploads to 10 MiB, rejects path-like filenames, validates JSON response structure, and supports a `THREATFADE_SERVICE_TOKEN` Bearer credential when the upstream service is configured to accept it. External deployments must use HTTPS. The optional token does not provide authentication unless the ThreatFade service verifies it.
+
+The Oracle circuit breaker opens after repeated upstream failures and permits only a single half-open probe after its cooldown. Analysis history is capped in process memory. These are local resilience controls; they are not durable distributed rate limits, and the history is not a durable audit ledger.
