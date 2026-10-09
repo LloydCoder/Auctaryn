@@ -364,7 +364,7 @@
         <div class="module-icon-wrap mod-amber">📡</div>
         <div>
           <div class="module-title">ThreatFade Oracle</div>
-          <div class="module-desc">Live C2 threat intelligence from FusionOps, MITRE TTP mapping. ASI10.</div>
+          <div class="module-desc">Optional advisory signals from ThreatFade when configured; live upstream service is not verified by this demo. ASI10.</div>
           <span class="module-tag">Implemented in repository</span>
         </div>
       </div>
@@ -393,7 +393,7 @@ const lines = [
   {delay:1700, ts:'09:14:35', tag:'SAFE', tagClass:'tag-safe', msg:'<span class="action">search_calendar</span>:query · risk=SAFE · auto-approved ✓'},
   {delay:2500, ts:'09:14:38', tag:'WARN', tagClass:'tag-warn', msg:'<span class="action">send_email</span>:bulk · params={recipients:47} · <span class="score">risk elevated → DESTRUCTIVE</span>'},
   {delay:3400, ts:'09:14:38', tag:'WAIT', tagClass:'tag-warn', msg:'Action queued · awaiting operator approval · timeout 300s'},
-  {delay:4200, ts:'09:14:39', tag:'INFO', tagClass:'tag-info', msg:'Checking ThreatFade Oracle → FusionOps ...'},
+  {delay:4200, ts:'09:14:39', tag:'INFO', tagClass:'tag-info', msg:'Simulating optional ThreatFade advisory lookup ...'},
   {delay:5100, ts:'09:14:40', tag:'INFO', tagClass:'tag-info', msg:'Oracle response: score=0.12 severity=LOW · no C2 signal detected'},
   {delay:6000, ts:'09:14:41', tag:'INFO', tagClass:'tag-info', msg:'Identity check → agent-001 authorized for send_email ✓'},
   {delay:7000, ts:'09:14:55', tag:'SAFE', tagClass:'tag-safe', msg:'Operator approved send_email:bulk · decision_id=d-8b3e · executed ✓'},
@@ -402,7 +402,7 @@ const lines = [
   {delay:9600, ts:'09:15:08', tag:'BLOCK', tagClass:'tag-block', msg:'<span class="vetoed">⛔ VETOED</span> · policy: no_config_modification · agent blocked'},
   {delay:10400,ts:'09:15:09', tag:'WARN', tagClass:'tag-warn', msg:'Context compaction detected · 8240→4100 tokens (-50%) · rechecking hashes ...'},
   {delay:11200,ts:'09:15:09', tag:'BLOCK', tagClass:'tag-block', msg:'<span class="integrity">✗ INTEGRITY VIOLATION</span> · email_safety instruction missing after compaction'},
-  {delay:12000,ts:'09:15:09', tag:'BLOCK', tagClass:'tag-block', msg:'<span class="vetoed">⛔ AGENT BLOCKED</span> · Context Integrity Guardian · Summer Yue protection active'},
+  {delay:12000,ts:'09:15:09', tag:'BLOCK', tagClass:'tag-block', msg:'<span class="vetoed">⛔ AGENT BLOCKED</span> · Illustrative local policy decision · not a live incident response'},
 ];
 const terminal = document.getElementById('terminal');
 function playSequence(){
