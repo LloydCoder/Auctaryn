@@ -282,9 +282,14 @@ def test_memory_session_expires_and_is_removed():
     from modules.memory_defender.defender import MemoryDefender
     defender = MemoryDefender()
     session = defender.create_session("agent-expiring", token_id="token-expiring", ttl_seconds=60)
+    decision = defender.evaluate_for_storage(
+        "quarantined note", source="api:untrusted", session_id=session, agent_id="agent-expiring",
+    )
+    assert defender.store.get(decision.entry_id) is not None
     defender._sessions[session].expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
     assert defender.session_owned_by(session, "agent-expiring", "token-expiring") is False
     assert session not in defender._sessions
+    assert defender.store.get(decision.entry_id) is None
 
 
 
