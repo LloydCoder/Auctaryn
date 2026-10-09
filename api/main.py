@@ -40,7 +40,7 @@ class APIRequestBodyLimitMiddleware:
     async def __call__(self, scope, receive, send):
         path = scope.get("path", "")
         method = scope.get("method", "")
-        if scope.get("type") != "http" or method not in {"POST", "PUT", "PATCH"} or not path.startswith("/api/v1/"):
+        if scope.get("type") != "http" or method not in {"POST", "PUT", "PATCH", "DELETE"} or not path.startswith("/api/v1/"):
             await self.app(scope, receive, send)
             return
 
