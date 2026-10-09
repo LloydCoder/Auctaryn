@@ -144,3 +144,45 @@ def test_approval_endpoint_returns_conflict_when_action_intent_changes(monkeypat
     assert response.status_code == 409
     assert "intent changed" in response.json()["detail"]
     assert gateway.history[0].decision == ActionDecision.DENIED
+
+
+
+def test_execute_approved_endpoint_returns_conflict_for_mutated_decision(monkeypatch):
+    from api.routes import gateway as gateway_routes
+    from core.models import ActionDecision, ToolCall
+    from modules.execution_gateway.gateway import ExecutionGateway
+
+    class NeverCalledAdapter:
+        async def execute(self, tool_call, *, idempotency_key):
+            raise AssertionError("mutated action must not reach the runtime adapter")
+
+    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
+    gateway = ExecutionGateway()
+    monkeypatch.setattr(gateway_routes, "_gateway", gateway)
+    adapter = NeverCalledAdapter()
+    gateway_routes.configure_runtime_adapter(adapter)
+    try:
+        pending = gateway.evaluate(
+            ToolCall(
+                tool_name="delete_file",
+                action="delete",
+                parameters={"path": "/tmp/original.db"},
+                agent_id="approval-intent-test",
+            )
+        )
+        assert pending.decision == ActionDecision.PENDING
+        approved = gateway.resolve_pending(
+            pending.id, approved=True, operator="authenticated_operator"
+        )
+        approved.tool_call.parameters["path"] = "/tmp/changed.db"
+
+        response = _client().post(
+            f"/api/v1/gateway/execute/approved/{approved.id}",
+            headers={"Authorization": "Bearer test-admin-secret"},
+        )
+    finally:
+        gateway_routes.configure_runtime_adapter(None)
+
+    assert response.status_code == 409
+    assert "intent integrity" in response.json()["detail"]
