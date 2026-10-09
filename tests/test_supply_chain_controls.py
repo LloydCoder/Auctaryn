@@ -78,8 +78,10 @@ def test_supply_chain_workflow_has_required_controls() -> None:
     assert "only-fixed: false" in inventory_step
     assert "output-file: grype-full.json" in supply
     assert "audit_grype_report.py grype-full.json" in supply
-    assert "apt-get install -y --no-install-recommends" not in (ROOT / "Dockerfile").read_text()
-    assert "curl" not in (ROOT / "Dockerfile").read_text()
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    assert "FROM python:3.12.15-alpine3.24" in dockerfile
+    assert "apt-get install -y --no-install-recommends" not in dockerfile
+    assert "curl" not in dockerfile
     assert "fail-build: true" in supply
     assert "actions/attest@" in supply
     assert "attestations: write" in supply
