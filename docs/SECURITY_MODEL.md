@@ -68,3 +68,8 @@ The Oracle circuit breaker opens after repeated upstream failures and permits on
 
 
 Quarantined memory is not readable by any agent session, including the originating session. An operator-authenticated review endpoint exposes quarantined content for investigation; there is no API route that promotes quarantine to trusted memory in this phase. The quarantine queue and inspection route verify entry integrity and restore last-known-good metadata before using the quarantine flag.
+
+
+## Skill and tool supply chain
+
+Skill manifests are accepted only with an exact semantic version, valid SHA-256 artifact digest, trusted Ed25519 publisher signature and matching artifact bytes. Publisher trust mutation is administrator-only. Immutable name/version manifest pins detect changes and version rollback within the process. These pins and trust roots remain in-memory; they are not a durable multi-replica trust store. Passing vetting does not authorize execution, which remains governed by Tinlance Agent Platform and the configured runtime. See [Skill Supply-Chain Security](SKILL_SUPPLY_CHAIN.md).
