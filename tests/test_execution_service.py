@@ -139,3 +139,34 @@ def test_api_execute_endpoint_returns_503_without_trusted_adapter(monkeypatch):
 
     assert response.status_code == 503
     assert "No trusted runtime adapter" in response.json()["detail"]
+
+def test_api_rejects_execution_of_auto_approved_decision_as_if_operator_approved(monkeypatch):
+    from api.routes.gateway import configure_runtime_adapter, get_gateway
+
+    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
+    gateway = get_gateway()
+    decision = GatewayDecision(
+        id="auto-approved-not-operator-approved",
+        tool_call=ToolCall(
+            tool_name="read_file",
+            action="read",
+            parameters={"path": "/tmp/readme.md"},
+            agent_id="test-agent",
+        ),
+        risk_level=RiskLevel.SAFE,
+        decision=ActionDecision.APPROVED,
+        decided_by="veto_engine",
+    )
+    gateway.history.append(decision)
+    configure_runtime_adapter(FakeRuntimeAdapter())
+    try:
+        response = TestClient(create_app()).post(
+            f"/api/v1/gateway/execute/approved/{decision.id}",
+            headers={"Authorization": "Bearer test-admin-secret"},
+        )
+    finally:
+        configure_runtime_adapter(None)
+
+    assert response.status_code == 409
+    assert "explicitly approved by an operator" in response.json()["detail"]
