@@ -1,7 +1,4 @@
 """API security and provenance tests for Phase 12 memory isolation."""
-import pytest
-
-
 def _agent_token(client, agent_id, scopes=("memory:read", "memory:write")):
     registered = client.post("/api/v1/identity/register", json={"agent_id": agent_id, "owner": f"owner-{agent_id}"})
     assert registered.status_code == 200
