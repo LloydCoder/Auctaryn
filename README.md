@@ -54,6 +54,12 @@ Auctaryn exposes the versioned advisory risk contract `POST /api/v1/risk/assess`
 
 Gateway assessments, decisions, approvals, execution requests and safe receipt hashes are recorded in a local SQLite hash chain. Administrator-only inspection endpoints are `GET /api/v1/evidence/records` and `GET /api/v1/evidence/verify`. Set `AUCTARYN_EVIDENCE_DB` for the database path and configure a separately managed value of at least 32 bytes for keyed record authentication using `AUCTARYN_EVIDENCE_HMAC_KEY` or, preferably, a mounted secret file via `AUCTARYN_EVIDENCE_HMAC_KEY_FILE`. Without the key, the service reports hash-chain-only mode. This local store is not the Platform audit of record; production requires external key management, immutable export, retention and restore validation. See [Phase 16 forensic audit](audits/PHASE-16-FORENSIC-AUDIT.md).
 
+## Local database recovery
+
+Auctaryn includes a verified single-host SQLite backup and restore utility for its local evidence and incident-control database. Use `python scripts/database_recovery.py backup SOURCE DESTINATION` to create a consistent snapshot and verify SQLite integrity plus the evidence hash chain; use `verify DATABASE` before a restore. If evidence records are HMAC-signed, configure the same separately managed verification key. See the [database recovery runbook](docs/DATABASE_RECOVERY.md) and [Phase 20 forensic audit](audits/PHASE-20-FORENSIC-AUDIT.md).
+
+This is not a complete enterprise DR service: off-host/immutable backup retention, backup monitoring, approved RPO/RTO, scheduled restore drills, multi-replica coordination and durable identity/approval state remain production gates.
+
 ## Enterprise authorization boundary
 
 See [`docs/API_AUTHORIZATION_MATRIX.md`](docs/API_AUTHORIZATION_MATRIX.md) for service/admin route permissions. Direct execution is disabled by default; controlled local execution requires `AUCTARYN_ALLOW_DIRECT_EXECUTION=true` plus the distinct administrator credential. In the Platform-integrated production profile, keep it disabled.
