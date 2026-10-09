@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from api.security import token_role
+from api.security import origin_allowed, token_role
 from core.logging import get_logger
 
 router = APIRouter()
@@ -29,6 +29,9 @@ async def broadcast_alert(data: dict) -> None:
 @router.websocket("/ws/alerts")
 async def alerts_websocket(websocket: WebSocket):
     """Require a valid API credential in the first WebSocket frame."""
+    if not origin_allowed(websocket.headers.get("origin")):
+        await websocket.close(code=4403, reason="Origin not allowed")
+        return
     await websocket.accept()
     try:
         raw = await asyncio.wait_for(websocket.receive_text(), timeout=10)
