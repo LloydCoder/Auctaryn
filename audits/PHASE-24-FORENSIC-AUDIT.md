@@ -87,7 +87,13 @@ This audit does not represent external gates as completed. No independent penetr
 
 **Remediation:** added the Apache License 2.0 text with Tinlance Limited copyright notice and added a regression test for the license file.
 
-### P24-10 — Production deploy could bypass the release evidence chain
+### P24-10 — Weak API credentials could pass readiness outside the deployment helper
+
+**Risk:** authentication accepted short service/admin keys, while only the deployment helper enforced a 32-character minimum. A manually configured deployment could therefore use weak keys and still appear configured.
+
+**Remediation:** authentication now enables strong-key enforcement by default, rejects keys shorter than 32 characters and obvious placeholders, and readiness independently requires strong distinct credentials. Production Compose forces strong-key mode. Test fixtures explicitly disable the policy only for tests that exercise authentication error paths; readiness tests use strong test keys.
+
+### P24-11 — Production deploy could bypass the release evidence chain
 
 **Risk:** the previous helper built from a moving branch and used a mutable image reference; rollback attempted to retag a local image ID rather than restore a previously attested immutable digest.
 
@@ -111,6 +117,7 @@ The Phase 24 tests cover:
 - gateway history and approval queues remain bounded and pending actions are denied at queue saturation;
 - identity, token, scope, execution-deduplication and runtime idempotency state have explicit fail-closed capacity guards;
 - public pages avoid unsupported universal-mediation, production-metric and pricing claims;
+- authentication rejects weak/placeholder credentials by default and readiness requires strong distinct keys;
 - the Olvrix reference integration fails closed and does not use a hard-coded endpoint;
 - production deployment and rollback require immutable digest and attestation verification;
 - the repository contains the declared Apache-2.0 license.
