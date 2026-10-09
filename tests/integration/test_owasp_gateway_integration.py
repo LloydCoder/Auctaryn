@@ -31,6 +31,12 @@ class TestAgentIdentityAPI:
         })
         assert r.status_code == 200
         assert "read_file" in r.json()["scopes"]
+        assert client.get("/api/v1/identity/sub/authorized/read_file").json()["authorized"] is False
+        from api.routes.gateway import get_gateway
+        token_id = r.json()["token_id"]
+        assert get_gateway().identity_manager.is_authorized(
+            "sub", "read_file", token_id=token_id, require_token=True
+        ) is True
 
     def test_delegate_excess_scope_rejected(self, client):
         client.post("/api/v1/identity/register", json={"agent_id": "mgr2", "owner": "user-1"})
