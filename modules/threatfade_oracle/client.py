@@ -47,8 +47,8 @@ class FusionOpsClient:
             len(service_token) > 4096 or any(ord(char) < 33 or ord(char) > 126 for char in service_token)
         ):
             raise ValueError("THREATFADE_SERVICE_TOKEN contains invalid characters")
-        if parsed.scheme == "https" and not service_token:
-            raise ValueError("THREATFADE_SERVICE_TOKEN is required for external HTTPS ThreatFade endpoints")
+        if parsed.hostname not in local_hosts and not service_token:
+            raise ValueError("THREATFADE_SERVICE_TOKEN is required for external ThreatFade endpoints")
         if service_token:
             self._headers["Authorization"] = f"Bearer {service_token}"
 
