@@ -103,10 +103,16 @@ def backup(source: Path, destination: Path, allow_unverified_hmac: bool = False)
     temp = Path(temp_name)
     try:
         # SQLite's backup API captures a consistent snapshot, including committed WAL data.
-        with sqlite3.connect(f"file:{source.as_posix()}?mode=ro", uri=True, timeout=10) as src:
-            with sqlite3.connect(temp, timeout=10) as dst:
-                src.backup(dst)
-                dst.execute("PRAGMA integrity_check")
+        src = sqlite3.connect(source.as_uri() + "?mode=ro", uri=True, timeout=10)
+        dst = sqlite3.connect(temp, timeout=10)
+        try:
+            src.backup(dst)
+            dst.commit()
+            if dst.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                raise ValueError("SQLite integrity_check failed after backup")
+        finally:
+            dst.close()
+            src.close()
         os.chmod(temp, 0o600)
         report = verify(temp, allow_unverified_hmac)
         # Hard-link creation is atomic and fails if another process created the
@@ -130,6 +136,8 @@ def restore(source: Path, destination: Path, overwrite: bool = False,
         raise ValueError(f"Backup does not exist: {source}")
     if destination.exists() and not overwrite:
         raise FileExistsError(f"Restore target exists; pass --overwrite to replace it: {destination}")
+    if any(Path(str(destination) + suffix).exists() for suffix in ("-wal", "-shm")):
+        raise ValueError("Restore target has SQLite -wal/-shm sidecars; stop all writers and handle them before restore")
     # Never replace the live target until the backup has passed both checks.
     verify(source, allow_unverified_hmac)
     destination.parent.mkdir(parents=True, exist_ok=True)
