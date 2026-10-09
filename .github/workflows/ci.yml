@@ -1,8 +1,8 @@
-name: TwinGuard CI
+name: Auctaryn CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'security/**']
   pull_request:
     branches: [main]
 
@@ -44,11 +44,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -t twinguard:latest .
+        run: docker build -t auctaryn:latest .
 
       - name: Verify container starts
         run: |
-          docker run -d --name twinguard-test -p 8400:8400 twinguard:latest
+          docker run -d --name auctaryn-test -p 8400:8400 twinguard:latest
           sleep 5
           curl -f http://localhost:8400/health || exit 1
-          docker stop twinguard-test
+          docker stop auctaryn-test
