@@ -10,7 +10,7 @@ All `/api/v1/memory/*` calls still require the Auctaryn service credential. In a
 - `X-Agent-ID`: registered agent identity;
 - `X-Agent-Identity-Token`: valid short-lived token with the required `memory:write` or `memory:read` scope.
 
-Create a server-issued session with `POST /api/v1/memory/sessions`. The session ID is bound to the authenticated agent; clients cannot establish ownership merely by choosing a session string. Storage and readability checks reject sessions owned by a different agent.
+Create a server-issued session with `POST /api/v1/memory/sessions`. The session ID is bound to the authenticated agent and the exact scoped token, expires within one hour, and is removed when expired. Clients cannot establish ownership merely by choosing a session string. Storage and readability checks reject sessions owned by a different agent or token.
 
 ## Provenance and quarantine
 
