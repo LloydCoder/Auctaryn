@@ -252,3 +252,18 @@ def test_integrity_verification_fails_closed_on_malformed_metadata():
     assert store.verify_integrity(entry.key) is False
     assert store.rollback(entry.key) is True
     assert store.verify_integrity(entry.key) is True
+
+
+
+def test_memory_store_enforces_aggregate_content_budget():
+    from modules.memory_defender.defender import MemoryStore
+    store = MemoryStore(max_entries=10, max_total_chars=5)
+    store.add("first", "12345", source="conversation")
+    with pytest.raises(ValueError, match="capacity reached"):
+        store.add("second", "x", source="conversation")
+
+
+def test_memory_provenance_rejects_control_characters():
+    from modules.memory_defender.defender import MemoryDefender
+    with pytest.raises(ValueError, match="control characters"):
+        MemoryDefender().evaluate_for_storage("benign", source="untrusted\nsource")
