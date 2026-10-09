@@ -28,7 +28,7 @@ def test_accepts_legacy_endpoint_field_for_compatibility():
     "https://openshell.example.com/path?token=secret",
     "https://openshell.example.com /",
     "https://open_shell.example.com",
-    "https://openshell.example.com\\\\@evil.example",
+    "https://openshell.example.com\\@evil.example",
 ])
 def test_rejects_unsafe_or_malformed_gateway_endpoints(endpoint):
     with pytest.raises(ValueError):
