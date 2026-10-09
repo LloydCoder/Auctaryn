@@ -55,3 +55,13 @@ Synthetic signals derived from tool-call parameters are not observed network tel
 The client disables redirects, validates the configured URL, applies bounded timeouts, constrains signal and event sizes, limits PCAP uploads to 10 MiB, rejects path-like filenames, validates JSON response structure, and supports a `THREATFADE_SERVICE_TOKEN` Bearer credential when the upstream service is configured to accept it. External deployments must use HTTPS. The optional token does not provide authentication unless the ThreatFade service verifies it.
 
 The Oracle circuit breaker opens after repeated upstream failures and permits only a single half-open probe after its cooldown. Analysis history is capped in process memory. These are local resilience controls; they are not durable distributed rate limits, and the history is not a durable audit ledger.
+
+
+## Memory integrity and poisoning boundary
+
+- Memory API operations require a valid short-lived agent identity token with `memory:write` or `memory:read` scope and a server-issued session bound to that agent. A caller-supplied session ID is not accepted as proof of ownership.
+- Public API submissions cannot assert trusted provenance. The API prefixes source labels with `api:`, which always routes entries to quarantine pending review. Only a separately trusted internal ingestion path may use the module's trusted provenance labels.
+- Memory entries use unique opaque IDs, bounded content/source/session/agent fields, and a bounded in-process store. The SHA-256 integrity digest binds content, source, session, agent, quarantine state, key and creation timestamp.
+- Integrity verification compares the live entry with a separately held last-known-good snapshot. API metadata reads detect tampering and attempt rollback before returning the result; memory content is not returned by the metadata endpoint.
+- Poisoning detection is heuristic and cannot detect every semantic prompt injection. Quarantine is a containment state, not a guarantee that content is benign.
+- The store, session ownership map and last-known-good snapshots are process-local. They are not durable, distributed, or cryptographically tamper-proof against a compromised process. Production persistence and authoritative identity/tenant binding remain platform integration work.
