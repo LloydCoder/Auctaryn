@@ -290,6 +290,18 @@ async def intercept_action(request: ToolCallRequest) -> GatewayDecision:
                   identity_token=request.identity_token)
     get_gateway().data_guard.validate_tool_call(tc)
     decision = get_gateway().evaluate(tc)
+    await record_evidence(
+        "decision.created",
+        correlation_id=decision.id,
+        actor_id=decision.tool_call.agent_id,
+        decision_id=decision.id,
+        outcome=decision.decision.value,
+        details={
+            "decision": decision.decision.value,
+            "risk_level": decision.risk_level.value,
+            "action_fingerprint": action_intent_fingerprint(decision.tool_call),
+        },
+    )
     await _broadcast_decision(decision)
     return decision
 
