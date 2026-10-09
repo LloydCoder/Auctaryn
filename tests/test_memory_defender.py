@@ -274,3 +274,14 @@ def test_memory_session_owner_rejects_control_characters():
     from modules.memory_defender.defender import MemoryDefender
     with pytest.raises(ValueError, match="control characters"):
         MemoryDefender().create_session("agent\nforged")
+
+
+
+def test_memory_session_expires_and_is_removed():
+    from datetime import datetime, timedelta, timezone
+    from modules.memory_defender.defender import MemoryDefender
+    defender = MemoryDefender()
+    session = defender.create_session("agent-expiring", token_id="token-expiring", ttl_seconds=60)
+    defender._sessions[session].expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    assert defender.session_owned_by(session, "agent-expiring", "token-expiring") is False
+    assert session not in defender._sessions
