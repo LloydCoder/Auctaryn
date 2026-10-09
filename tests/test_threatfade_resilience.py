@@ -130,6 +130,7 @@ def test_external_threatfade_endpoint_requires_service_token(monkeypatch):
 def test_cancelled_half_open_probe_releases_circuit_breaker(monkeypatch):
     import asyncio
 
+    monkeypatch.setattr("modules.threatfade_oracle.oracle.time.monotonic", lambda: 100.0)
     oracle = ThreatFadeOracle()
     oracle.circuit_breaker = OracleCircuitBreaker(failure_threshold=1, cooldown_seconds=60)
     oracle.circuit_breaker.record_failure()
