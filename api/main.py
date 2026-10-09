@@ -41,10 +41,11 @@ def _requires_admin(path: str) -> bool:
     """Paths that expose privileged decisions, identity, or policy mutation."""
     if path.startswith("/api/v1/identity"):
         return True
+    if path.startswith("/api/v1/gateway/decisions"):
+        return True
     if path in {
         "/api/v1/gateway/approve",
         "/api/v1/gateway/pending",
-        "/api/v1/gateway/decisions",
         "/api/v1/gateway/identity-enforcement/enable",
         "/api/v1/context/register",
         "/api/v1/context/instructions",
