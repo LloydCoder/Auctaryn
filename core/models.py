@@ -59,6 +59,7 @@ class ProtectedInstruction(BaseModel):
 
 class IntegrityCheckResult(BaseModel):
     id: str = ""
+    session_id: str = Field(default="", max_length=128)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     status: IntegrityStatus
     instructions_total: int
