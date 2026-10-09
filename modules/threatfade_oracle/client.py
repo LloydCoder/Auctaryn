@@ -96,11 +96,11 @@ class FusionOpsClient:
                 raise ThreatFadeConnectionError(
                     f"FusionOps returned an invalid numeric field for {endpoint}."
                 )
-        if not 0 <= detection["score"] <= 1 or not 0 <= detection["entropy"] <= 1:
+        if not 0 <= detection["score"] <= 1 or not 0 <= detection["drop_ratio"] <= 1:
             raise ThreatFadeConnectionError(
                 f"FusionOps returned an out-of-range score for {endpoint}."
             )
-        if not 0 <= detection["drop_ratio"] <= 1 or not 0 <= detection["z_outlier"] <= 1_000_000:
+        if not 0 <= detection["entropy"] <= 1_000_000 or not 0 <= detection["z_outlier"] <= 1_000_000:
             raise ThreatFadeConnectionError(
                 f"FusionOps returned an out-of-range statistic for {endpoint}."
             )
