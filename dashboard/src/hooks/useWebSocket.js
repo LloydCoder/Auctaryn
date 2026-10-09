@@ -34,6 +34,8 @@ export function useWebSocket(path, { maxMessages = 100, token = '' } = {}) {
     }
 
     ws.onclose = () => {
+      // A stale socket must not reconnect with credentials from a prior session.
+      if (wsRef.current !== ws) return
       setConnected(false)
       reconnectTimer.current = setTimeout(connect, 3000)
     }
@@ -53,7 +55,9 @@ export function useWebSocket(path, { maxMessages = 100, token = '' } = {}) {
     connect()
     return () => {
       clearTimeout(reconnectTimer.current)
-      wsRef.current?.close()
+      const socket = wsRef.current
+      wsRef.current = null
+      socket?.close()
     }
   }, [connect])
 
