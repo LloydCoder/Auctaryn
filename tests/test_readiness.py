@@ -1,12 +1,18 @@
-    _set_strong_credentials(monkeypatch)\n    _set_strong_credentials(monkeypatch)\n    _set_strong_credentials(monkeypatch)\n    _set_strong_credentials(monkeypatch)\n    _set_strong_credentials(monkeypatch)\n"""Readiness reports configured and live runtime controls separately."""
+"""Readiness reports configured and live runtime controls separately."""
 
 import logging
-from types import SimpleNamespace\n\n\ndef _set_strong_credentials(monkeypatch):\n    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-key-0123456789abcdef")\n    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-key-0123456789abcdef")
+from types import SimpleNamespace
 
 import pytest
 
 
+def _set_strong_credentials(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-key-0123456789abcdef")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-key-0123456789abcdef")
+
+
 def test_readiness_explains_missing_runtime_adapter(client, monkeypatch):
+    _set_strong_credentials(monkeypatch)
     response = client.get("/health/ready")
 
     assert response.status_code == 200
@@ -19,6 +25,8 @@ def test_readiness_explains_missing_runtime_adapter(client, monkeypatch):
 
 
 def test_readiness_requires_successful_openshell_health_probe(client, monkeypatch):
+    _set_strong_credentials(monkeypatch)
+
     class HealthyOpenShellAdapter:
         runtime_name = "openshell"
 
@@ -41,6 +49,8 @@ def test_readiness_requires_successful_openshell_health_probe(client, monkeypatc
 
 
 def test_detailed_health_uses_the_same_live_openshell_probe(client, monkeypatch):
+    _set_strong_credentials(monkeypatch)
+
     class HealthyOpenShellAdapter:
         runtime_name = "openshell"
 
@@ -65,6 +75,7 @@ def test_detailed_health_uses_the_same_live_openshell_probe(client, monkeypatch)
 
 
 def test_readiness_fails_closed_when_runtime_probe_times_out(client, monkeypatch):
+    _set_strong_credentials(monkeypatch)
     import asyncio
 
     class HangingOpenShellAdapter:
@@ -89,6 +100,7 @@ def test_readiness_fails_closed_when_runtime_probe_times_out(client, monkeypatch
 
 
 def test_detailed_health_does_not_claim_probe_is_unimplemented(client, monkeypatch):
+    _set_strong_credentials(monkeypatch)
     response = client.get("/health/detailed")
 
     assert response.status_code == 200
