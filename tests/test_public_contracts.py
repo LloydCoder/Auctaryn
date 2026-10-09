@@ -40,6 +40,8 @@ def test_public_pages_do_not_claim_universal_mediation_or_unverified_metrics():
         "Built on OpenShell",
     ]
     combined = "\n".join(path.read_text(encoding="utf-8") for path in public_pages)
+    # The legacy stylesheet filename is an asset path, not a public product claim.
+    combined = combined.replace("twinguard.css", "")
     for phrase in forbidden:
         assert phrase.lower() not in combined.lower(), f"unsupported public claim remains: {phrase}"
 
