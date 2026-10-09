@@ -305,52 +305,27 @@ async def test_startup_keeps_unhealthy_runtime_adapter_disabled(monkeypatch, tmp
         assert adapter.closed is True
 
 
-def test_detailed_health_bounds_synchronous_runtime_probe(client, monkeypatch):
-    import time
-
+def test_detailed_health_rejects_synchronous_runtime_probe(client, monkeypatch):
     _set_strong_credentials(monkeypatch)
+    called = False
 
-    class HangingSyncOpenShellAdapter:
+    class SyncOpenShellAdapter:
         runtime_name = "openshell"
 
         def health_check(self):
-            time.sleep(0.2)
+            nonlocal called
+            called = True
             return True
 
     monkeypatch.setattr(
         "api.routes.gateway.get_execution_service",
-        lambda: SimpleNamespace(adapter=HangingSyncOpenShellAdapter()),
+        lambda: SimpleNamespace(adapter=SyncOpenShellAdapter()),
     )
-    monkeypatch.setattr("api.routes.health.RUNTIME_PROBE_TIMEOUT_SECONDS", 0.005)
     response = client.get("/health/detailed")
 
     assert response.status_code == 200
     body = response.json()
     runtime = next(module for module in body["modules"] if module["name"] == "openshell_runtime")
     assert runtime["status"] == "degraded"
-    assert "timed out" in runtime["error_message"].lower()
-
-
-def test_synchronous_runtime_probe_runs_off_the_event_loop(client, monkeypatch):
-    import threading
-
-    _set_strong_credentials(monkeypatch)
-    caller_thread = threading.current_thread().name
-
-    class ThreadAwareOpenShellAdapter:
-        runtime_name = "openshell"
-
-        def health_check(self):
-            return threading.current_thread().name != caller_thread
-
-    monkeypatch.setattr(
-        "api.routes.gateway.get_execution_service",
-        lambda: SimpleNamespace(adapter=ThreadAwareOpenShellAdapter()),
-    )
-    response = client.get("/health/detailed")
-
-    assert response.status_code == 200
-    body = response.json()
-    runtime = next(module for module in body["modules"] if module["name"] == "openshell_runtime")
-    assert runtime["status"] == "healthy"
-    assert runtime["error_message"] == ""
+    assert "must be asynchronous" in runtime["error_message"].lower()
+    assert called is False
