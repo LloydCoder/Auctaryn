@@ -15,10 +15,10 @@ class TestGatewayBroadcast:
         client.post("/api/v1/identity/grant", json={"agent_id": agent_id, "scope": scope})
 
     def test_intercept_broadcasts_decision(self, client):
-        self._register_scope(client, "broadcast-reader", "read_file")
+        token_id = self._register_scope(client, "broadcast-reader", "read_file")
         with patch("api.websockets.actions.broadcast_action", new=AsyncMock()) as mock_broadcast:
             r = client.post("/api/v1/gateway/intercept", json={
-                "tool_name": "read_file", "action": "read", "parameters": {}, "agent_id": "broadcast-reader"
+                "tool_name": "read_file", "action": "read", "parameters": {}, "agent_id": "broadcast-reader", "identity_token": token_id
             })
             assert r.status_code == 200
             mock_broadcast.assert_called_once()
@@ -27,11 +27,11 @@ class TestGatewayBroadcast:
             assert call_args["decision"] == "approved"
 
     def test_vetoed_action_broadcasts_alert(self, client):
-        self._register_scope(client, "broadcast-config-agent", "modify_config")
+        token_id = self._register_scope(client, "broadcast-config-agent", "modify_config")
         with patch("api.websockets.actions.broadcast_action", new=AsyncMock()), \
              patch("api.websockets.alerts.broadcast_alert", new=AsyncMock()) as mock_alert:
             r = client.post("/api/v1/gateway/intercept", json={
-                "tool_name": "modify_config", "action": "write", "agent_id": "broadcast-config-agent"
+                "tool_name": "modify_config", "action": "write", "agent_id": "broadcast-config-agent", "identity_token": token_id
             })
             assert r.status_code == 200
             assert r.json()["decision"] == "vetoed"
@@ -41,10 +41,10 @@ class TestGatewayBroadcast:
             assert alert_data["module"] == "execution_gateway"
 
     def test_approve_pending_broadcasts(self, client):
-        self._register_scope(client, "broadcast-delete-agent", "delete_file")
+        token_id = self._register_scope(client, "broadcast-delete-agent", "delete_file")
         with patch("api.websockets.actions.broadcast_action", new=AsyncMock()) as mock_broadcast:
             r = client.post("/api/v1/gateway/intercept", json={
-                "tool_name": "delete_file", "action": "delete", "agent_id": "broadcast-delete-agent"
+                "tool_name": "delete_file", "action": "delete", "agent_id": "broadcast-delete-agent", "identity_token": token_id
             })
             decision_id = r.json()["id"]
             mock_broadcast.reset_mock()
