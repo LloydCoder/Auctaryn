@@ -31,7 +31,7 @@ class EvidenceStore:
     def __init__(self, path: str | Path | None = None, signing_key: str | bytes | None = None):
         self.path = str(path if path is not None else os.getenv("AUCTARYN_EVIDENCE_DB", "data/evidence.sqlite3"))
         key = signing_key if signing_key is not None else os.getenv("AUCTARYN_EVIDENCE_HMAC_KEY")
-        self.key = key.encode() if isinstance(key, str) and key else key
+        self.key = key.encode() if isinstance(key, str) and key else None
         if self.key is not None and len(self.key) < 32:
             raise ValueError("Evidence key must be at least 32 bytes")
         self._lock = asyncio.Lock()
