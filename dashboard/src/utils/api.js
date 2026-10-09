@@ -1,9 +1,22 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8400'
 const WS_BASE = import.meta.env.VITE_WS_URL || 'ws://localhost:8400'
+let API_TOKEN = ''
+
+export function setApiToken(token) { API_TOKEN = token }
+
+export async function validateAdminToken(token) {
+  const response = await fetch(`${API_BASE}/api/v1/gateway/status`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw new Error(response.status === 403 ? 'Administrator access required.' : `Authentication failed (${response.status}).`)
+  const status = await response.json()
+  if (status.identity_enforcement_enabled !== true) throw new Error('Gateway identity enforcement is not enabled.')
+  return status
+}
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}), ...options.headers },
     ...options,
   })
   if (!res.ok) throw new Error(`API error: ${res.status}`)
@@ -39,14 +52,14 @@ export const fetchDetections = (severity) =>
 // WebSocket connections
 export function connectActionStream(onMessage) {
   const ws = new WebSocket(`${WS_BASE}/ws/actions`)
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'authenticate', token: API_TOKEN }))
   ws.onmessage = (e) => onMessage(JSON.parse(e.data))
-  ws.onerror = () => setTimeout(() => connectActionStream(onMessage), 5000)
   return ws
 }
 
 export function connectAlertStream(onMessage) {
   const ws = new WebSocket(`${WS_BASE}/ws/alerts`)
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'authenticate', token: API_TOKEN }))
   ws.onmessage = (e) => onMessage(JSON.parse(e.data))
-  ws.onerror = () => setTimeout(() => connectAlertStream(onMessage), 5000)
   return ws
 }
