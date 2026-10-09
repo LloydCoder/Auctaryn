@@ -300,16 +300,19 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
 async def execute_approved_decision(decision_id: str) -> dict:
     """Execute the exact immutable decision after an administrator approved it."""
     service = get_execution_service()
-    try:
-        service.require_adapter()
-    except RuntimeAdapterUnavailable as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
     decision = next((item for item in get_gateway().history if item.id == decision_id), None)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     if decision.decision != ActionDecision.APPROVED or decision.decided_by != "authenticated_operator":
         raise HTTPException(status_code=409, detail="Decision has not been explicitly approved by an operator")
+    try:
+        get_incident_response_manager().assert_execution_allowed(decision.tool_call.agent_id)
+    except IncidentResponseBlocked as exc:
+        raise HTTPException(status_code=423, detail="Execution blocked by incident-response controls") from exc
+    try:
+        service.require_adapter()
+    except RuntimeAdapterUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     context_denial = _context_integrity_preflight(decision.tool_call)
     if context_denial:
         raise HTTPException(status_code=409, detail=context_denial)
