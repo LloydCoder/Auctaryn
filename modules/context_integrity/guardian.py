@@ -90,8 +90,7 @@ def detect_goal_hijack(registered_instruction: str, new_content: str) -> GoalHij
         if overlap:
             return GoalHijackResult(
                 hijack_detected=True,
-                reason="Override language targets protected instruction terms: "
-                + ", ".join(sorted(overlap)),
+                reason="Override language matched the protected-instruction domain.",
             )
 
     return GoalHijackResult(hijack_detected=False)
