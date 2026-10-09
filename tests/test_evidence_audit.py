@@ -79,3 +79,10 @@ async def test_key_must_be_long_enough_and_page_size_is_bounded(tmp_path):
     store = EvidenceStore(tmp_path / "evidence.sqlite3")
     with pytest.raises(ValueError):
         await store.list_records(limit=501)
+
+
+@pytest.mark.asyncio
+async def test_evidence_details_reject_unapproved_fields(tmp_path):
+    store = EvidenceStore(tmp_path / "evidence.sqlite3")
+    with pytest.raises(ValueError):
+        await store.append("decision.created", details={"raw_parameters": "must-not-be-stored"})
