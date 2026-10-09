@@ -36,6 +36,7 @@ This is tamper detection against accidental or ordinary in-process mutation, not
 - Source label: at most 64 characters internally; public source label at most 48 before the `api:` prefix.
 - Session and agent IDs: at most 128 characters.
 - In-process entries: at most 5,000.
+- Aggregate stored content: at most 8 Mi characters (the live entry and trusted snapshot together use approximately twice this amount, excluding object overhead).
 - Server-issued sessions: at most 5,000.
 
 Capacity exhaustion denies further storage/session creation rather than growing the process without bound.
