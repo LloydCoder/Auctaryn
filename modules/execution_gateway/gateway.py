@@ -19,6 +19,9 @@ from modules.execution_gateway.data_guard import SensitiveDataGuard
 
 logger = get_logger("execution_gateway")
 
+MAX_DECISION_HISTORY = 5_000
+MAX_PENDING_APPROVALS = 1_000
+
 
 class ApprovalIntentIntegrityError(RuntimeError):
     """Raised when a pending approval no longer matches its evaluated action intent."""
@@ -87,11 +90,42 @@ class ExecutionGateway:
 
         return None
 
+    def _append_history(self, decision: GatewayDecision) -> None:
+        """Keep operational history bounded without evicting pending decisions."""
+        self.history.append(decision)
+        protected_ids = set(self._pending)
+        if decision.decision == ActionDecision.PENDING:
+            protected_ids.add(decision.id)
+        while len(self.history) > MAX_DECISION_HISTORY:
+            evict_index = next(
+                (index for index, item in enumerate(self.history) if item.id not in protected_ids),
+                None,
+            )
+            if evict_index is None:
+                # Defensive: pending capacity is deliberately lower than history capacity.
+                raise RuntimeError("Decision history capacity exhausted by protected pending decisions")
+            del self.history[evict_index]
+
+    def _deny_pending_capacity(self, decision: GatewayDecision) -> GatewayDecision:
+        """Convert a new pending action to a terminal denial when the queue is full."""
+        if decision.decision != ActionDecision.PENDING or len(self._pending) < MAX_PENDING_APPROVALS:
+            return decision
+        return GatewayDecision(
+            id=decision.id,
+            timestamp=datetime.now(timezone.utc),
+            tool_call=decision.tool_call,
+            risk_level=RiskLevel.CRITICAL,
+            decision=ActionDecision.DENIED,
+            reason="Pending approval capacity reached; action denied without execution.",
+            decided_by="capacity_guard",
+            action_fingerprint=decision.action_fingerprint,
+        )
+
     def _record_preflight_denial(self, decision: GatewayDecision) -> GatewayDecision:
         # Never retain or return the caller's bearer capability in decision history.
         decision.tool_call = decision.tool_call.model_copy(update={"identity_token": ""})
         decision.action_fingerprint = action_intent_fingerprint(decision.tool_call)
-        self.history.append(decision)
+        self._append_history(decision)
         self.total_processed += 1
         self.total_vetoed += 1
         return decision
@@ -110,14 +144,15 @@ class ExecutionGateway:
         classification = self.classifier.classify(tool_call)
         decision = self.veto_engine.decide(classification)
         decision.action_fingerprint = action_intent_fingerprint(decision.tool_call)
-        self.history.append(decision)
+        decision = self._deny_pending_capacity(decision)
+        if decision.decision == ActionDecision.PENDING:
+            self._pending[decision.id] = decision
+        self._append_history(decision)
         self.total_processed += 1
 
         if decision.decision in (ActionDecision.VETOED, ActionDecision.DENIED):
             self.total_vetoed += 1
             self._emit_veto_alert(decision)
-        elif decision.decision == ActionDecision.PENDING:
-            self._pending[decision.id] = decision
         return decision
 
     def _record_breaker_outcome(self, agent_id: str, success: bool) -> None:
@@ -150,14 +185,15 @@ class ExecutionGateway:
             decision = await self._enrich_with_oracle(tool_call, classification, decision)
 
         decision.action_fingerprint = action_intent_fingerprint(decision.tool_call)
-        self.history.append(decision)
+        decision = self._deny_pending_capacity(decision)
+        if decision.decision == ActionDecision.PENDING:
+            self._pending[decision.id] = decision
+        self._append_history(decision)
         self.total_processed += 1
 
         if decision.decision in (ActionDecision.VETOED, ActionDecision.DENIED):
             self.total_vetoed += 1
             self._emit_veto_alert(decision)
-        elif decision.decision == ActionDecision.PENDING:
-            self._pending[decision.id] = decision
         return decision
 
     async def _enrich_with_oracle(self, tool_call: ToolCall,
