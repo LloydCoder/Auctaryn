@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-CONFIG_PATH = BASE_DIR / "config" / "twinguard.yaml"
+CONFIG_PATH = BASE_DIR / "config" / "twinguard.yaml"  # retained for compatibility with existing deployments
 
 
 class ContextIntegrityConfig(BaseModel):
@@ -54,7 +54,7 @@ class LoggingConfig(BaseModel):
 
 
 class BrandingConfig(BaseModel):
-    name: str = "TwinGuard"
+    name: str = "Auctaryn"
     company: str = "Tinlance Limited"
     version: str = "0.1.0-alpha"
 
@@ -82,9 +82,13 @@ def _deep_merge(base: dict, override: dict) -> dict:
 def _apply_env_overrides(raw: dict) -> dict:
     """Override config values with environment variables where set."""
     env_map = {
+        "AUCTARYN_HOST": ("server", "host"),
         "TWINGUARD_HOST": ("server", "host"),
+        "AUCTARYN_PORT": ("server", "port"),
         "TWINGUARD_PORT": ("server", "port"),
+        "AUCTARYN_DEBUG": ("server", "debug"),
         "TWINGUARD_DEBUG": ("server", "debug"),
+        "AUCTARYN_DB_PATH": ("database", "path"),
         "TWINGUARD_DB_PATH": ("database", "path"),
         "THREATFADE_SERVICE_URL": ("modules", "threatfade_oracle", "service_url"),
         "LOG_LEVEL": ("logging", "level"),
