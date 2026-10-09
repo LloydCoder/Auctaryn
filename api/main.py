@@ -35,8 +35,38 @@ async def lifespan(app: FastAPI):
 
     Path("data").mkdir(exist_ok=True)
     Path("logs").mkdir(exist_ok=True)
-    yield
-    logger.info("Auctaryn shutting down", extra={"event": "shutdown"})
+
+    runtime_adapter = None
+    try:
+        runtime_adapter = create_openshell_adapter_from_environment()
+        gateway.configure_runtime_adapter(runtime_adapter)
+        if runtime_adapter is not None:
+            logger.info(
+                "OpenShell runtime adapter configured",
+                extra={"event": "runtime_adapter_ready", "adapter": "nvidia-openshell"},
+            )
+    except RuntimeAdapterUnavailable as exc:
+        gateway.configure_runtime_adapter(None)
+        logger.error(
+            "Runtime adapter unavailable; governed execution remains disabled (%s)",
+            str(exc),
+            extra={"event": "runtime_adapter_unavailable"},
+        )
+
+    try:
+        yield
+    finally:
+        gateway.configure_runtime_adapter(None)
+        if runtime_adapter is not None:
+            try:
+                runtime_adapter.close()
+            except Exception as exc:
+                logger.warning(
+                    "Runtime adapter shutdown failed (%s)",
+                    type(exc).__name__,
+                    extra={"event": "runtime_adapter_shutdown_failed"},
+                )
+        logger.info("Auctaryn shutting down", extra={"event": "shutdown"})
 
 
 def _requires_admin(path: str) -> bool:
