@@ -27,7 +27,7 @@ aiosqlite==0.21.0
 pytest==9.0.3
 pytest-asyncio==1.4.0
 pytest-cov==6.1.1
-httpx==0.28.1
+httpx2==2.13.1
 
 # Logging
 python-json-logger==3.3.0
