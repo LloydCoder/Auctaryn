@@ -11,8 +11,11 @@ API contract v0.3.0 (Tinlance Limited):
   POST /triage          (DetectionResult dict)
 """
 
+import json
+import math
 import os
 import random
+from pathlib import PurePath
 from urllib.parse import urlparse
 
 import httpx
@@ -24,6 +27,12 @@ logger = get_logger("threatfade_oracle.client")
 
 DEFAULT_BASE_URL = "http://threatfade:8401"
 MIN_DATA_POINTS = 10
+MAX_DATA_POINTS = 10_000
+MAX_SOURCE_LABEL_LENGTH = 256
+MAX_PCAP_BYTES = 25 * 1024 * 1024
+MAX_TRIAGE_PAYLOAD_BYTES = 1_000_000
+MAX_EVENTS_LIMIT = 200
+VALID_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
 
 VALID_SCENARIOS = {
     "c2_quieting",
@@ -53,8 +62,54 @@ class FusionOpsClient:
             raise ValueError("THREATFADE_SERVICE_URL must be an absolute HTTP(S) URL")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("ThreatFade base URL must not contain credentials, query parameters, or fragments")
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 0 < timeout <= 60:
+            raise ValueError("timeout must be greater than 0 and at most 60 seconds")
         self.base_url = configured_url.rstrip("/")
-        self.timeout = timeout
+        self.timeout = float(timeout)
+
+    @staticmethod
+    def _json_object(response: httpx.Response, endpoint: str) -> dict:
+        try:
+            data = response.json()
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise ThreatFadeConnectionError(
+                f"FusionOps returned invalid JSON for {endpoint}."
+            ) from exc
+        if not isinstance(data, dict):
+            raise ThreatFadeConnectionError(
+                f"FusionOps returned an invalid response shape for {endpoint}."
+            )
+        return data
+
+    @staticmethod
+    def _validate_full_analysis(data: dict, endpoint: str) -> dict:
+        detection = data.get("detection")
+        triage = data.get("triage")
+        remediation = data.get("remediation")
+        if not isinstance(detection, dict) or not isinstance(triage, dict) or not isinstance(remediation, dict):
+            raise ThreatFadeConnectionError(
+                f"FusionOps returned an invalid analysis schema for {endpoint}."
+            )
+        for key in ("score", "entropy", "drop_ratio", "z_outlier"):
+            value = detection.get(key, 0.0)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ThreatFadeConnectionError(
+                    f"FusionOps returned an invalid numeric field for {endpoint}."
+                )
+        severity = detection.get("severity", "INFO")
+        if not isinstance(severity, str) or severity.upper() not in VALID_SEVERITIES:
+            raise ThreatFadeConnectionError(
+                f"FusionOps returned an invalid severity for {endpoint}."
+            )
+        if "detected" in detection and not isinstance(detection["detected"], bool):
+            raise ThreatFadeConnectionError(
+                f"FusionOps returned an invalid detection flag for {endpoint}."
+            )
+        if "escalate" in triage and not isinstance(triage["escalate"], bool):
+            raise ThreatFadeConnectionError(
+                f"FusionOps returned an invalid escalation flag for {endpoint}."
+            )
+        return data
 
     async def health_check(self) -> dict:
         """GET /health — liveness check for both FusionOps and ThreatFade."""
@@ -62,29 +117,41 @@ class FusionOpsClient:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.get(f"{self.base_url}/health")
                 resp.raise_for_status()
-                return resp.json()
-        except httpx.HTTPError as e:
-            logger.warning(f"FusionOps health check failed: {e}",
-                           extra={"event": "fusionops_unreachable"})
-            return {"status": "unreachable", "threatfade": "unreachable", "error": str(e)}
+                data = self._json_object(resp, "/health")
+                if not isinstance(data.get("status"), str):
+                    return {"status": "unreachable", "threatfade": "unreachable", "error": "invalid_health_response"}
+                return data
+        except (httpx.HTTPError, ThreatFadeConnectionError) as e:
+            logger.warning("FusionOps health check failed",
+                           extra={"event": "fusionops_unreachable", "error_type": type(e).__name__})
+            return {"status": "unreachable", "threatfade": "unreachable", "error": type(e).__name__}
 
     async def get_events(self, limit: int = 50) -> dict:
         """GET /events?limit=N — recent detection events for the dashboard."""
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= MAX_EVENTS_LIMIT:
+            raise ValueError(f"limit must be between 1 and {MAX_EVENTS_LIMIT}")
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.get(f"{self.base_url}/events", params={"limit": limit})
                 resp.raise_for_status()
-                return resp.json()
+                return self._json_object(resp, "/events")
         except httpx.HTTPError as e:
-            raise ThreatFadeConnectionError(f"Failed to fetch events: {e}") from e
+            raise ThreatFadeConnectionError("Failed to fetch events from FusionOps.") from e
 
     async def detect_json(self, timestamps: list[float], values: list[float],
                           source_label: str = "") -> dict:
         """POST /detect/json — analyze signal data, returns FullAnalysisResult."""
         if len(timestamps) != len(values):
             raise ValueError("timestamps and values must be the same length")
-        if len(values) < MIN_DATA_POINTS:
-            raise ValueError(f"Need at least {MIN_DATA_POINTS} data points, got {len(values)}")
+        if not MIN_DATA_POINTS <= len(values) <= MAX_DATA_POINTS:
+            raise ValueError(f"Data points must be between {MIN_DATA_POINTS} and {MAX_DATA_POINTS}")
+        if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+               for value in timestamps + values):
+            raise ValueError("timestamps and values must contain only finite numbers")
+        if any(timestamps[index] > timestamps[index + 1] for index in range(len(timestamps) - 1)):
+            raise ValueError("timestamps must be ordered non-decreasingly")
+        if not isinstance(source_label, str) or len(source_label) > MAX_SOURCE_LABEL_LENGTH:
+            raise ValueError(f"source_label must be a string of at most {MAX_SOURCE_LABEL_LENGTH} characters")
 
         payload = {"timestamps": timestamps, "values": values, "source_label": source_label}
 
@@ -92,11 +159,12 @@ class FusionOpsClient:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(f"{self.base_url}/detect/json", json=payload)
                 resp.raise_for_status()
-                return resp.json()
+                data = self._json_object(resp, "/detect/json")
+                return self._validate_full_analysis(data, "/detect/json")
         except httpx.HTTPError as e:
-            logger.error(f"FusionOps /detect/json failed: {e}",
-                        extra={"event": "fusionops_detect_failed"})
-            raise ThreatFadeConnectionError(f"FusionOps unreachable: {e}") from e
+            logger.error("FusionOps /detect/json failed",
+                        extra={"event": "fusionops_detect_failed", "error_type": type(e).__name__})
+            raise ThreatFadeConnectionError("FusionOps detection request failed.") from e
 
     async def detect_scenario(self, scenario: str) -> dict:
         """POST /detect/scenario — run a named simulation."""
