@@ -9,8 +9,8 @@ WORKDIR /app
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser
 
 # Python deps
-COPY requirements.txt .
-RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
+COPY requirements.lock .
+RUN pip install --no-cache-dir --disable-pip-version-check --require-hashes -r requirements.lock
 
 # Application code (read-only to the runtime user).
 COPY core/ core/
