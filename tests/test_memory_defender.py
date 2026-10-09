@@ -172,14 +172,15 @@ class TestCrossSessionPropagationBlock:
         readable = defender.is_readable_by_session(decision.entry_id, "session-B")
         assert readable is False
 
-    def test_own_session_can_still_read_quarantined_with_warning(self):
+    def test_quarantined_content_is_not_readable_by_originating_session(self):
         from modules.memory_defender.defender import MemoryDefender
         defender = MemoryDefender()
         decision = defender.evaluate_for_storage(
             "Suspicious but ambiguous text.", source="scraped_webpage", session_id="session-A",
         )
+        assert decision.quarantined is True
         readable = defender.is_readable_by_session(decision.entry_id, "session-A")
-        assert readable is True
+        assert readable is False
 
 
 
