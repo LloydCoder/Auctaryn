@@ -1,7 +1,7 @@
 """Skill artifact vetting API."""
 import base64
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from api.security import require_operator_key
 from modules.skill_vetting.secure_vetting import SecureSkillVettingService
 
@@ -19,6 +19,16 @@ class ManifestRequest(BaseModel):
     permissions: list[str] = Field(default_factory=list, max_length=100)
     publisher: str = Field(min_length=1, max_length=256)
     artifact_b64: str = Field(min_length=1, max_length=1398104)
+
+    @field_validator("permissions")
+    @classmethod
+    def validate_permission_bounds(cls, values: list[str]) -> list[str]:
+        if any(not value or len(value) > 128 for value in values):
+            raise ValueError("permission names must contain 1–128 characters")
+        if len(set(values)) != len(values):
+            raise ValueError("duplicate permission names are not allowed")
+        return values
+
 
 class TrustPublisherRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
