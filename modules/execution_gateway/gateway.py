@@ -70,7 +70,6 @@ class ExecutionGateway:
         self.history.append(decision)
         self.total_processed += 1
         self.total_vetoed += 1
-        self._record_breaker_outcome(decision.tool_call.agent_id, success=False)
         return decision
 
     def evaluate(self, tool_call: ToolCall) -> GatewayDecision:
@@ -90,11 +89,10 @@ class ExecutionGateway:
         if decision.decision in (ActionDecision.VETOED, ActionDecision.DENIED):
             self.total_vetoed += 1
             self._emit_veto_alert(decision)
-            self._record_breaker_outcome(tool_call.agent_id, success=False)
         elif decision.decision == ActionDecision.PENDING:
             self._pending[decision.id] = decision
         elif decision.decision == ActionDecision.APPROVED:
-            self._record_breaker_outcome(tool_call.agent_id, success=True)
+            pass
         return decision
 
     def _record_breaker_outcome(self, agent_id: str, success: bool) -> None:
@@ -104,6 +102,10 @@ class ExecutionGateway:
             self.circuit_breaker.record_success(agent_id)
         else:
             self.circuit_breaker.record_failure(agent_id)
+
+    def record_execution_outcome(self, agent_id: str, *, success: bool) -> None:
+        """Update the circuit breaker only from actual runtime execution outcomes."""
+        self._record_breaker_outcome(agent_id, success)
 
     async def evaluate_with_oracle(self, tool_call: ToolCall) -> GatewayDecision:
         """Apply the same mandatory preflight checks before optional Oracle enrichment."""
