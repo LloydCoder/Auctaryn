@@ -175,3 +175,14 @@ def test_quarantine_revokes_tokens_and_release_does_not_restore_them(client):
         headers={"X-Agent-Identity-Token": token_id},
     )
     assert still_denied.json()["authorized"] is False
+
+
+@pytest.mark.asyncio
+async def test_runtime_failure_emits_durable_alert():
+    from api.routes.gateway import _publish_runtime_failure_alert
+    from modules.incident_response.manager import get_incident_response_manager
+    fingerprint = "d" * 64
+    await _publish_runtime_failure_alert("runtime-failure-agent", fingerprint, "RuntimeAdapterFailure", "decision-runtime-1")
+    alerts = get_incident_response_manager().list_alerts(status="open")
+    assert any(item["category"] == "runtime_failure" and item["decision_id"] == "decision-runtime-1"
+               for item in alerts)
