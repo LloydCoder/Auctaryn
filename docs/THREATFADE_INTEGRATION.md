@@ -22,7 +22,7 @@ The current Auctaryn integration can generate a synthetic entropy signal from ac
 - PCAP uploads are capped at 10 MiB; filenames are restricted to a safe basename character set and file contents must begin with a recognized PCAP/PCAPNG magic header.
 - Analysis responses must be JSON objects with `detection` and `triage` objects, recognized severity values, finite numeric fields, and correctly typed boolean flags. Malformed, invalid or unavailable responses are upstream failures, not benign findings.
 
-The current response-size guard checks Content-Length and the received response body after HTTPX has materialized it. It is defense in depth, not a hard transport-memory cap; production service and reverse-proxy limits must also enforce response sizes.
+The request body is capped by ASGI middleware before multipart parsing, including requests without Content-Length, with a 64 KiB allowance for multipart framing. The endpoint also reads at most the file limit plus one byte and validates the PCAP magic header. The upstream response-size guard checks Content-Length and the received response body after HTTPX has materialized it; it is defense in depth, not a hard transport-memory cap, so production service and reverse-proxy limits must also enforce response sizes.
 
 ## Circuit breaker and failure behavior
 
