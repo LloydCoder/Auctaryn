@@ -285,3 +285,11 @@ def test_memory_session_expires_and_is_removed():
     defender._sessions[session].expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
     assert defender.session_owned_by(session, "agent-expiring", "token-expiring") is False
     assert session not in defender._sessions
+
+
+
+def test_unbound_memory_entry_is_not_readable_by_agent_scope():
+    from modules.memory_defender.defender import MemoryDefender
+    defender = MemoryDefender()
+    defender.store.add("legacy-unbound", "content", source="trusted_system")
+    assert defender.is_readable_by_session("legacy-unbound", "session", "agent-a") is False
