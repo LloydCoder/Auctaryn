@@ -19,6 +19,17 @@ class PolicyValidationError(ValueError):
     """Raised when the checked-in runtime baseline violates required controls."""
 
 
+class _UniqueKeyLoader(yaml.SafeLoader):
+    def construct_mapping(self, node, deep=False):
+        mapping = {}
+        for key_node, value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in mapping:
+                raise ValueError("duplicate YAML mapping key")
+            mapping[key] = self.construct_object(value_node, deep=deep)
+        return mapping
+
+
 def validate_baseline_policy(policy: Any) -> list[str]:
     """Return policy violations for the deliberately restrictive default baseline."""
     errors: list[str] = []
@@ -69,9 +80,9 @@ def load_and_validate_baseline(path: str | Path) -> tuple[dict[str, Any], str]:
     """Load a YAML baseline safely, validate it, and return its source SHA-256."""
     source = Path(path).read_bytes()
     try:
-        policy = yaml.safe_load(source)
-    except yaml.YAMLError as exc:
-        raise PolicyValidationError("OpenShell baseline policy is not valid YAML") from exc
+        policy = yaml.load(source, Loader=_UniqueKeyLoader)
+    except (yaml.YAMLError, ValueError) as exc:
+        raise PolicyValidationError("OpenShell baseline policy is invalid or contains duplicate keys") from exc
 
     errors = validate_baseline_policy(policy)
     if errors:
