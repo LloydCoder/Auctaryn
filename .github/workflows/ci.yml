@@ -61,8 +61,10 @@ jobs:
           npm run build
           npm audit --omit=dev --audit-level=high
 
-      - name: Validate deployment script syntax
-        run: bash -n scripts/deploy.sh
+      - name: Validate deployment and rollback script syntax
+        run: |
+          bash -n scripts/deploy.sh
+          bash -n scripts/rollback.sh
 
       - name: Validate Compose configuration
         env:
