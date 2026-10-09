@@ -62,3 +62,11 @@ def test_malformed_yaml_fails_closed(tmp_path):
     policy_path.write_text("filesystem_policy: [unclosed", encoding="utf-8")
     with pytest.raises(PolicyValidationError, match="not valid YAML"):
         load_and_validate_baseline(policy_path)
+
+
+
+def test_duplicate_yaml_keys_fail_closed(tmp_path):
+    policy_path = tmp_path / "duplicate.yaml"
+    policy_path.write_text("version: 1\nversion: 2\n", encoding="utf-8")
+    with pytest.raises(PolicyValidationError, match="duplicate keys"):
+        load_and_validate_baseline(policy_path)
