@@ -1,5 +1,5 @@
-import pytest
 """Regression tests for API authentication and privileged operations."""
+import pytest
 from fastapi.testclient import TestClient
 
 from api.main import create_app
