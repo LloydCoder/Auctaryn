@@ -59,6 +59,8 @@ class ExecutionGateway:
         return None
 
     def _record_preflight_denial(self, decision: GatewayDecision) -> GatewayDecision:
+        # Never retain or return the caller's bearer capability in decision history.
+        decision.tool_call = decision.tool_call.model_copy(update={"identity_token": ""})
         self.history.append(decision)
         self.total_processed += 1
         self.total_vetoed += 1
@@ -71,6 +73,8 @@ class ExecutionGateway:
         if preflight is not None:
             return self._record_preflight_denial(preflight)
 
+        # Token is consumed by preflight; all downstream state is credential-free.
+        tool_call = tool_call.model_copy(update={"identity_token": ""})
         classification = self.classifier.classify(tool_call)
         decision = self.veto_engine.decide(classification)
         self.history.append(decision)
@@ -100,6 +104,8 @@ class ExecutionGateway:
         if preflight is not None:
             return self._record_preflight_denial(preflight)
 
+        # Token is consumed by preflight; all downstream state is credential-free.
+        tool_call = tool_call.model_copy(update={"identity_token": ""})
         classification = self.classifier.classify(tool_call)
         decision = self.veto_engine.decide(classification)
 
