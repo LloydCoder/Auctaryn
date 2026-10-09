@@ -14,7 +14,7 @@
 
 1. Added a machine-readable standards traceability manifest with 10 OWASP ASI categories, 9 selected NIST SSDF practice mappings, all four NIST AI RMF functions, and an explicit tactic-level MITRE ATLAS mapping.
 2. Added a fail-closed validator that checks schema version, unique control/standard IDs, declared standards, referenced standards, allowed evidence statuses, non-empty residual-risk descriptions, implementation paths, exact test function references, complete ASI01–ASI10 coverage and all four AI RMF functions.
-3. Added negative tests proving invalid statuses and missing implementation paths fail validation.
+3. Added negative tests proving invalid statuses, missing implementation paths, missing test functions and unreferenced standards fail validation.
 4. Added a security risk register that separates repository evidence from live Platform/OpenShell acceptance, multi-replica durability, external penetration testing, and deployed-digest verification.
 5. Added an independent-assurance plan defining test scope, required artifacts, report fields, retest evidence and release acceptance rules.
 6. Reconciled OWASP coverage and the roadmap to avoid presenting local test mappings as certification or independent testing.

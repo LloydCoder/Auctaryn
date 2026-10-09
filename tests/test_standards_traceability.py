@@ -16,9 +16,13 @@ def test_traceability_validator_fails_closed_for_missing_paths_and_unknown_statu
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     manifest["controls"][0]["status"] = "certified"
     manifest["controls"][0]["implementation_paths"] = ["does/not/exist.py"]
+    manifest["controls"][0]["test_cases"][0]["name"] = "test_missing_case"
+    manifest["standards"].append({"id": "UNUSED-STANDARD", "name": "Unused", "source_url": "https://example.invalid", "claim_limit": "test"})
     bad_manifest = tmp_path / "bad-traceability.json"
     bad_manifest.write_text(json.dumps(manifest), encoding="utf-8")
 
     errors = validate_manifest(ROOT, bad_manifest)
     assert any("invalid status" in error for error in errors)
     assert any("does/not/exist.py" in error for error in errors)
+    assert any("test function test_missing_case not found" in error for error in errors)
+    assert any("unreferenced standards" in error for error in errors)

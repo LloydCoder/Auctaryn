@@ -1,6 +1,6 @@
 # Standards-to-evidence traceability
 
-This is the human-readable entry point to the machine-readable manifest at config/standards_traceability.json. The manifest is validated by scripts/audit_standards_traceability.py and the test suite; it records implementation paths, exact test functions, evidence level, residual risk and release-gate status for OWASP ASI01–ASI10, selected NIST SSDF practices, and the NIST AI RMF Govern/Map/Measure/Manage functions.
+This is the human-readable entry point to the machine-readable manifest at config/standards_traceability.json. The manifest is validated by scripts/audit_standards_traceability.py and the test suite; it records implementation paths, exact test functions, evidence level, residual risk and release-gate status for OWASP ASI01–ASI10, selected NIST SSDF practices, the NIST AI RMF Govern/Map/Measure/Manage functions, and tactic-level MITRE ATLAS mappings.
 
 Run validation with python scripts/audit_standards_traceability.py and pytest tests/test_standards_traceability.py -q.
 
