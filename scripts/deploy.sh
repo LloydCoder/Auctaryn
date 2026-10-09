@@ -81,6 +81,7 @@ EVIDENCE_KEY_BYTES="$(tr -d '\r\n' < "$EVIDENCE_KEY_FILE" | wc -c)"
 ACTIVE_GATEWAY="$(tr -d '\r\n' < "$OPEN_SHELL_DIR/active_gateway")"
 [[ "$ACTIVE_GATEWAY" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || die "OpenShell active_gateway name is invalid."
 GATEWAY_METADATA="$OPEN_SHELL_DIR/gateways/$ACTIVE_GATEWAY/metadata.json"
+command -v python3 >/dev/null 2>&1 || die "Required command is missing: python3"
 [[ -f "$GATEWAY_METADATA" ]] || die "OpenShell active gateway metadata is missing."
 python3 "$REPO_DIR/scripts/verify_openshell_gateway_metadata.py" "$GATEWAY_METADATA" >/dev/null || die "OpenShell metadata must define a valid remote HTTPS gateway endpoint (gateway_endpoint)."
 
