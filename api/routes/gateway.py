@@ -130,7 +130,22 @@ async def evaluate_tool_call(request: ToolCallRequest) -> ActionClassification:
                   identity_token=request.identity_token)
     get_gateway().data_guard.validate_tool_call(tc)
     from modules.execution_gateway.risk_classifier import RiskClassifier
-    return RiskClassifier().classify(tc)
+    classification = RiskClassifier().classify(tc)
+    try:
+        await record_evidence(
+            "risk.assessed",
+            correlation_id=action_intent_fingerprint(tc),
+            actor_id=tc.agent_id,
+            outcome=classification.risk_level.value,
+            details={
+                "risk_level": classification.risk_level.value,
+                "action_fingerprint": action_intent_fingerprint(tc),
+                "confidence": classification.confidence,
+            },
+        )
+    except EvidenceStoreError as exc:
+        raise HTTPException(status_code=503, detail="Evidence recording unavailable") from exc
+    return classification
 
 @router.get("/decisions")
 async def list_decisions(limit: int = Query(50, ge=1, le=500)) -> list[GatewayDecision]:
