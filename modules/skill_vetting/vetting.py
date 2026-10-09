@@ -8,6 +8,12 @@ from modules.skill_vetting.common import (
     scan_permissions,
 )
 
+__all__ = [
+    "PermissionScanResult", "VettingVerdict", "detect_typosquat", "scan_permissions",
+    "validate_manifest_structure", "has_valid_signature", "has_pinned_hash",
+    "verify_content_hash", "SkillVettingService",
+]
+
 
 def validate_manifest_structure(manifest: dict) -> bool:
     from modules.skill_vetting.secure_vetting import valid_manifest
