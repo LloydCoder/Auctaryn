@@ -17,7 +17,7 @@ Transient decision IDs, timestamps, and bearer capabilities are excluded. The fi
 1. The gateway creates the fingerprint after identity preflight and removal of the caller's identity token.
 2. A pending approval is checked against its current tool-call intent before the approval transition.
 3. If the intent has changed or the fingerprint is absent, the pending decision is removed, replaced with a terminal denial, and the approval request is rejected.
-4. Immediately before runtime invocation, the execution service recomputes the fingerprint. A missing or mismatched fingerprint prevents adapter execution.
+4. Immediately before runtime invocation, the execution service recomputes the fingerprint. A missing or mismatched fingerprint prevents adapter execution and maps to HTTP 409 rather than being reported as a runtime failure.
 5. Existing expiry and at-most-once checks remain active. Approval state and execution claims are still process-local.
 
 ## Security properties and limits
