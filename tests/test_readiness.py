@@ -6,7 +6,7 @@ from types import SimpleNamespace\n\n\ndef _set_strong_credentials(monkeypatch):
 import pytest
 
 
-def test_readiness_explains_missing_runtime_adapter(client):
+def test_readiness_explains_missing_runtime_adapter(client, monkeypatch):
     response = client.get("/health/ready")
 
     assert response.status_code == 200
@@ -88,7 +88,7 @@ def test_readiness_fails_closed_when_runtime_probe_times_out(client, monkeypatch
     assert body["checks"]["openshell_connected"] is False
 
 
-def test_detailed_health_does_not_claim_probe_is_unimplemented(client):
+def test_detailed_health_does_not_claim_probe_is_unimplemented(client, monkeypatch):
     response = client.get("/health/detailed")
 
     assert response.status_code == 200
