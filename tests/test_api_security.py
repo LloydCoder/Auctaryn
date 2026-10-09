@@ -58,3 +58,31 @@ def test_health_liveness_remains_available_without_api_credentials(monkeypatch):
     response = _client().get("/health")
 
     assert response.status_code == 200
+
+def test_identical_service_and_admin_keys_fail_closed(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_API_KEY", "same-secret")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "same-secret")
+
+    response = _client().get(
+        "/api/v1/gateway/status",
+        headers={"Authorization": "Bearer same-secret"},
+    )
+
+    assert response.status_code == 503
+
+
+def test_service_websocket_credential_cannot_approve(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
+
+    with _client().websocket_connect("/ws/actions") as websocket:
+        websocket.send_json({"type": "authenticate", "token": "test-service-secret"})
+        assert websocket.receive_json()["role"] == "api"
+        websocket.send_json({
+            "type": "approve",
+            "decision_id": "does-not-exist",
+            "approved": True,
+        })
+        response = websocket.receive_json()
+        assert response["type"] == "error"
+        assert response["message"] == "Administrator credential required"
