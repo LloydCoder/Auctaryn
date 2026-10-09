@@ -32,9 +32,10 @@ class TestIdentityEnforcement:
         identity_mgr = AgentIdentityManager()
         identity_mgr.register("agent-001", owner="user-1")
         identity_mgr.grant_scope("agent-001", "read_*")
+        token = identity_mgr.issue_token("agent-001")
         gw = ExecutionGateway(identity_manager=identity_mgr)
 
-        tc = ToolCall(tool_name="read_file", action="read", agent_id="agent-001")
+        tc = ToolCall(tool_name="read_file", action="read", agent_id="agent-001", identity_token=token.token_id)
         decision = gw.evaluate(tc)
         assert decision.decision == ActionDecision.APPROVED
 
@@ -49,6 +50,17 @@ class TestIdentityEnforcement:
 
         tc = ToolCall(tool_name="read_file", action="read", agent_id="agent-001")
         decision = gw.evaluate(tc)
+        assert decision.decision == ActionDecision.DENIED
+
+    def test_missing_token_is_denied_when_identity_manager_is_enabled(self):
+        from modules.execution_gateway.gateway import ExecutionGateway
+        from modules.agent_identity.identity import AgentIdentityManager
+
+        identity_mgr = AgentIdentityManager()
+        identity_mgr.register("agent-001", owner="user-1")
+        identity_mgr.grant_scope("agent-001", "read_file")
+        gw = ExecutionGateway(identity_manager=identity_mgr)
+        decision = gw.evaluate(ToolCall(tool_name="read_file", action="read", agent_id="agent-001"))
         assert decision.decision == ActionDecision.DENIED
 
     def test_no_identity_manager_means_open_mode_for_backward_compat(self):
