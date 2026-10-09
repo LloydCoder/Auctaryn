@@ -77,3 +77,8 @@ Quarantined memory is not readable by any agent session, including the originati
 ## Skill and tool supply chain
 
 Skill manifests are accepted only with an exact semantic version, valid SHA-256 artifact digest, trusted Ed25519 publisher signature and matching artifact bytes. Publisher trust mutation is administrator-only. Immutable name/version manifest pins detect changes and version rollback within the process. These pins and trust roots remain in-memory; they are not a durable multi-replica trust store. Passing vetting does not authorize execution, which remains governed by Tinlance Agent Platform and the configured runtime. See [Skill Supply-Chain Security](SKILL_SUPPLY_CHAIN.md).
+
+
+## Inter-agent communication and cascade containment
+
+Auctaryn's message envelope binds message ID, sender, recipient, payload, issue time and expiry with HMAC-SHA-256. When managed identity is configured, key registration and rotation require an injected platform key-management authorizer, while send, inbox reads and receive verification require scoped agent tokens. Payloads and the aggregate in-memory queue are bounded; messages expire and are consumed once. Dependency cycles are rejected, and descendants remain blocked until a tripped ancestor's own half-open recovery probe succeeds. Keys, inboxes, replay state and breaker state remain in-memory; the bus is not a production network transport. See the [Inter-Agent Security Contract](INTER_AGENT_SECURITY.md) and [Phase 14 forensic audit](../audits/PHASE-14-FORENSIC-AUDIT.md) for production gates.
