@@ -151,14 +151,6 @@ async def _broadcast_decision(decision: GatewayDecision) -> None:
         "risk_level": decision.risk_level.value, "decision": decision.decision.value,
         "reason": decision.reason, "decided_by": decision.decided_by,
     })
-    if decision.decision.value == "vetoed":
-        from api.websockets.alerts import broadcast_alert
-        await broadcast_alert({
-            "type": "alert", "severity": "critical", "module": "execution_gateway",
-            "title": "Action Vetoed",
-            "message": f"{decision.tool_call.tool_name}:{decision.tool_call.action} — {decision.reason}",
-            "timestamp": decision.timestamp.isoformat(),
-        })
 
 @router.get("/status")
 async def get_gateway_status() -> dict:
