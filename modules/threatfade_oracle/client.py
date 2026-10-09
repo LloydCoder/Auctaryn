@@ -63,10 +63,16 @@ class FusionOpsClient:
             raise ValueError("THREATFADE_SERVICE_URL must be an absolute HTTP(S) URL")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("ThreatFade base URL must not contain credentials, query parameters, or fragments")
+        api_key = os.getenv("THREATFADE_API_KEY", "").strip()
+        if len(api_key) > 4096 or any(ord(char) < 32 for char in api_key):
+            raise ValueError("THREATFADE_API_KEY is invalid")
+        if parsed.hostname not in local_hosts and not api_key:
+            raise ValueError("THREATFADE_API_KEY is required for non-local ThreatFade endpoints")
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 0 < timeout <= 60:
             raise ValueError("timeout must be greater than 0 and at most 60 seconds")
         self.base_url = configured_url.rstrip("/")
         self.timeout = float(timeout)
+        self.headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
     @staticmethod
     def _json_object(response: httpx.Response, endpoint: str) -> dict:
@@ -148,7 +154,7 @@ class FusionOpsClient:
         """GET /health — liveness check for both FusionOps and ThreatFade."""
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(f"{self.base_url}/health")
+                resp = await client.get(f"{self.base_url}/health", headers=self.headers)
                 resp.raise_for_status()
                 data = self._json_object(resp, "/health")
                 if not isinstance(data.get("status"), str):
@@ -165,7 +171,7 @@ class FusionOpsClient:
             raise ValueError(f"limit must be between 1 and {MAX_EVENTS_LIMIT}")
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(f"{self.base_url}/events", params={"limit": limit})
+                resp = await client.get(f"{self.base_url}/events", params={"limit": limit}, headers=self.headers)
                 resp.raise_for_status()
                 return self._json_object(resp, "/events")
         except httpx.HTTPError as e:
@@ -192,7 +198,7 @@ class FusionOpsClient:
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(f"{self.base_url}/detect/json", json=payload)
+                resp = await client.post(f"{self.base_url}/detect/json", json=payload, headers=self.headers)
                 resp.raise_for_status()
                 data = self._json_object(resp, "/detect/json")
                 return self._validate_full_analysis(data, "/detect/json")
@@ -211,7 +217,7 @@ class FusionOpsClient:
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(f"{self.base_url}/detect/scenario",
-                                         json={"scenario": scenario})
+                                         json={"scenario": scenario}, headers=self.headers)
                 resp.raise_for_status()
                 data = self._json_object(resp, "/detect/scenario")
                 return self._validate_full_analysis(data, "/detect/scenario")
@@ -235,7 +241,7 @@ class FusionOpsClient:
         try:
             async with httpx.AsyncClient(timeout=self.timeout * 3) as client:
                 files = {"file": (filename, file_bytes, "application/octet-stream")}
-                resp = await client.post(f"{self.base_url}/detect/pcap", files=files)
+                resp = await client.post(f"{self.base_url}/detect/pcap", files=files, headers=self.headers)
                 resp.raise_for_status()
                 data = self._json_object(resp, "/detect/pcap")
                 return self._validate_full_analysis(data, "/detect/pcap")
@@ -254,7 +260,7 @@ class FusionOpsClient:
             raise ValueError(f"detection_result exceeds {MAX_TRIAGE_PAYLOAD_BYTES} bytes")
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(f"{self.base_url}/triage", json=detection_result)
+                resp = await client.post(f"{self.base_url}/triage", json=detection_result, headers=self.headers)
                 resp.raise_for_status()
                 return self._json_object(resp, "/triage")
         except httpx.HTTPError as e:
