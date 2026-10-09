@@ -22,7 +22,7 @@
 
 ## External acceptance gates
 
-- Provision and rotate `AUCTARYN_EVIDENCE_HMAC_KEY` through the approved secrets manager.
+- Provision and rotate the evidence key through the approved secrets manager; prefer a mounted secret file and verify key rotation behavior.
 - Validate file/volume permissions, backups, restore drills, retention, storage exhaustion and cross-process concurrent writers in the target deployment.
 - Forward evidence records/checkpoints to independently controlled immutable storage and test tamper alerts.
 - Correlate Auctaryn advisory findings with authoritative Platform decisions and execution receipts using Platform-issued IDs; do not treat local evidence as the Platform's audit of record.
