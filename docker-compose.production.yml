@@ -1,0 +1,19 @@
+# Production-only overrides. Use only after Phase 24 evidence gates have passed.
+# The release image must be pinned to an attested immutable GHCR digest.
+services:
+  api:
+    image: ${AUCTARYN_IMAGE:?Set AUCTARYN_IMAGE to the verified GHCR digest}
+    pull_policy: always
+    environment:
+      AUCTARYN_EVIDENCE_HMAC_KEY: ""
+      AUCTARYN_EVIDENCE_HMAC_KEY_FILE: /run/secrets/auctaryn-evidence-hmac-key
+      OPENSHELL_SYSTEM_GATEWAY_DIR: /etc/openshell
+    volumes:
+      - ${OPENSHELL_SYSTEM_GATEWAY_DIR:?Set OPENSHELL_SYSTEM_GATEWAY_DIR to host gateway metadata}:/etc/openshell:ro
+    secrets:
+      - source: evidence_hmac_key
+        target: auctaryn-evidence-hmac-key
+
+secrets:
+  evidence_hmac_key:
+    file: ${AUCTARYN_EVIDENCE_HMAC_KEY_FILE:?Set AUCTARYN_EVIDENCE_HMAC_KEY_FILE to the host evidence key file}
