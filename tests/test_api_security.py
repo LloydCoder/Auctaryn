@@ -75,14 +75,15 @@ def test_service_websocket_credential_cannot_approve(monkeypatch):
     monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
     monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
 
-    with _client().websocket_connect("/ws/actions") as websocket:
-        websocket.send_json({"type": "authenticate", "token": "test-service-secret"})
-        assert websocket.receive_json()["role"] == "api"
-        websocket.send_json({
-            "type": "approve",
-            "decision_id": "does-not-exist",
-            "approved": True,
-        })
-        response = websocket.receive_json()
-        assert response["type"] == "error"
-        assert response["message"] == "Administrator credential required"
+    with _client() as client:
+        with client.websocket_connect("/ws/actions") as websocket:
+            websocket.send_json({"type": "authenticate", "token": "test-service-secret"})
+            assert websocket.receive_json()["role"] == "api"
+            websocket.send_json({
+                "type": "approve",
+                "decision_id": "does-not-exist",
+                "approved": True,
+            })
+            response = websocket.receive_json()
+            assert response["type"] == "error"
+            assert response["message"] == "Administrator credential required"
