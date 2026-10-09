@@ -5,7 +5,8 @@ services:
     image: ${AUCTARYN_IMAGE:?Set AUCTARYN_IMAGE to the verified GHCR digest}
     pull_policy: always
     environment:
-      AUCTARYN_REQUIRE_STRONG_API_KEYS: "true"\n      AUCTARYN_EVIDENCE_HMAC_KEY: ""
+      AUCTARYN_REQUIRE_STRONG_API_KEYS: "true"
+      AUCTARYN_EVIDENCE_HMAC_KEY: ""
       AUCTARYN_EVIDENCE_HMAC_KEY_FILE: /run/secrets/auctaryn-evidence-hmac-key
       OPENSHELL_SYSTEM_GATEWAY_DIR: /etc/openshell
     volumes:
