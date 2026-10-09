@@ -37,13 +37,18 @@ export AUCTARYN_DOMAIN="${DOMAIN}"
 
 # 3. Build the dashboard with same-origin HTTPS/WSS URLs; never bake API secrets into Vite.
 echo "Building dashboard assets..."
-(cd dashboard && VITE_API_URL="https://${DOMAIN}" VITE_WS_URL="wss://${DOMAIN}" npm ci && npm run build)
+(cd dashboard && VITE_API_URL="https://${DOMAIN}" VITE_WS_URL="wss://${DOMAIN}" npm install --silent && VITE_API_URL="https://${DOMAIN}" VITE_WS_URL="wss://${DOMAIN}" npm run build)
 
 # 4. Build and start the API and internal-only ThreatFade service.
 echo "Building containers..."
-docker compose build api threatfade
+THREATFADE_URL=$(grep -E '^THREATFADE_SERVICE_URL=' .env | head -n1 | cut -d= -f2- || true)
+if [[ "$THREATFADE_URL" != https://* ]] || [[ "$THREATFADE_URL" == *replace-with* ]]; then
+    echo "Set THREATFADE_SERVICE_URL to your real HTTPS endpoint in .env before deployment."
+    exit 1
+fi
+docker compose build api
 echo "Starting services..."
-docker compose up -d api threatfade
+docker compose up -d api
 
 echo "Waiting for API liveness..."
 healthy=false
