@@ -222,3 +222,17 @@ def test_memory_session_is_bound_to_exact_token(client):
     second_token = _agent_token(client, "memory-token-binding")
     response = _store(client, second_token, session_id)
     assert response.status_code == 404
+
+
+
+def test_quarantine_queue_restores_tampered_quarantine_flag(client):
+    import api.routes.memory as memory_routes
+
+    headers = _agent_token(client, "memory-quarantine-queue-integrity")
+    session_id = _session(client, headers)
+    stored = _store(client, headers, session_id).json()
+    memory_routes.get_memory_defender().store._entries[stored["entry_id"]].quarantined = False
+    response = client.get("/api/v1/memory/quarantine")
+    assert response.status_code == 200
+    assert any(item["key"] == stored["entry_id"] for item in response.json()["entries"])
+    assert memory_routes.get_memory_defender().store.get(stored["entry_id"]).quarantined is True
