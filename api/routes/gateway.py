@@ -10,8 +10,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from api.security import require_api_key, require_operator_key
+from api.routes.context import get_guardian
 
-from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision
+from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision, IntegrityStatus
 from modules.execution_gateway.gateway import ExecutionGateway
 from modules.threatfade_oracle.oracle import ThreatFadeOracle
 from modules.agent_identity.identity import AgentIdentityManager
@@ -28,6 +29,26 @@ router = APIRouter(dependencies=[Depends(require_api_key)])
 _oracle = ThreatFadeOracle()
 _identity_manager = AgentIdentityManager()
 _circuit_breaker = AgentCircuitBreaker(failure_threshold=5, cooldown_seconds=60)
+
+
+def _context_integrity_preflight(tool_call: ToolCall) -> str | None:
+    """Require a clean session-bound check whenever protected instructions exist."""
+    guardian = get_guardian()
+    if guardian.registry.count() == 0:
+        return None
+    session_id = tool_call.session_id
+    if not session_id:
+        return "Session ID is required while protected context instructions are configured."
+    if guardian.is_session_blocked(session_id):
+        return "Session is quarantined after a context-integrity violation; administrator clearance is required."
+    result = guardian.get_session_result(session_id)
+    if result is None:
+        return "No session-bound context-integrity check exists; action denied."
+    if result.blocked or result.status != IntegrityStatus.INTACT:
+        return "Latest context-integrity check is not intact; action denied."
+    return None
+
+
 # Fail closed: the gateway always has an identity manager. Agents must be
 # registered and granted the requested tool scope before protected actions pass.
 _gateway = ExecutionGateway(
@@ -35,6 +56,7 @@ _gateway = ExecutionGateway(
     oracle=_oracle,
     identity_manager=_identity_manager,
     circuit_breaker=_circuit_breaker,
+    context_integrity_guard=_context_integrity_preflight,
 )
 _execution_service = ExecutionService(_gateway)
 
@@ -85,11 +107,12 @@ async def _broadcast_decision(decision: GatewayDecision) -> None:
         "risk_level": decision.risk_level.value, "decision": decision.decision.value,
         "reason": decision.reason, "decided_by": decision.decided_by,
     })
-    if decision.decision.value == "vetoed":
+    if decision.decision.value == "vetoed" or decision.decided_by == "context_integrity_guard":
         from api.websockets.alerts import broadcast_alert
+        is_context_block = decision.decided_by == "context_integrity_guard"
         await broadcast_alert({
-            "type": "alert", "severity": "critical", "module": "execution_gateway",
-            "title": "Action Vetoed",
+            "type": "alert", "severity": "critical", "module": "context_integrity" if is_context_block else "execution_gateway",
+            "title": "Context Integrity Block" if is_context_block else "Action Vetoed",
             "message": f"{decision.tool_call.tool_name}:{decision.tool_call.action} — {decision.reason}",
             "timestamp": decision.timestamp.isoformat(),
         })
@@ -177,6 +200,9 @@ async def execute_approved_decision(decision_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Decision not found")
     if decision.decision != ActionDecision.APPROVED or decision.decided_by != "authenticated_operator":
         raise HTTPException(status_code=409, detail="Decision has not been explicitly approved by an operator")
+    context_denial = _context_integrity_preflight(decision.tool_call)
+    if context_denial:
+        raise HTTPException(status_code=409, detail=context_denial)
     try:
         receipt = await service.execute_approved_decision(decision)
     except DuplicateExecution as exc:
