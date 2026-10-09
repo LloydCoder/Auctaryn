@@ -36,6 +36,8 @@ def test_public_pages_do_not_claim_universal_mediation_or_unverified_metrics():
         "Every agent gets a scoped managed identity",
         "Every row below has working, tested code",
         "Live connectivity status to FusionOps",
+        "TwinGuard",
+        "Built on OpenShell",
     ]
     combined = "\n".join(path.read_text(encoding="utf-8") for path in public_pages)
     for phrase in forbidden:
