@@ -1,8 +1,8 @@
-# TwinGuard — Docker Compose
+# Auctaryn — Docker Compose
 # Orchestrates API, Dashboard, and ThreatFade Oracle
 
 services:
-  # TwinGuard API Backend
+  # Auctaryn API Backend
   api:
     build:
       context: .
@@ -11,7 +11,8 @@ services:
       - "8400:8400"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - TWINGUARD_API_KEY=${TWINGUARD_API_KEY}
+      - AUCTARYN_API_KEY=${AUCTARYN_API_KEY:?Set AUCTARYN_API_KEY in your environment}
+      - AUCTARYN_ADMIN_API_KEY=${AUCTARYN_ADMIN_API_KEY:?Set AUCTARYN_ADMIN_API_KEY in your environment}
       - THREATFADE_SERVICE_URL=http://threatfade:8401
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
@@ -23,15 +24,16 @@ services:
       - threatfade
     restart: unless-stopped
     networks:
-      - twinguard
+      - auctaryn
+
+        - AUCTARYN_ALLOW_INSECURE_THREATFADE_HTTP=false
 
   # ThreatFade Oracle Service
   threatfade:
     build:
       context: ./modules/threatfade_oracle
       dockerfile: Dockerfile
-    ports:
-      - "8401:8401"
+    # Internal-only service: do not publish the unauthenticated Oracle port to the host.
     volumes:
       - ./data/pcaps:/app/pcaps
       - ./data/reports:/app/reports
@@ -59,8 +61,8 @@ services:
       - twinguard
 
 networks:
-  twinguard:
+  auctaryn:
     driver: bridge
 
 volumes:
-  twinguard-data:
+  auctaryn-data:
