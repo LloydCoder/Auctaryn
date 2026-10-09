@@ -247,3 +247,9 @@ def test_repeated_character_keys_are_not_strong(monkeypatch):
     monkeypatch.setenv("AUCTARYN_API_KEY", "a" * 64)
     monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "b" * 64)
     assert credentials_are_strong() is False
+
+
+def test_non_ascii_bearer_candidate_is_rejected_without_compare_digest_error():
+    from api.security import token_role
+
+    assert token_role("🔑") is None
