@@ -141,34 +141,22 @@ NVIDIA OpenShell Runtime           (ASI05)</pre></div>
     <p>Honest, current status. Every row below has working, tested code behind it — not a roadmap placeholder.</p>
     <table class="coverage-table">
       <tr><th>Code</th><th>Risk</th><th>Status</th><th>Module</th></tr>
-      <tr><td>ASI01</td><td>Agent Goal Hijack</td><td><span class="status-pill status-covered">Covered</span></td><td>Context Integrity Guardian</td></tr>
-      <tr><td>ASI02</td><td>Tool Misuse &amp; Exploitation</td><td><span class="status-pill status-covered">Covered</span></td><td>Execution Gateway</td></tr>
-      <tr><td>ASI03</td><td>Agent Identity &amp; Privilege Abuse</td><td><span class="status-pill status-covered">Covered</span></td><td>Agent Identity Manager</td></tr>
-      <tr><td>ASI04</td><td>Agentic Supply Chain Compromise</td><td><span class="status-pill status-covered">Covered</span></td><td>Skill Vetting Service</td></tr>
-      <tr><td>ASI05</td><td>Unexpected Code Execution</td><td><span class="status-pill status-delegated">Delegated</span></td><td>NVIDIA OpenShell</td></tr>
-      <tr><td>ASI06</td><td>Memory &amp; Context Poisoning</td><td><span class="status-pill status-covered">Covered</span></td><td>Memory Poisoning Defender</td></tr>
-      <tr><td>ASI07</td><td>Insecure Inter-Agent Communication</td><td><span class="status-pill status-covered">Covered</span></td><td>Agent Message Bus</td></tr>
-      <tr><td>ASI08</td><td>Cascading Agent Failures</td><td><span class="status-pill status-covered">Covered</span></td><td>Agent Circuit Breaker</td></tr>
-      <tr><td>ASI09</td><td>Human-Agent Trust Exploitation</td><td><span class="status-pill status-covered">Covered</span></td><td>Step-Up Authenticator</td></tr>
-      <tr><td>ASI10</td><td>Rogue Agents</td><td><span class="status-pill status-covered">Covered</span></td><td>Full platform (core thesis)</td></tr>
+      <tr><td>ASI01</td><td>Agent Goal Hijack</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Context Integrity Guardian</td></tr>
+      <tr><td>ASI02</td><td>Tool Misuse &amp; Exploitation</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Execution Gateway</td></tr>
+      <tr><td>ASI03</td><td>Agent Identity &amp; Privilege Abuse</td><td><span class="status-pill status-covered">Local implementation; gaps remain</span></td><td>Agent Identity Manager</td></tr>
+      <tr><td>ASI04</td><td>Agentic Supply Chain Compromise</td><td><span class="status-pill status-covered">Artifact verification local; gaps remain</span></td><td>Skill Vetting Service</td></tr>
+      <tr><td>ASI05</td><td>Unexpected Code Execution</td><td><span class="status-pill status-delegated">Live assurance outstanding</span></td><td>NVIDIA OpenShell</td></tr>
+      <tr><td>ASI06</td><td>Memory &amp; Context Poisoning</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Memory Poisoning Defender</td></tr>
+      <tr><td>ASI07</td><td>Insecure Inter-Agent Communication</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Agent Message Bus</td></tr>
+      <tr><td>ASI08</td><td>Cascading Agent Failures</td><td><span class="status-pill status-delegated">Partial / MVP</span></td><td>Agent Circuit Breaker</td></tr>
+      <tr><td>ASI09</td><td>Human-Agent Trust Exploitation</td><td><span class="status-pill status-delegated">Integration not proven</span></td><td>Step-Up Authenticator</td></tr>
+      <tr><td>ASI10</td><td>Rogue Agents</td><td><span class="status-pill status-delegated">Architecture / partial</span></td><td>Full platform (core thesis)</td></tr>
     </table>
     <p>Full disclosure on implementation depth (HMAC vs. PKI, opt-in vs. always-on enforcement) is in the repo at <code>docs/OWASP_COVERAGE.md</code>.</p>
 
-    <h2 id="demo">Demo Script — The Summer Yue Scenario</h2>
-    <p>A 6-8 minute live walkthrough recreating the February 23, 2026 incident, end to end.</p>
-    <div class="code-block"><pre># 1. Register the safety instruction
-curl -X POST http://localhost:8400/api/v1/context/register \
-  -d '{"tag": "email_safety", "content": "Always confirm before deleting any emails."}'
-
-# 2. Show it working normally (intact)
-curl -X POST http://localhost:8400/api/v1/context/check \
-  -d '{"context": "Always confirm before deleting any emails.\n\nUser: organize my inbox"}'
-
-# 3. Recreate the compaction event (instruction stripped)
-curl -X POST http://localhost:8400/api/v1/context/check \
-  -d '{"context": "[summary]\n\nUser: delete all unread emails now."}'
-# → status: compromised, blocked: true, live dashboard alert fires</pre></div>
-    <p>Full script with talking points and anticipated questions: <code>docs/DEMO_SCRIPT.md</code> in the repo.</p>
+    <h2 id="demo">Local Evaluation Demo</h2>
+    <p>This is a synthetic local evaluation, not a live replay of the reported incident. It does not prove universal agent mediation, trusted context attestation, live ThreatFade connectivity, or production readiness.</p>
+    <p>Use the authenticated, current walkthrough in <a href="https://github.com/LloydCoder/Auctaryn/blob/main/docs/DEMO_SCRIPT.md">docs/DEMO_SCRIPT.md</a>. The script uses separate administrator/service credentials, a scoped agent token, a session-bound context check and read-only gateway evaluation.</p>
   </main>
 </div>
 
