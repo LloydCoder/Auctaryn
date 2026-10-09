@@ -34,6 +34,9 @@ class FakeOpenShellClient:
         self.sdk_exit_code = sdk_exit_code
         self.calls = []
 
+    def health(self):
+        return SimpleNamespace(version="0.1.0")
+
     def exec(self, sandbox_name, argv, *, workspace):
         self.calls.append((sandbox_name, argv, workspace))
         return SimpleNamespace(
@@ -57,6 +60,30 @@ def _tool_call(argv=_DEFAULT_ARGV, tool_name="openshell_exec", action="exec"):
         parameters={"argv": selected_argv},
         agent_id="openshell-test-agent",
     )
+
+
+def test_adapter_live_health_probe_reports_runtime_identity():
+    adapter = OpenShellRuntimeAdapter(FakeOpenShellClient(), sandbox_name="s", workspace="w")
+    assert adapter.runtime_name == "openshell"
+    assert asyncio.run(adapter.health_check()) is True
+
+
+def test_adapter_live_health_probe_fails_closed_when_version_missing():
+    class ClientWithoutVersion(FakeOpenShellClient):
+        def health(self):
+            return SimpleNamespace(version="")
+
+    adapter = OpenShellRuntimeAdapter(ClientWithoutVersion(), sandbox_name="s", workspace="w")
+    assert asyncio.run(adapter.health_check()) is False
+
+
+def test_adapter_live_health_probe_fails_closed_on_gateway_error():
+    class UnavailableClient(FakeOpenShellClient):
+        def health(self):
+            raise RuntimeError("gateway unavailable")
+
+    adapter = OpenShellRuntimeAdapter(UnavailableClient(), sandbox_name="s", workspace="w")
+    assert asyncio.run(adapter.health_check()) is False
 
 
 def test_adapter_uses_server_configured_sandbox_and_argv_array():
