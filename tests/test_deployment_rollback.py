@@ -141,6 +141,7 @@ def test_deployment_script_requires_attested_digest_and_runtime_evidence():
     assert "docker compose up -d --no-build api" in script
     assert "docker compose build api" not in script
     assert "OPENSHELL_SYSTEM_GATEWAY_DIR" in script
+    assert "verify_openshell_gateway_metadata.py" in script
     assert "AUCTARYN_EVIDENCE_HMAC_KEY_FILE" in script
     assert "AUCTARYN_RUNTIME_ADAPTER" in script
     assert "AUCTARYN_DOMAIN" in script
