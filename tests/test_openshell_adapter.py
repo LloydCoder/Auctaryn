@@ -118,6 +118,11 @@ def test_adapter_uses_server_configured_sandbox_and_argv_array():
     assert result.adapter == "nvidia-openshell"
 
 
+def test_adapter_rejects_invalid_sandbox_identifier():
+    with pytest.raises(ValueError, match="unsupported characters"):
+        OpenShellRuntimeAdapter(FakeOpenShellClient(), sandbox_name="--help", workspace="default")
+
+
 def test_adapter_rejects_unknown_tool_or_action():
     adapter = OpenShellRuntimeAdapter(FakeOpenShellClient(), sandbox_name="s", workspace="w")
 
