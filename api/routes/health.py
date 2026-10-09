@@ -16,10 +16,11 @@ _start_time = time.time()
 def _check_module_health(name: str, enabled: bool) -> ModuleHealth:
     if not enabled:
         return ModuleHealth(name=name, status=ModuleStatus.DISABLED)
-    # Module-specific dependency checks are added by each module's health adapter.
+    # Enabled is not equivalent to healthy: no live probe exists for this module yet.
     return ModuleHealth(
         name=name,
-        status=ModuleStatus.HEALTHY,
+        status=ModuleStatus.DEGRADED,
+        error_message="No live module health probe is registered; status is unverified.",
         uptime_seconds=time.time() - _start_time,
     )
 
