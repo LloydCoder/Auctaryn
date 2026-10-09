@@ -11,7 +11,7 @@ chmod 600 .env
 
 env_value() {
   local key="$1"
-  grep -E "^\${key}=" .env | tail -n1 | cut -d= -f2- || true
+  grep -E "^${key}=" .env | tail -n1 | cut -d= -f2- || true
 }
 
 PREVIOUS_IMAGE_REF="$(cat "$DEPLOY_STATE_DIR/previous-image-ref" 2>/dev/null || true)"
