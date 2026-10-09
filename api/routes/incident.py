@@ -91,8 +91,8 @@ async def list_incident_alerts(
     status: str | None = Query(default=None, pattern="^(open|acknowledged|resolved)$"),
     limit: int = Query(100, ge=1, le=500),
 ) -> dict:
-    manager = get_incident_response_manager()
-    return {"alerts": manager.list_alerts(status=status, limit=limit), "count": len(manager.list_alerts(status=status, limit=limit))}
+    alerts = get_incident_response_manager().list_alerts(status=status, limit=limit)
+    return {"alerts": alerts, "count": len(alerts)}
 
 
 async def _transition_alert(alert_id: str, action: str) -> dict:
