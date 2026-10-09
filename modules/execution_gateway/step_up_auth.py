@@ -14,7 +14,7 @@ or confirmed outside its freshness window.
 """
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 
 from core.logging import get_logger
