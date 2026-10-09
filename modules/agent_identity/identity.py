@@ -197,6 +197,24 @@ class AgentIdentityManager:
         if token is not None:
             token.revoked = True
 
+    def revoke_agent_tokens(self, agent_id: str) -> int:
+        """Revoke every token issued to or delegated by an agent and invalidate its version."""
+        identity = self._identities.get(agent_id)
+        if identity is None:
+            raise PolicyViolation("unknown_agent", agent_id)
+        identity.permissions_version += 1
+        revoked = 0
+        for token in self._tokens.values():
+            if token.agent_id == agent_id or token.delegator_agent_id == agent_id:
+                if not token.revoked:
+                    token.revoked = True
+                    revoked += 1
+        logger.warning(
+            "Revoked all agent capabilities",
+            extra={"event": "agent_tokens_revoked", "module_name": "agent_identity"},
+        )
+        return revoked
+
     # --- Delegation ---
 
     def delegate(self, delegator_agent_id: str, delegate_agent_id: str,

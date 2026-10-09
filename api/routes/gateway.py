@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from api.security import require_api_key, require_operator_key
 from api.routes.context import get_guardian
+from api.websockets import alerts as alerts_ws
 
 from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision, action_intent_fingerprint
 from modules.execution_gateway.gateway import ExecutionGateway, ApprovalIntentIntegrityError
@@ -19,6 +20,7 @@ from modules.agent_identity.identity import AgentIdentityManager
 from modules.inter_agent.circuit_breaker import AgentCircuitBreaker
 from modules.execution_gateway.execution_service import ExecutionService, ActionIntentIntegrityError
 from modules.evidence_audit.store import record_evidence, EvidenceStoreError
+from modules.incident_response.manager import IncidentResponseBlocked, get_incident_response_manager
 from modules.execution_gateway.runtime_adapter import (
     DuplicateExecution,
     RuntimeAdapter,
@@ -91,6 +93,55 @@ class ApprovalRequest(BaseModel):
     approved: bool
     reason: str = Field(default="", max_length=500)
 
+async def _publish_decision_alert(decision: GatewayDecision) -> None:
+    if decision.risk_level.value != "critical" and decision.decision != ActionDecision.VETOED:
+        return
+    alert = get_incident_response_manager().create_alert(
+        severity="critical" if decision.risk_level.value == "critical" else "high",
+        category="agent_action_risk",
+        title="Critical agent action risk",
+        summary=f"Decision {decision.decision.value}; risk={decision.risk_level.value}",
+        decision_id=decision.id,
+        actor_id=decision.tool_call.agent_id,
+    )
+    try:
+        await record_evidence(
+            "incident.alert.created",
+            correlation_id=alert["alert_id"],
+            actor_id=decision.tool_call.agent_id,
+            decision_id=decision.id,
+            outcome=alert["severity"],
+            details={"decision": decision.decision.value, "risk_level": decision.risk_level.value},
+        )
+    except (EvidenceStoreError, ValueError):
+        pass
+    await alerts_ws.broadcast_alert({"type": "incident_alert", "alert": alert})
+
+
+async def _publish_runtime_failure_alert(agent_id: str, fingerprint: str, error_type: str,
+                                         decision_id: str = "") -> None:
+    alert = get_incident_response_manager().create_alert(
+        severity="high",
+        category="runtime_failure",
+        title="Trusted runtime execution failure",
+        summary=f"failure_type={error_type}",
+        decision_id=decision_id,
+        actor_id=agent_id,
+    )
+    try:
+        await record_evidence(
+            "incident.runtime_failure",
+            correlation_id=fingerprint,
+            actor_id=agent_id,
+            decision_id=decision_id,
+            outcome=error_type,
+            details={"decision": "runtime_failure"},
+        )
+    except (EvidenceStoreError, ValueError):
+        pass
+    await alerts_ws.broadcast_alert({"type": "incident_alert", "alert": alert})
+
+
 async def _broadcast_decision(decision: GatewayDecision) -> None:
     from api.websockets.actions import broadcast_action
     await broadcast_action({
@@ -100,14 +151,6 @@ async def _broadcast_decision(decision: GatewayDecision) -> None:
         "risk_level": decision.risk_level.value, "decision": decision.decision.value,
         "reason": decision.reason, "decided_by": decision.decided_by,
     })
-    if decision.decision.value == "vetoed":
-        from api.websockets.alerts import broadcast_alert
-        await broadcast_alert({
-            "type": "alert", "severity": "critical", "module": "execution_gateway",
-            "title": "Action Vetoed",
-            "message": f"{decision.tool_call.tool_name}:{decision.tool_call.action} — {decision.reason}",
-            "timestamp": decision.timestamp.isoformat(),
-        })
 
 @router.get("/status")
 async def get_gateway_status() -> dict:
@@ -228,7 +271,10 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
         raise HTTPException(status_code=409, detail="Decision already claimed for execution") from exc
     except ActionIntentIntegrityError as exc:
         raise HTTPException(status_code=409, detail="Action intent integrity check failed; execution refused") from exc
+    except IncidentResponseBlocked as exc:
+        raise HTTPException(status_code=423, detail="Execution blocked by incident-response controls") from exc
     except RuntimeAdapterFailure as exc:
+        await _publish_runtime_failure_alert(tc.agent_id, fingerprint, type(exc).__name__)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     evidence_status = "complete"
     try:
@@ -259,6 +305,7 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
         # already executed action. The prior execution.requested record remains
         # as a detectable incomplete chain event for operator investigation.
         evidence_status = "terminal_record_failed"
+    await _publish_decision_alert(decision)
     return {
         "decision": decision.model_dump(mode="json"),
         "execution": receipt.model_dump(mode="json") if receipt is not None else None,
@@ -270,16 +317,19 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
 async def execute_approved_decision(decision_id: str) -> dict:
     """Execute the exact immutable decision after an administrator approved it."""
     service = get_execution_service()
-    try:
-        service.require_adapter()
-    except RuntimeAdapterUnavailable as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
     decision = next((item for item in get_gateway().history if item.id == decision_id), None)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     if decision.decision != ActionDecision.APPROVED or decision.decided_by != "authenticated_operator":
         raise HTTPException(status_code=409, detail="Decision has not been explicitly approved by an operator")
+    try:
+        get_incident_response_manager().assert_execution_allowed(decision.tool_call.agent_id)
+    except IncidentResponseBlocked as exc:
+        raise HTTPException(status_code=423, detail="Execution blocked by incident-response controls") from exc
+    try:
+        service.require_adapter()
+    except RuntimeAdapterUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     context_denial = _context_integrity_preflight(decision.tool_call)
     if context_denial:
         raise HTTPException(status_code=409, detail=context_denial)
@@ -301,7 +351,12 @@ async def execute_approved_decision(decision_id: str) -> dict:
         raise HTTPException(status_code=409, detail="Decision already claimed for execution") from exc
     except ActionIntentIntegrityError as exc:
         raise HTTPException(status_code=409, detail="Action intent integrity check failed; execution refused") from exc
+    except IncidentResponseBlocked as exc:
+        raise HTTPException(status_code=423, detail="Execution blocked by incident-response controls") from exc
     except RuntimeAdapterFailure as exc:
+        await _publish_runtime_failure_alert(
+            decision.tool_call.agent_id, fingerprint, type(exc).__name__, decision.id
+        )
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     evidence_status = "complete"
     try:
@@ -320,6 +375,7 @@ async def execute_approved_decision(decision_id: str) -> dict:
         )
     except (EvidenceStoreError, ValueError):
         evidence_status = "terminal_record_failed"
+    await _publish_decision_alert(decision)
     return {"decision_id": decision.id, "execution": receipt.model_dump(mode="json"),
             "evidence_status": evidence_status}
 
@@ -344,6 +400,7 @@ async def intercept_action(request: ToolCallRequest) -> GatewayDecision:
             "action_fingerprint": action_intent_fingerprint(decision.tool_call),
         },
     )
+    await _publish_decision_alert(decision)
     await _broadcast_decision(decision)
     return decision
 
@@ -355,5 +412,6 @@ async def intercept_action_full(request: ToolCallRequest) -> GatewayDecision:
                   identity_token=request.identity_token)
     get_gateway().data_guard.validate_tool_call(tc)
     decision = await get_gateway().evaluate_with_oracle(tc)
+    await _publish_decision_alert(decision)
     await _broadcast_decision(decision)
     return decision

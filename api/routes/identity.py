@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from core.exceptions import PolicyViolation
 from api.routes.gateway import get_identity_manager
 from api.security import require_api_key, require_operator_key
+from modules.evidence_audit.store import record_evidence, EvidenceStoreError
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
 
@@ -96,6 +97,36 @@ async def check_authorization(
 async def revoke_agent_token(request: RevokeTokenRequest) -> dict:
     get_identity_manager().revoke_token(request.token_id)
     return {"revoked": True, "token_id": request.token_id}
+
+
+@router.post("/{agent_id}/revoke-all-tokens", dependencies=[Depends(require_operator_key)])
+async def revoke_all_agent_tokens(agent_id: str) -> dict:
+    try:
+        await record_evidence(
+            "identity.revoke_all_requested",
+            correlation_id=agent_id,
+            actor_id="authenticated_operator",
+            outcome="requested",
+            details={"decision": "revoke_all_tokens"},
+        )
+    except (EvidenceStoreError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="Evidence recording unavailable; tokens not revoked") from exc
+    try:
+        count = get_identity_manager().revoke_agent_tokens(agent_id)
+    except PolicyViolation as exc:
+        raise HTTPException(status_code=404, detail="Agent identity not found") from exc
+    evidence_status = "complete"
+    try:
+        await record_evidence(
+            "identity.revoke_all_completed",
+            correlation_id=agent_id,
+            actor_id="authenticated_operator",
+            outcome="revoked",
+            details={"decision": "revoke_all_tokens"},
+        )
+    except (EvidenceStoreError, ValueError):
+        evidence_status = "terminal_record_failed"
+    return {"agent_id": agent_id, "revoked_token_count": count, "evidence_status": evidence_status}
 
 
 @router.post("/delegate", dependencies=[Depends(require_operator_key)])

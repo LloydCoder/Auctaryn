@@ -54,6 +54,10 @@ Auctaryn exposes the versioned advisory risk contract `POST /api/v1/risk/assess`
 
 Gateway assessments, decisions, approvals, execution requests and safe receipt hashes are recorded in a local SQLite hash chain. Administrator-only inspection endpoints are `GET /api/v1/evidence/records` and `GET /api/v1/evidence/verify`. Set `AUCTARYN_EVIDENCE_DB` for the database path and configure a separately managed value of at least 32 bytes for keyed record authentication using `AUCTARYN_EVIDENCE_HMAC_KEY` or, preferably, a mounted secret file via `AUCTARYN_EVIDENCE_HMAC_KEY_FILE`. Without the key, the service reports hash-chain-only mode. This local store is not the Platform audit of record; production requires external key management, immutable export, retention and restore validation. See [Phase 16 forensic audit](audits/PHASE-16-FORENSIC-AUDIT.md).
 
+## Incident response and containment
+
+Administrators can inspect `GET /api/v1/incident/status`, list alerts with `GET /api/v1/incident/alerts`, activate the persistent global stop with `POST /api/v1/incident/emergency-stop`, quarantine/release an agent with `POST /api/v1/incident/agents/{agent_id}/quarantine`, and acknowledge/resolve alerts through the incident API. Critical-risk and veto decisions create durable alerts; the execution service checks stop/quarantine state before runtime invocation. Agent-wide capability revocation is available at `POST /api/v1/identity/{agent_id}/revoke-all-tokens`. These local controls do not replace Platform-side revocation or multi-replica coordination. Follow the [incident response runbook](docs/INCIDENT_RESPONSE.md) and [Phase 17 forensic audit](audits/PHASE-17-FORENSIC-AUDIT.md).
+
 ## Skill supply-chain security
 
 Skill vetting requires a trusted publisher's Ed25519 signature and the actual artifact bytes matching the signed SHA-256 digest. Publisher trust mutation requires the administrator credential. Version and manifest pins currently remain process-local; see [the supply-chain security contract](docs/SKILL_SUPPLY_CHAIN.md) before deployment.
