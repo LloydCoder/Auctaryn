@@ -1,13 +1,13 @@
-"""TwinGuard — Shared Test Fixtures"""
-
+"""Auctaryn shared test fixtures."""
 import pytest
 from fastapi.testclient import TestClient
 from api.main import app
 
 
 @pytest.fixture(autouse=True)
-def reset_singletons():
-    """Reset all module singletons before each test."""
+def reset_singletons(monkeypatch):
+    """Reset module state and explicitly enable demo-only synthetic signals in tests."""
+    monkeypatch.setenv("AUCTARYN_THREATFADE_ALLOW_SYNTHETIC_SIGNAL", "true")
     from api.routes.context import _guardian
     _guardian.registry._instructions.clear()
     _guardian.history.clear()
@@ -25,11 +25,12 @@ def reset_singletons():
     _gateway.total_vetoed = 0
     gw_oracle.history.clear()
     gw_oracle.raw_results.clear()
+    gw_oracle.circuit_breaker.reset()
 
     from api.routes.threatfade import _oracle as tf_oracle
     tf_oracle.history.clear()
     tf_oracle.raw_results.clear()
-
+    tf_oracle.circuit_breaker.reset()
     yield
 
 
