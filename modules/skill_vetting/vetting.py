@@ -102,7 +102,7 @@ def canonical_manifest_payload(manifest: dict) -> bytes:
 
 
 def validate_manifest_structure(manifest: dict) -> bool:
-    if not isinstance(manifest, dict) or not REQUIRED_MANIFEST_FIELDS.issubset(manifest):
+    if not isinstance(manifest, dict) or set(manifest.keys()) != REQUIRED_MANIFEST_FIELDS:
         return False
     name = manifest.get("name")
     version = manifest.get("version")
@@ -137,7 +137,7 @@ def validate_manifest_structure(manifest: dict) -> bool:
 
 def has_valid_signature(manifest: dict, trusted_publishers: Mapping[str, bytes | str]) -> bool:
     """Verify the Ed25519 signature over the canonical manifest payload."""
-    if not isinstance(manifest, dict) or not isinstance(trusted_publishers, Mapping):
+    if not validate_manifest_structure(manifest) or not isinstance(trusted_publishers, Mapping):
         return False
     signature = manifest.get("signature")
     publisher = manifest.get("publisher")
@@ -238,7 +238,7 @@ class SkillVettingService:
         for publisher, key in (trusted_publishers or {}).items():
             self.trusted_publishers[publisher] = self._decode_public_key(key)
         self.known_skills: set[str] = set(known_skills or set())
-        self.approved_pins: dict[tuple[str, str], str] = {}
+        self.approved_pins: dict[tuple[str, str], tuple[str, str]] = {}
         self.history: list[VettingVerdict] = []
         self._lock = threading.RLock()
 
@@ -321,22 +321,30 @@ class SkillVettingService:
         if perm_scan.risk_level != "low":
             reasons.append(f"Permission risk {perm_scan.risk_level}: {perm_scan.reason}")
 
-        if self.known_skills and isinstance(skill_name, str) and skill_name != "invalid-manifest":
-            typosquat_match = detect_typosquat(skill_name, self.known_skills)
+        with self._lock:
+            known_skills = set(self.known_skills)
+            trusted_publishers = dict(self.trusted_publishers)
+        if known_skills and isinstance(skill_name, str) and skill_name != "invalid-manifest":
+            typosquat_match = detect_typosquat(skill_name, known_skills)
             if typosquat_match:
                 reasons.append(f"Possible typosquat of known skill '{typosquat_match}'")
 
         pin_key = (skill_name, version) if isinstance(version, str) else (skill_name, "")
+        manifest_fingerprint = (
+            hashlib.sha256(canonical_manifest_payload(safe_manifest)).hexdigest()
+            if manifest_is_valid else ""
+        )
         with self._lock:
-            prior_hash = self.approved_pins.get(pin_key)
-            if has_pinned_hash(safe_manifest) and prior_hash and prior_hash != content_hash.lower():
-                reasons.append("Artifact changed without a version bump; reject and publish a new version")
-            if not prior_hash and len(self.approved_pins) >= MAX_APPROVED_PINS:
+            prior_pin = self.approved_pins.get(pin_key)
+            current_pin = (content_hash.lower(), manifest_fingerprint) if has_pinned_hash(safe_manifest) else None
+            if current_pin and prior_pin and prior_pin != current_pin:
+                reasons.append("Artifact or manifest changed without a version bump; publish a new version")
+            if prior_pin is None and len(self.approved_pins) >= MAX_APPROVED_PINS:
                 reasons.append("Approved artifact pin capacity reached")
 
             approved = not reasons
-            if approved:
-                self.approved_pins[pin_key] = content_hash.lower()
+            if approved and current_pin is not None:
+                self.approved_pins[pin_key] = current_pin
             verdict = VettingVerdict(
                 skill_name=skill_name,
                 approved=approved,
