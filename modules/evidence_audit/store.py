@@ -1,6 +1,7 @@
 """Append-only SQLite evidence chain with optional keyed authentication."""
 from __future__ import annotations
 import asyncio
+from contextlib import closing
 from datetime import datetime, timezone
 import hashlib
 import hmac
@@ -50,7 +51,7 @@ class EvidenceStore:
         return db
 
     def _init_sync(self):
-        with self._connect() as db:
+        with closing(self._connect()) as db:
             db.execute("""CREATE TABLE IF NOT EXISTS evidence_records (
                 sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                 record_id TEXT NOT NULL UNIQUE,
@@ -116,7 +117,7 @@ class EvidenceStore:
         }
         serialized = canonical_json(payload).decode("utf-8")
         try:
-            with self._connect() as db:
+            with closing(self._connect()) as db:
                 db.execute("BEGIN IMMEDIATE")
                 row = db.execute("SELECT record_hash FROM evidence_records ORDER BY sequence DESC LIMIT 1").fetchone()
                 previous_hash = row["record_hash"] if row else ZERO_HASH
@@ -143,7 +144,7 @@ class EvidenceStore:
         if not 1 <= limit <= MAX_PAGE_SIZE:
             raise ValueError("limit outside supported bounds")
         try:
-            with self._connect() as db:
+            with closing(self._connect()) as db:
                 rows = db.execute(
                     "SELECT * FROM evidence_records ORDER BY sequence DESC LIMIT ?", (limit,)
                 ).fetchall()
@@ -166,7 +167,7 @@ class EvidenceStore:
 
     def _verify_sync(self) -> dict[str, Any]:
         try:
-            with self._connect() as db:
+            with closing(self._connect()) as db:
                 rows = db.execute("SELECT * FROM evidence_records ORDER BY sequence ASC").fetchall()
             previous_hash = ZERO_HASH
             checked = 0
