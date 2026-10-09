@@ -2,7 +2,8 @@
 # Auctaryn deployment helper. Verify DNS and secrets before running.
 set -euo pipefail
 
-REPO_DIR="/opt/auctaryn"
+REPO_DIR="${AUCTARYN_REPO_DIR:-/opt/auctaryn}"
+DEPLOY_STATE_DIR="${AUCTARYN_DEPLOY_STATE_DIR:-${REPO_DIR}/.deploy-state}"
 DOMAIN="${AUCTARYN_DOMAIN:?Set AUCTARYN_DOMAIN to a verified DNS name}"
 EMAIL="${AUCTARYN_TLS_EMAIL:-hello@tinlance.com}"
 
@@ -39,7 +40,24 @@ export AUCTARYN_DOMAIN="${DOMAIN}"
 echo "Building dashboard assets..."
 (cd dashboard && VITE_API_URL="https://${DOMAIN}" VITE_WS_URL="wss://${DOMAIN}" npm install --silent && VITE_API_URL="https://${DOMAIN}" VITE_WS_URL="wss://${DOMAIN}" npm run build -- --base=/dashboard/)
 
-# 4. Build and start the API with the configured external ThreatFade client.
+# 4. Capture the currently running immutable image ID before rebuilding so rollback
+# remains possible even after the mutable auctaryn:latest tag moves.
+mkdir -p "$DEPLOY_STATE_DIR"
+chmod 700 "$DEPLOY_STATE_DIR"
+RUNNING_CONTAINER=$(docker compose ps -q api 2>/dev/null || true)
+if [ -n "$RUNNING_CONTAINER" ]; then
+    PREVIOUS_IMAGE_ID=$(docker inspect --format '{{.Image}}' "$RUNNING_CONTAINER")
+    if [[ ! "$PREVIOUS_IMAGE_ID" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+        echo "Refusing deployment: could not identify the running image immutably."
+        exit 1
+    fi
+    STATE_TMP="$DEPLOY_STATE_DIR/previous-image-id.tmp"
+    printf '%s\\n' "$PREVIOUS_IMAGE_ID" > "$STATE_TMP"
+    chmod 600 "$STATE_TMP"
+    mv -f "$STATE_TMP" "$DEPLOY_STATE_DIR/previous-image-id"
+fi
+
+# Build and start the API with the configured external ThreatFade client.
 echo "Building containers..."
 THREATFADE_URL=$(grep -E '^THREATFADE_SERVICE_URL=' .env | head -n1 | cut -d= -f2- || true)
 if [[ "$THREATFADE_URL" != https://* ]] || [[ "$THREATFADE_URL" == *replace-with* ]]; then
@@ -141,4 +159,3 @@ echo "Deployment services are live. Verify TLS, dashboard sign-in, API credentia
 echo "Dashboard: https://${DOMAIN}/dashboard/"
 echo "API docs:  https://${DOMAIN}/docs"
 echo "Liveness:  https://${DOMAIN}/health"
-echo "Readiness is expected to remain false until the OpenShell runtime probe is implemented."
