@@ -20,7 +20,7 @@ def test_effective_policy_verifier_accepts_exact_reviewed_hash():
     assert verify_effective_policy("prod-sandbox", expected, runner=runner) == expected
     assert calls[0][0] == ["openshell", "sandbox", "get", "prod-sandbox", "--policy-only"]
     assert calls[0][1]["timeout"] == 10
-    assert calls[0][1]["shell"] if "shell" in calls[0][1] else True
+    assert calls[0][1]["shell"] is False
 
 
 def test_effective_policy_verifier_rejects_policy_drift():
