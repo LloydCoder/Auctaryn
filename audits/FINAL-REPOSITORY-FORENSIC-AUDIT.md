@@ -58,7 +58,7 @@ No architecture duplication or claim of universal runtime mediation was introduc
 | 13 | Skill/tool/MCP supply-chain defense | Signature and artifact-digest verification, immutable pins and change detection | Publisher trust persistence and runtime behavior integrity remain open |
 | 14 | Inter-agent security | HMAC envelope integrity, scoped messaging, expiry/replay defense, queue bounds and cascade containment | Durable key service, transport security and multi-replica replay state remain open |
 | 15 | Unified explainable risk findings | Deterministic bounded findings with provenance, confidence, rationale, rule/control and evidence references; versioned additive schema | Live consumer conformance remains required; advisory output never grants authorization |
-| 16 | Evidence, audit and forensic investigation | Canonical chained records, optional HMAC authentication, decision/approval/execution correlation, bounded admin verification API and tamper/access-control tests | Local SQLite is defense-in-depth, not the Platform audit of record; off-host durability remains required |
+| 16 | Evidence, audit and forensic investigation | Chained evidence records, optional HMAC integrity tags, linkage across decisions, approvals and executions, a bounded admin verification API, and tamper/access-control tests | Local SQLite is defense-in-depth, not the Platform audit of record; off-host durability remains required |
 | 17 | Detection and incident response | Detection and incident workflow implemented and audited | Live telemetry and response-operational evidence remain required |
 | 18 | Adversarial benchmark | Repeatable ASI/ATLAS-oriented benchmark and regression tests | Internal benchmark is not independent assurance; false-positive/negative rates need external measurement |
 | 19 | Tenancy/admin boundaries | Route authorization and direct-execution restrictions implemented | Platform-side tenant binding and IdP/MFA assertions remain open |
@@ -84,6 +84,7 @@ Per-phase reports are indexed in [audits/README.md](README.md). See the [impleme
 10. **License/documentation drift:** root Apache-2.0 license added; public claims and phase roadmap reconciled.
 11. **Audit discoverability:** canonical reports for all 24 phases are indexed; historical duplicate reports are explicitly distinguished from current canonical reports.
 12. **ACS interoperability claim boundary:** OWASP ACS v0.1.0 was reviewed as a wire protocol, not an ASI control category. Auctaryn does not implement ACS and makes no conformance claim; a future adapter is explicitly out of current scope.
+13. **Secret-scan range and runtime:** replaced deprecated Gitleaks Action v2/default commit selection with a checksum-pinned Gitleaks v8.30.1 binary, explicit PR/push ranges, full-history scanning on every event and SARIF upload. A narrowly scoped ignore covers only the known false-positive fingerprint in the immutable Phase 24 squash commit; the current audit wording no longer matches it. PR #34 exact-head secret scanning passed; full checks and post-merge validation remain required.
 
 ## Standards and external technical references reviewed
 
