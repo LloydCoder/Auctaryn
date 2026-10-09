@@ -71,6 +71,8 @@ def test_supply_chain_workflow_has_required_controls() -> None:
     assert "anchore/sbom-action@" in supply
     assert "anchore/scan-action@" in supply
     assert "severity-cutoff: high" in supply
+    assert "only-fixed: true" in supply
+    assert "output-file: grype-full.json" in supply
     assert "fail-build: true" in supply
     assert "actions/attest@" in supply
     assert "attestations: write" in supply
