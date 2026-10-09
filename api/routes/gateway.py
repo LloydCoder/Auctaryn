@@ -5,8 +5,8 @@ Wired to ExecutionGateway + ThreatFade Oracle (Parliament integration)
 """
 
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from core.models import ToolCall, ActionClassification, GatewayDecision
 from modules.execution_gateway.gateway import ExecutionGateway
@@ -29,7 +29,7 @@ _circuit_breaker = AgentCircuitBreaker(failure_threshold=5, cooldown_seconds=60)
 _gateway = ExecutionGateway(
     auto_approve_safe=True,
     oracle=_oracle,
-    identity_manager=None,  # set via enable_strict_identity()
+    identity_manager=_identity_manager,
     circuit_breaker=_circuit_breaker,
 )
 
@@ -57,18 +57,19 @@ def enable_strict_identity_enforcement() -> None:
 
 
 class ToolCallRequest(BaseModel):
-    tool_name: str
-    action: str
-    parameters: dict = {}
-    target: str = ""
-    agent_id: str = ""
-    session_id: str = ""
+    tool_name: str = Field(min_length=1, max_length=128)
+    action: str = Field(min_length=1, max_length=256)
+    parameters: dict = Field(default_factory=dict)
+    target: str = Field(default="", max_length=512)
+    agent_id: str = Field(default="", max_length=128)
+    session_id: str = Field(default="", max_length=128)
+    identity_token: str = Field(default="", max_length=128)
 
 
 class ApprovalRequest(BaseModel):
-    decision_id: str
+    decision_id: str = Field(min_length=1, max_length=64)
     approved: bool
-    reason: str = ""
+    reason: str = Field(default="", max_length=500)
 
 
 async def _broadcast_decision(decision: GatewayDecision) -> None:
@@ -120,6 +121,7 @@ async def evaluate_tool_call(request: ToolCallRequest) -> ActionClassification:
         tool_name=request.tool_name, action=request.action,
         parameters=request.parameters, target=request.target,
         agent_id=request.agent_id, session_id=request.session_id,
+        identity_token=request.identity_token,
     )
     from modules.execution_gateway.risk_classifier import RiskClassifier
     clf = RiskClassifier()
@@ -127,7 +129,7 @@ async def evaluate_tool_call(request: ToolCallRequest) -> ActionClassification:
 
 
 @router.get("/decisions")
-async def list_decisions(limit: int = 50) -> list[GatewayDecision]:
+async def list_decisions(limit: int = Query(50, ge=1, le=500)) -> list[GatewayDecision]:
     return get_gateway().history[-limit:]
 
 
@@ -148,7 +150,7 @@ async def list_pending_approvals() -> list[GatewayDecision]:
 async def approve_action(request: ApprovalRequest) -> dict:
     try:
         resolved = get_gateway().resolve_pending(
-            request.decision_id, request.approved, request.reason
+            request.decision_id, request.approved, request.reason, operator="api_admin"
         )
         await _broadcast_decision(resolved)
         return {
@@ -167,6 +169,7 @@ async def intercept_action(request: ToolCallRequest) -> GatewayDecision:
         tool_name=request.tool_name, action=request.action,
         parameters=request.parameters, target=request.target,
         agent_id=request.agent_id, session_id=request.session_id,
+        identity_token=request.identity_token,
     )
     decision = get_gateway().evaluate(tc)
     await _broadcast_decision(decision)
@@ -180,6 +183,7 @@ async def intercept_action_full(request: ToolCallRequest) -> GatewayDecision:
         tool_name=request.tool_name, action=request.action,
         parameters=request.parameters, target=request.target,
         agent_id=request.agent_id, session_id=request.session_id,
+        identity_token=request.identity_token,
     )
     decision = await get_gateway().evaluate_with_oracle(tc)
     await _broadcast_decision(decision)

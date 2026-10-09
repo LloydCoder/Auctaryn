@@ -12,7 +12,13 @@ class TestAgentIdentityAPI:
     def test_register_and_authorize(self, client):
         client.post("/api/v1/identity/register", json={"agent_id": "agent-x", "owner": "user-1"})
         client.post("/api/v1/identity/grant", json={"agent_id": "agent-x", "scope": "read_file"})
-        r = client.get("/api/v1/identity/agent-x/authorized/read_file")
+        token = client.post("/api/v1/identity/token", json={
+            "agent_id": "agent-x", "scopes": ["read_file"]
+        }).json()["token_id"]
+        r = client.get(
+            "/api/v1/identity/agent-x/authorized/read_file",
+            headers={"X-Agent-Identity-Token": token},
+        )
         assert r.status_code == 200
         assert r.json()["authorized"] is True
 
@@ -31,6 +37,15 @@ class TestAgentIdentityAPI:
         })
         assert r.status_code == 200
         assert "read_file" in r.json()["scopes"]
+        token_id = r.json()["token_id"]
+        assert client.get(
+            "/api/v1/identity/sub/authorized/read_file",
+            headers={"X-Agent-Identity-Token": token_id},
+        ).json()["authorized"] is True
+        from api.routes.gateway import get_gateway
+        assert get_gateway().identity_manager.is_authorized(
+            "sub", "read_file", token_id=token_id, require_token=True
+        ) is True
 
     def test_delegate_excess_scope_rejected(self, client):
         client.post("/api/v1/identity/register", json={"agent_id": "mgr2", "owner": "user-1"})
@@ -110,30 +125,25 @@ class TestMemoryDefenderAPI:
         assert r.json()["integrity_ok"] is True
 
 
-class TestProductionIdentityToggle:
-    """Confirms the opt-in identity enforcement toggle actually changes gateway behavior end-to-end."""
+class TestProductionIdentityEnforcement:
+    """Production identity enforcement is mandatory, not an opt-in toggle."""
 
-    def test_status_shows_enforcement_disabled_by_default(self, client):
-        r = client.get("/api/v1/gateway/status")
-        assert r.status_code == 200
-        assert r.json()["identity_enforcement_enabled"] is False
-        assert r.json()["circuit_breaker_enabled"] is True
+    def test_status_shows_enforcement_enabled_by_default(self, client):
+        response = client.get("/api/v1/gateway/status")
+        assert response.status_code == 200
+        assert response.json()["identity_enforcement_enabled"] is True
+        assert response.json()["circuit_breaker_enabled"] is True
 
-    def test_unregistered_agent_allowed_before_enforcement_enabled(self, client):
-        r = client.post("/api/v1/gateway/intercept", json={
+    def test_unregistered_agent_is_denied_by_default(self, client):
+        response = client.post("/api/v1/gateway/intercept", json={
             "tool_name": "read_file", "action": "read", "agent_id": "never-registered"
         })
-        assert r.status_code == 200
-        assert r.json()["decision"] == "approved"
+        assert response.status_code == 200
+        assert response.json()["decision"] == "denied"
 
-    def test_enabling_enforcement_then_blocks_unregistered_agents(self, client):
-        client.post("/api/v1/gateway/identity-enforcement/enable")
-        r = client.post("/api/v1/gateway/intercept", json={
-            "tool_name": "read_file", "action": "read", "agent_id": "still-unregistered"
-        })
-        assert r.status_code == 200
-        assert r.json()["decision"] == "denied"
-
-        # Reset for other tests in the suite
-        from api.routes.gateway import _gateway
-        _gateway.identity_manager = None
+    def test_enable_endpoint_does_not_disable_mandatory_enforcement(self, client):
+        response = client.post("/api/v1/gateway/identity-enforcement/enable")
+        assert response.status_code == 200
+        assert response.json()["identity_enforcement_enabled"] is True
+        from api.routes.gateway import get_gateway
+        assert get_gateway().identity_manager is not None

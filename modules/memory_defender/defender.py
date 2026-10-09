@@ -14,7 +14,6 @@ all, and detects tampering of content already stored.
 
 import hashlib
 import re
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 

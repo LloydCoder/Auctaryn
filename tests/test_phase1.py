@@ -8,7 +8,7 @@ class TestHealthEndpoints:
         r = client.get("/health")
         assert r.status_code == 200
         d = r.json()
-        assert d["status"] == "healthy"
+        assert d["status"] == "alive"
         assert "version" in d
 
     def test_detailed_health(self, client):
@@ -16,12 +16,18 @@ class TestHealthEndpoints:
         assert r.status_code == 200
         d = r.json()
         names = {m["name"] for m in d["modules"]}
-        assert names == {"context_integrity", "execution_gateway", "threatfade_oracle"}
+        assert names == {"context_integrity", "execution_gateway", "threatfade_oracle", "openshell_runtime"}
+        assert d["overall_status"] == "degraded"
+        assert all(
+            module["status"] != "healthy"
+            for module in d["modules"]
+        )
 
     def test_readiness(self, client):
         r = client.get("/health/ready")
         assert r.status_code == 200
-        assert r.json()["ready"] is True
+        assert r.json()["ready"] is False
+        assert r.json()["checks"]["openshell_connected"] is False
 
 
 class TestContextIntegrityRoutes:
@@ -88,7 +94,7 @@ class TestConfigLoading:
     def test_config_loads(self):
         from core.config import load_config
         config = load_config()
-        assert config.branding.name == "TwinGuard"
+        assert config.branding.name == "Auctaryn"
 
     def test_config_singleton(self):
         from core.config import get_config

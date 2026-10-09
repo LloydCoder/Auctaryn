@@ -1,19 +1,19 @@
-# TwinGuard
+# Auctaryn
 
-**AI Agent Containment & Security Platform**
+**Runtime authority and containment for autonomous AI agents**
 
 Built on [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) — defense-in-depth for autonomous AI agents.
 
-TwinGuard prevents AI agents from going rogue by adding context integrity monitoring, execution gating, and network threat intelligence on top of OpenShell's kernel-level sandbox.
+Auctaryn helps control autonomous agent actions from going rogue by adding context integrity monitoring, execution gating, and network threat intelligence on top of OpenShell's kernel-level sandbox.
 
-## Why TwinGuard?
+## Why Auctaryn?
 
-On February 23, 2026, an OpenClaw agent deleted a user's entire email inbox after a context compaction event stripped its safety instructions. OpenShell provides kernel-level isolation — but it doesn't monitor what happens *inside* the agent's reasoning. TwinGuard fills that gap.
+On February 23, 2026, an OpenClaw agent deleted a user's entire email inbox after a context compaction event stripped its safety instructions. OpenShell provides kernel-level isolation — but it doesn't monitor what happens *inside* the agent's reasoning. Auctaryn is designed to complement runtime isolation with context integrity, action policy, and threat intelligence.
 
 ## MVP Modules
 
-1. **Context Integrity Guardian** — Detects instruction loss during context compaction
-2. **Execution Gateway** — Intercepts and classifies every tool call by risk level
+1. **Context Integrity Guardian** — Checks registered instructions for integrity changes
+2. **Execution Gateway** — Evaluates submitted tool calls and applies risk-based decisions; direct tool execution must still be connected to a trusted runtime adapter
 3. **ThreatFade Oracle** — Network threat intelligence via [ThreatFade](https://github.com/LloydCoder/tinlance-threatfade)
 4. **React Dashboard** — Real-time visibility into agent behavior
 
@@ -21,30 +21,46 @@ On February 23, 2026, an OpenClaw agent deleted a user's entire email inbox afte
 
 ```bash
 # Clone
-git clone https://github.com/Tinlance/twinguard.git
-cd twinguard
+git clone https://github.com/LloydCoder/Auctaryn.git
+cd Auctaryn
 
 # Setup
 chmod +x scripts/setup.sh
 ./scripts/setup.sh
 
 # Run
-docker-compose up -d
+cp .env.example .env
+# Edit .env: set two independent high-entropy API keys and a reachable HTTPS
+# THREATFADE_SERVICE_URL. Do not commit .env.
+docker compose --env-file .env up -d --build api
 
-# Dashboard (local dev)
-open http://localhost:3000
+# Dashboard (local dev; run in another terminal)
+cd dashboard
+npm install
+npm run dev -- --host 0.0.0.0
+# Open the Vite URL shown in the terminal (normally http://localhost:5173).
 ```
 
 ## Production
 
-Live at **twinguard.tinlance.com**:
+The deployment scripts and domain configuration may still reference legacy TwinGuard infrastructure. Verify DNS, TLS, runtime integration, and authentication before exposing a deployment.
 - `/` — marketing site (`site/`)
 - `/dashboard` — operational console (built React app)
 - `/api/` — REST API
 - `/ws/` — WebSocket live streams
 - `/docs` — interactive Swagger API reference
 
-Deploy with `./scripts/deploy.sh` (set `TWINGUARD_DOMAIN` to override the default domain).
+The dashboard requires an administrator API key at sign-in. REST API clients use `Authorization: Bearer <key>`; general clients use `AUCTARYN_API_KEY`, while identity administration and approval operations require `AUCTARYN_ADMIN_API_KEY`.
+
+## Security configuration
+
+- Generate two different secrets, for example with `openssl rand -hex 32`, and set `AUCTARYN_API_KEY` and `AUCTARYN_ADMIN_API_KEY` in `.env`.
+- All `/api/v1/*` HTTP endpoints require a Bearer credential. Identity management, approval, pending-decision, and decision-history endpoints require the administrator credential.
+- Before intercepting actions, an administrator registers an agent, grants exact tool scopes, and issues a short-lived token via `POST /api/v1/identity/token`. Gateway interception requests must include both `agent_id` and `identity_token`. Tokens expire within one hour maximum; scope revocation invalidates matching issued and delegated capabilities.
+- WebSocket clients must send `{"type":"authenticate","token":"..."}` as their first frame. The dashboard prompts for the administrator key and keeps it in memory rather than local storage.
+- The ThreatFade service implementation is not bundled in this repository; Compose requires a reachable `THREATFADE_SERVICE_URL`. Use HTTPS for external ThreatFade endpoints; plain HTTP is accepted only for local/Docker service names unless the explicit insecure override is set for isolated testing. The dashboard is run with Vite in development and served as static assets by the deployment script; this repository does not define a dashboard Dockerfile.
+- `/health` is a liveness endpoint, not evidence that OpenShell is connected or that all security controls are ready.
+- This release does not yet prove that every external agent tool execution is forcibly mediated by Auctaryn. Do not treat an API decision alone as an execution sandbox.
 
 ## Requirements
 

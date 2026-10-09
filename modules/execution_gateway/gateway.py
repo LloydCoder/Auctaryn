@@ -1,12 +1,11 @@
 """
-TwinGuard — Execution Gateway Service
-Main entry point: evaluate tool calls, track decisions, resolve pending approvals.
-Now enriched with ThreatFade Oracle network threat intelligence for
-destructive-and-above actions (the Parliament integration).
+Auctaryn execution gateway.
+Evaluates agent actions and records enforceable decisions before execution.
 """
 
 import uuid
 from datetime import datetime, timezone
+
 from core.models import (
     ToolCall, GatewayDecision, ActionDecision, ActionClassification,
     Alert, Severity, RiskLevel,
@@ -27,33 +26,27 @@ class ExecutionGateway:
         self._pending: dict[str, GatewayDecision] = {}
         self.total_processed: int = 0
         self.total_vetoed: int = 0
-        self.oracle = oracle  # ThreatFadeOracle instance, optional (lazy-wired)
-        self.identity_manager = identity_manager  # AgentIdentityManager (ASI03), optional
-        self.circuit_breaker = circuit_breaker      # AgentCircuitBreaker (ASI08), optional
+        self.oracle = oracle
+        self.identity_manager = identity_manager
+        self.circuit_breaker = circuit_breaker
 
     def _check_identity_and_breaker(self, tool_call: ToolCall) -> GatewayDecision | None:
-        """
-        Pre-flight checks that run BEFORE risk classification. Returns a
-        terminal DENIED decision if the agent fails identity or circuit
-        breaker checks, or None if the action should proceed to normal
-        evaluation. Both checks are opt-in (None manager/breaker means
-        the check is skipped — no breaking change for existing callers).
-        """
+        """Return a terminal denial if the caller lacks identity/scope or is isolated."""
         agent_id = tool_call.agent_id
 
-        if self.circuit_breaker is not None and agent_id:
-            if self.circuit_breaker.is_open(agent_id):
+        if self.circuit_breaker is not None:
+            if not agent_id or self.circuit_breaker.is_open(agent_id):
                 return GatewayDecision(
                     id=uuid.uuid4().hex[:12],
                     tool_call=tool_call,
                     risk_level=RiskLevel.CRITICAL,
                     decision=ActionDecision.DENIED,
-                    reason=f"Agent '{agent_id}' is isolated — circuit breaker is open due to repeated failures",
+                    reason=f"Agent '{agent_id}' is isolated or missing identity for circuit-breaker enforcement",
                     decided_by="circuit_breaker",
                 )
 
         if self.identity_manager is not None:
-            if not self.identity_manager.is_authorized(agent_id, tool_call.tool_name):
+            if not agent_id or not self.identity_manager.is_authorized(agent_id, tool_call.tool_name, token_id=tool_call.identity_token, require_token=True):
                 return GatewayDecision(
                     id=uuid.uuid4().hex[:12],
                     tool_call=tool_call,
@@ -65,21 +58,29 @@ class ExecutionGateway:
 
         return None
 
+    def _record_preflight_denial(self, decision: GatewayDecision) -> GatewayDecision:
+        # Never retain or return the caller's bearer capability in decision history.
+        decision.tool_call = decision.tool_call.model_copy(update={"identity_token": ""})
+        self.history.append(decision)
+        self.total_processed += 1
+        self.total_vetoed += 1
+        self._record_breaker_outcome(decision.tool_call.agent_id, success=False)
+        return decision
+
     def evaluate(self, tool_call: ToolCall) -> GatewayDecision:
-        """Evaluate a tool call and return a decision (sync path, no Oracle)."""
+        """Evaluate a tool call using local policy without Oracle enrichment."""
         preflight = self._check_identity_and_breaker(tool_call)
         if preflight is not None:
-            self.history.append(preflight)
-            self.total_processed += 1
-            return preflight
+            return self._record_preflight_denial(preflight)
 
+        # Token is consumed by preflight; all downstream state is credential-free.
+        tool_call = tool_call.model_copy(update={"identity_token": ""})
         classification = self.classifier.classify(tool_call)
         decision = self.veto_engine.decide(classification)
-
         self.history.append(decision)
         self.total_processed += 1
 
-        if decision.decision == ActionDecision.VETOED:
+        if decision.decision in (ActionDecision.VETOED, ActionDecision.DENIED):
             self.total_vetoed += 1
             self._emit_veto_alert(decision)
             self._record_breaker_outcome(tool_call.agent_id, success=False)
@@ -87,7 +88,6 @@ class ExecutionGateway:
             self._pending[decision.id] = decision
         elif decision.decision == ActionDecision.APPROVED:
             self._record_breaker_outcome(tool_call.agent_id, success=True)
-
         return decision
 
     def _record_breaker_outcome(self, agent_id: str, success: bool) -> None:
@@ -99,47 +99,51 @@ class ExecutionGateway:
             self.circuit_breaker.record_failure(agent_id)
 
     async def evaluate_with_oracle(self, tool_call: ToolCall) -> GatewayDecision:
-        """
-        Full evaluation path: pattern classification + ThreatFade Oracle
-        enrichment for destructive/critical actions. This is what the
-        Parliament Ensemble looks like for the MVP — two voters (pattern
-        classifier + network threat oracle) instead of one.
-        """
+        """Apply the same mandatory preflight checks before optional Oracle enrichment."""
+        preflight = self._check_identity_and_breaker(tool_call)
+        if preflight is not None:
+            return self._record_preflight_denial(preflight)
+
+        # Token is consumed by preflight; all downstream state is credential-free.
+        tool_call = tool_call.model_copy(update={"identity_token": ""})
         classification = self.classifier.classify(tool_call)
         decision = self.veto_engine.decide(classification)
 
-        # Only consult the Oracle for actions that matter — safe/moderate
-        # actions don't need network threat enrichment, saves latency + cost
         if self.oracle and classification.risk_level in (RiskLevel.DESTRUCTIVE, RiskLevel.CRITICAL):
             decision = await self._enrich_with_oracle(tool_call, classification, decision)
 
         self.history.append(decision)
         self.total_processed += 1
 
-        if decision.decision == ActionDecision.VETOED:
+        if decision.decision in (ActionDecision.VETOED, ActionDecision.DENIED):
             self.total_vetoed += 1
             self._emit_veto_alert(decision)
+            self._record_breaker_outcome(tool_call.agent_id, success=False)
         elif decision.decision == ActionDecision.PENDING:
             self._pending[decision.id] = decision
-
+        elif decision.decision == ActionDecision.APPROVED:
+            self._record_breaker_outcome(tool_call.agent_id, success=True)
         return decision
 
     async def _enrich_with_oracle(self, tool_call: ToolCall,
-                                   classification: ActionClassification,
-                                   decision: GatewayDecision) -> GatewayDecision:
-        """Consult ThreatFade Oracle and escalate if it disagrees with a lenient verdict."""
-        from modules.threatfade_oracle.parliament_adapter import should_escalate
-
+                                  classification: ActionClassification,
+                                  decision: GatewayDecision) -> GatewayDecision:
+        """Enrich a decision without ever turning a pending destructive action into an approval."""
         try:
             tf_result = await self.oracle.analyze(tool_call)
-        except Exception as e:
-            logger.warning(f"Oracle enrichment failed, proceeding with pattern verdict only: {e}",
-                           extra={"event": "oracle_enrichment_failed"})
+        except Exception as exc:
+            # Destructive actions already require approval; critical actions remain vetoed.
+            # Do not silently convert a pending/vetoed decision into an approval on Oracle failure.
+            logger.warning(
+                "Oracle enrichment unavailable; retaining conservative local decision (%s)",
+                type(exc).__name__,
+                extra={"event": "oracle_enrichment_failed"},
+            )
             return decision
 
-        # If the network oracle flags critical/high severity and the gateway
-        # was about to approve or merely queue, escalate to vetoed.
-        if tf_result.severity in (Severity.CRITICAL, Severity.HIGH) and decision.decision != ActionDecision.VETOED:
+        if tf_result.severity in (Severity.CRITICAL, Severity.HIGH) and decision.decision not in (
+            ActionDecision.VETOED, ActionDecision.DENIED
+        ):
             escalated = GatewayDecision(
                 id=decision.id,
                 timestamp=datetime.now(timezone.utc),
@@ -153,12 +157,11 @@ class ExecutionGateway:
                 decided_by="parliament:oracle_escalation",
             )
             logger.warning(
-                f"Parliament escalation: {tool_call.tool_name}:{tool_call.action} "
-                f"upgraded to VETOED by ThreatFade Oracle (severity={tf_result.severity.value})",
+                "Oracle escalated %s:%s to vetoed (severity=%s)",
+                tool_call.tool_name, tool_call.action, tf_result.severity.value,
                 extra={"event": "parliament_escalation"},
             )
             return escalated
-
         return decision
 
     def get_pending(self) -> list[GatewayDecision]:
@@ -171,7 +174,6 @@ class ExecutionGateway:
 
         original = self._pending.pop(decision_id)
         new_decision = ActionDecision.APPROVED if approved else ActionDecision.DENIED
-
         resolved = GatewayDecision(
             id=original.id,
             timestamp=datetime.now(timezone.utc),
@@ -182,13 +184,14 @@ class ExecutionGateway:
             decided_by=operator,
         )
 
-        for i, h in enumerate(self.history):
-            if h.id == decision_id:
-                self.history[i] = resolved
+        for index, history_item in enumerate(self.history):
+            if history_item.id == decision_id:
+                self.history[index] = resolved
                 break
 
         logger.info(
-            f"Pending resolved: {original.tool_call.tool_name} → {new_decision.value}",
+            "Pending decision resolved: %s -> %s",
+            original.tool_call.tool_name, new_decision.value,
             extra={"event": "pending_resolved", "decision": new_decision.value},
         )
         return resolved
@@ -200,6 +203,8 @@ class ExecutionGateway:
             "total_vetoed": self.total_vetoed,
             "pending_approvals": len(self._pending),
             "oracle_enabled": self.oracle is not None,
+            "identity_enforcement_enabled": self.identity_manager is not None,
+            "circuit_breaker_enabled": self.circuit_breaker is not None,
         }
 
     def _emit_veto_alert(self, decision: GatewayDecision) -> Alert:
@@ -211,11 +216,11 @@ class ExecutionGateway:
             title="Critical Action Vetoed",
             message=(
                 f"Agent attempted critical action '{tc.tool_name}:{tc.action}' "
-                f"— permanently blocked by Execution Gateway. {decision.reason}"
+                f"— blocked by Execution Gateway. {decision.reason}"
             ),
             data={"decision_id": decision.id, "tool_name": tc.tool_name,
                   "action": tc.action, "risk_level": decision.risk_level.value},
         )
-        logger.warning(f"VETO ALERT: {alert.message}",
+        logger.warning("VETO ALERT: %s", alert.message,
                        extra={"event": "veto_alert", "alert_id": alert.id})
         return alert

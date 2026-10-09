@@ -5,14 +5,13 @@ Loads from YAML + environment variable overrides.
 
 import os
 from pathlib import Path
-from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-CONFIG_PATH = BASE_DIR / "config" / "twinguard.yaml"
+CONFIG_PATH = BASE_DIR / "config" / "twinguard.yaml"  # retained for compatibility with existing deployments
 
 
 class ContextIntegrityConfig(BaseModel):
@@ -54,7 +53,7 @@ class LoggingConfig(BaseModel):
 
 
 class BrandingConfig(BaseModel):
-    name: str = "TwinGuard"
+    name: str = "Auctaryn"
     company: str = "Tinlance Limited"
     version: str = "0.1.0-alpha"
 
@@ -83,9 +82,14 @@ def _apply_env_overrides(raw: dict) -> dict:
     """Override config values with environment variables where set."""
     env_map = {
         "TWINGUARD_HOST": ("server", "host"),
+        "AUCTARYN_HOST": ("server", "host"),
         "TWINGUARD_PORT": ("server", "port"),
+        "AUCTARYN_PORT": ("server", "port"),
         "TWINGUARD_DEBUG": ("server", "debug"),
+        "AUCTARYN_DEBUG": ("server", "debug"),
         "TWINGUARD_DB_PATH": ("database", "path"),
+        "AUCTARYN_DB_PATH": ("database", "path"),
+        "AUCTARYN_CORS_ORIGINS": ("server", "cors_origins"),
         "THREATFADE_SERVICE_URL": ("modules", "threatfade_oracle", "service_url"),
         "LOG_LEVEL": ("logging", "level"),
     }
@@ -102,6 +106,8 @@ def _apply_env_overrides(raw: dict) -> dict:
                 value = int(value)
             elif final_key == "debug":
                 value = value.lower() in ("true", "1", "yes")
+            elif final_key == "cors_origins":
+                value = [origin.strip() for origin in value.split(",") if origin.strip()]
             current[final_key] = value
 
     return raw

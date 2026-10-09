@@ -16,7 +16,9 @@ def reset_singletons():
     _guardian._last_token_count = 0
     _guardian._last_combined_hash = ""
 
-    from api.routes.gateway import _gateway, _oracle as gw_oracle
+    from api.routes.gateway import _gateway, _oracle as gw_oracle, _identity_manager
+    _identity_manager._identities.clear()
+    _identity_manager._tokens.clear()
     _gateway.history.clear()
     _gateway._pending.clear()
     _gateway.total_processed = 0
@@ -32,8 +34,11 @@ def reset_singletons():
 
 
 @pytest.fixture
-def client():
-    return TestClient(app)
+def client(monkeypatch):
+    """Authenticated administrator client for functional API tests."""
+    monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-secret")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-secret")
+    return TestClient(app, headers={"Authorization": "Bearer test-admin-secret"})
 
 
 @pytest.fixture

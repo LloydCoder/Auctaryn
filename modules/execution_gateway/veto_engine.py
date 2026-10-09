@@ -4,7 +4,6 @@ Decides approve / pending / veto for each classified action.
 """
 
 import uuid
-from datetime import datetime, timezone
 from core.models import (
     RiskLevel, ActionDecision, ActionClassification, GatewayDecision,
 )
@@ -47,15 +46,20 @@ class VetoEngine:
             )
             decided_by = "veto_engine"
 
-        elif risk in (RiskLevel.SAFE, RiskLevel.MODERATE):
+        elif risk == RiskLevel.SAFE:
             if self.auto_approve_safe:
                 decision = ActionDecision.APPROVED
-                reason = f"Auto-approved: {classification.reason}"
+                reason = f"Auto-approved safe read-only action: {classification.reason}"
                 decided_by = "auto"
             else:
                 decision = ActionDecision.PENDING
-                reason = "Manual approval required (auto-approve disabled)."
+                reason = "Manual approval required (safe auto-approval disabled)."
                 decided_by = "veto_engine"
+
+        elif risk == RiskLevel.MODERATE:
+            decision = ActionDecision.PENDING
+            reason = f"Moderate or unrecognized action requires operator approval: {classification.reason}"
+            decided_by = "veto_engine"
         else:
             decision = ActionDecision.PENDING
             reason = "Unknown risk level — pending operator review."

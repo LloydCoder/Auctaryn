@@ -90,6 +90,8 @@ class ToolCall(BaseModel):
     target: str = ""
     agent_id: str = ""
     session_id: str = ""
+    # Bearer capability is consumed only by gateway preflight and excluded from responses.
+    identity_token: str = Field(default="", exclude=True, repr=False, max_length=128)
 
 
 class ActionClassification(BaseModel):

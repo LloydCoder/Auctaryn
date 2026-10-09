@@ -3,35 +3,44 @@ TwinGuard — Agent Identity API Routes
 Exposes the ASI03 Agent Identity & Privilege Manager.
 """
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Header
+from pydantic import BaseModel, Field
 
 from modules.agent_identity.identity import AgentIdentityManager
 from core.exceptions import PolicyViolation
 
 router = APIRouter()
-_manager = AgentIdentityManager()
-
-
 def get_identity_manager() -> AgentIdentityManager:
-    return _manager
+    """Return the same identity manager enforced by the production gateway."""
+    from api.routes.gateway import get_identity_manager as get_gateway_identity_manager
+    return get_gateway_identity_manager()
 
 
 class RegisterRequest(BaseModel):
-    agent_id: str
-    owner: str
+    agent_id: str = Field(min_length=1, max_length=128)
+    owner: str = Field(min_length=1, max_length=256)
 
 
 class ScopeRequest(BaseModel):
-    agent_id: str
-    scope: str
+    agent_id: str = Field(min_length=1, max_length=128)
+    scope: str = Field(min_length=1, max_length=128)
+
+
+class TokenRequest(BaseModel):
+    agent_id: str = Field(min_length=1, max_length=128)
+    scopes: list[str] = Field(min_length=1, max_length=50)
+    ttl_seconds: int = Field(default=300, ge=1, le=3600)
+
+
+class RevokeTokenRequest(BaseModel):
+    token_id: str = Field(min_length=1, max_length=128)
 
 
 class DelegateRequest(BaseModel):
     delegator_agent_id: str
     delegate_agent_id: str
     scopes: list[str]
-    ttl_seconds: int = 300
+    ttl_seconds: int = Field(default=300, ge=1, le=3600)
 
 
 @router.post("/register")
@@ -43,6 +52,29 @@ async def register_agent(request: RegisterRequest) -> dict:
         "owner": identity.owner,
         "scopes": list(identity.scopes),
     }
+
+
+
+
+@router.post("/token")
+async def issue_agent_token(request: TokenRequest) -> dict:
+    """Issue a short-lived, scoped bearer capability for an already-authorized agent."""
+    try:
+        token = get_identity_manager().issue_token(request.agent_id, request.ttl_seconds, request.scopes)
+        return {
+            "token_id": token.token_id,
+            "agent_id": token.agent_id,
+            "scopes": list(token.scopes),
+            "expires_at": token.expires_at.isoformat(),
+        }
+    except PolicyViolation as exc:
+        raise HTTPException(status_code=404, detail="Agent identity not found") from exc
+
+
+@router.post("/token/revoke")
+async def revoke_agent_token(request: RevokeTokenRequest) -> dict:
+    get_identity_manager().revoke_token(request.token_id)
+    return {"revoked": True, "token_id": request.token_id}
 
 
 @router.post("/grant")
@@ -75,8 +107,14 @@ async def get_agent_identity(agent_id: str) -> dict:
 
 
 @router.get("/{agent_id}/authorized/{tool_name}")
-async def check_authorization(agent_id: str, tool_name: str) -> dict:
-    authorized = get_identity_manager().is_authorized(agent_id, tool_name)
+async def check_authorization(
+    agent_id: str,
+    tool_name: str,
+    identity_token: str | None = Header(default=None, alias="X-Agent-Identity-Token"),
+) -> dict:
+    authorized = get_identity_manager().is_authorized(
+        agent_id, tool_name, token_id=identity_token, require_token=True
+    )
     return {"agent_id": agent_id, "tool_name": tool_name, "authorized": authorized}
 
 

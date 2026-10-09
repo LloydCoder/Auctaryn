@@ -127,7 +127,7 @@ class TestVetoEngine:
         assert decision.decision == ActionDecision.APPROVED
         assert decision.decided_by == "auto"
 
-    def test_moderate_action_auto_approved(self):
+    def test_moderate_action_requires_approval(self):
         from modules.execution_gateway.veto_engine import VetoEngine
         from core.models import ToolCall, ActionClassification
         engine = VetoEngine(auto_approve_safe=True)
@@ -136,7 +136,7 @@ class TestVetoEngine:
             tool_call=tc, risk_level=RiskLevel.MODERATE, confidence=0.8, reason="Moderate create"
         )
         decision = engine.decide(classification)
-        assert decision.decision == ActionDecision.APPROVED
+        assert decision.decision == ActionDecision.PENDING
 
     def test_destructive_action_pending_approval(self):
         from modules.execution_gateway.veto_engine import VetoEngine

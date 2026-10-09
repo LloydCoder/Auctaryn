@@ -5,7 +5,7 @@ import ExecutionGatewayPanel from './components/ExecutionGatewayPanel'
 import ThreatFadePanel from './components/ThreatFadePanel'
 import SystemHealth from './components/SystemHealth'
 import AlertFeed from './components/AlertFeed'
-import { fetchHealth } from './utils/api'
+import { fetchHealth, setApiToken, validateAdminToken } from './utils/api'
 import { useWebSocket } from './hooks/useWebSocket'
 
 const TABS = [
@@ -19,11 +19,15 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('overview')
   const [health, setHealth] = useState(null)
   const [apiConnected, setApiConnected] = useState(false)
+  const [apiToken, setApiTokenState] = useState('')
+  const [credentialInput, setCredentialInput] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
 
   // Live WebSocket streams — these are the real-time feeds the dashboard
   // was missing: the backend was already broadcasting, nothing was listening.
-  const actionsWs = useWebSocket('/ws/actions')
-  const alertsWs = useWebSocket('/ws/alerts')
+  const actionsWs = useWebSocket('/ws/actions', { token: apiToken })
+  const alertsWs = useWebSocket('/ws/alerts', { token: apiToken })
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -57,6 +61,56 @@ export default function App() {
     actionsWs.send({ type: 'approve', decision_id: decisionId, approved })
   }
 
+  const handleAuthenticate = async (event) => {
+    event.preventDefault()
+    setAuthLoading(true)
+    setAuthError('')
+    try {
+      await validateAdminToken(credentialInput)
+      setApiToken(credentialInput)
+      setApiTokenState(credentialInput)
+      setCredentialInput('')
+    } catch (error) {
+      setAuthError(error.message || 'Authentication failed.')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  if (!apiToken) {
+    return (
+      <main className="min-h-screen bg-[#0a0e17] flex items-center justify-center px-6">
+        <form onSubmit={handleAuthenticate} className="w-full max-w-md rounded-2xl border border-gray-800 bg-[#111827] p-8 space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold text-white">Auctaryn</h1>
+              <p className="text-sm text-gray-400">Administrator sign-in</p>
+            </div>
+          </div>
+          <p className="text-sm text-gray-400">Enter the administrator API key configured on the Auctaryn server. The key is held in memory for this browser session and is not saved to local storage.</p>
+          <label className="block space-y-2">
+            <span className="text-sm text-gray-300">Administrator API key</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={credentialInput}
+              onChange={(event) => setCredentialInput(event.target.value)}
+              required
+              className="w-full rounded-lg border border-gray-700 bg-[#0a0e17] px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-400"
+            />
+          </label>
+          {authError && <p role="alert" className="text-sm text-red-400">{authError}</p>}
+          <button type="submit" disabled={authLoading} className="w-full rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-[#061016] disabled:opacity-50">
+            {authLoading ? 'Verifying…' : 'Authenticate'}
+          </button>
+        </form>
+      </main>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0e17]">
       {/* Header */}
@@ -67,8 +121,8 @@ export default function App() {
               <Shield className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold tracking-tight text-white">TwinGuard</h1>
-              <p className="text-xs text-gray-500">AI Agent Containment</p>
+              <h1 className="text-lg font-semibold tracking-tight text-white">Auctaryn</h1>
+              <p className="text-xs text-gray-500">Runtime Authority for Autonomous AI</p>
             </div>
           </div>
 

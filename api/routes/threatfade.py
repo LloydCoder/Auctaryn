@@ -3,7 +3,7 @@ TwinGuard — ThreatFade Oracle API Routes
 Wired to the live FusionOps API at 13.50.16.19.
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query
 from pydantic import BaseModel
 
 from core.models import ThreatFadeResult, Severity
@@ -48,7 +48,7 @@ async def analyze_pcap(file: UploadFile = File(...)) -> dict:
 
 
 @router.get("/results")
-async def list_results(limit: int = 50) -> list[ThreatFadeResult]:
+async def list_results(limit: int = Query(50, ge=1, le=200)) -> list[ThreatFadeResult]:
     """List recent ThreatFade Oracle analysis results."""
     return get_oracle().get_recent_results(limit)
 
@@ -72,7 +72,7 @@ async def list_detections(severity: Severity | None = None) -> list[ThreatFadeRe
 
 
 @router.get("/events")
-async def get_live_events(limit: int = 50) -> dict:
+async def get_live_events(limit: int = Query(50, ge=1, le=200)) -> dict:
     """Proxy to FusionOps /events endpoint — live SOC dashboard feed."""
     try:
         return await get_oracle().client.get_events(limit)

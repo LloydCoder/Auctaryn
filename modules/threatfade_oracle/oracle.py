@@ -7,7 +7,6 @@ Fails safe: if FusionOps is unreachable, returns an INFO-level result
 rather than crashing or blocking legitimate agent actions.
 """
 
-import uuid
 from datetime import datetime, timezone
 
 from core.models import ToolCall, ThreatFadeResult, Severity
@@ -15,7 +14,7 @@ from core.exceptions import ThreatFadeConnectionError
 from core.logging import get_logger
 from modules.threatfade_oracle.client import FusionOpsClient, generate_synthetic_signal
 from modules.threatfade_oracle.parliament_adapter import (
-    to_threatfade_result, should_escalate, recommended_decision,
+    to_threatfade_result, should_escalate,
 )
 
 logger = get_logger("threatfade_oracle")

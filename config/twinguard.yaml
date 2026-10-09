@@ -1,4 +1,4 @@
-# TwinGuard Configuration
+# Auctaryn Configuration
 # All sensitive values should be set via environment variables
 
 server:
@@ -10,7 +10,7 @@ server:
     - "http://localhost:5173"
 
 database:
-  path: "data/twinguard.db"
+  path: "data/auctaryn.db"
 
 modules:
   context_integrity:
@@ -49,13 +49,13 @@ modules:
 logging:
   level: "INFO"
   format: "json"
-  file: "logs/twinguard.log"
+  file: "logs/auctaryn.log"
 
 openshell:
   policy_path: "config/openshell_policy.yaml"
   gateway_url: "http://localhost:8080"
 
 branding:
-  name: "TwinGuard"
+  name: "Auctaryn"
   company: "Tinlance Limited"
   version: "0.1.0-alpha"

@@ -1,18 +1,19 @@
 """
-TwinGuard — API Entry Point
-FastAPI application with WebSocket support.
+Auctaryn API entry point.
+FastAPI application with authenticated REST and WebSocket surfaces.
 """
 
-import os
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from core.config import get_config, load_config
-from core.logging import setup_logging, get_logger
+from core.config import get_config
+from core.logging import setup_logging
+from api.security import configured_for, extract_bearer, token_role
 from api.routes import health, context, gateway, threatfade, identity, skills, memory
 from api.websockets import actions, alerts
 
@@ -27,44 +28,73 @@ async def lifespan(app: FastAPI):
     startup_time = time.time()
 
     config = get_config()
-    logger = setup_logging(
-        level=config.logging.level,
-        log_file=config.logging.file,
-    )
-    logger.info("TwinGuard starting", extra={"event": "startup", "version": config.branding.version})
+    logger = setup_logging(level=config.logging.level, log_file=config.logging.file)
+    logger.info("Auctaryn starting", extra={"event": "startup", "version": config.branding.version})
 
-    # Create data directories
     Path("data").mkdir(exist_ok=True)
     Path("logs").mkdir(exist_ok=True)
-
     yield
+    logger.info("Auctaryn shutting down", extra={"event": "shutdown"})
 
-    logger.info("TwinGuard shutting down", extra={"event": "shutdown"})
+
+def _requires_admin(path: str) -> bool:
+    """Paths that expose privileged decisions, identity, or policy mutation."""
+    if path.startswith("/api/v1/identity"):
+        return True
+    if path.startswith("/api/v1/gateway/decisions"):
+        return True
+    if path in {
+        "/api/v1/gateway/approve",
+        "/api/v1/gateway/pending",
+        "/api/v1/gateway/identity-enforcement/enable",
+        "/api/v1/context/register",
+        "/api/v1/context/instructions",
+    }:
+        return True
+    return path.startswith("/api/v1/context/instructions/")
 
 
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     config = get_config()
-
     app = FastAPI(
-        title="TwinGuard API",
-        description="AI Agent Containment & Security Platform",
+        title="Auctaryn API",
+        description="Runtime authority and containment for autonomous AI agents.",
         version=config.branding.version,
         docs_url="/docs",
         redoc_url="/redoc",
         lifespan=lifespan,
     )
 
-    # CORS
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.server.cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "Accept"],
     )
 
-    # REST routes
+    @app.middleware("http")
+    async def authenticate_api_requests(request: Request, call_next):
+        """Require explicit credentials for every non-health API operation."""
+        path = request.url.path
+        if request.method == "OPTIONS" or not path.startswith("/api/v1/"):
+            return await call_next(request)
+
+        role = token_role(extract_bearer(request.headers.get("authorization")))
+        required_role = "admin" if _requires_admin(path) else "api"
+
+        if not configured_for(required_role):
+            return JSONResponse(
+                status_code=503,
+                content={"detail": f"{required_role.upper()} API credentials are not configured"},
+            )
+        if role is None:
+            return JSONResponse(status_code=401, content={"detail": "Bearer API credential required"})
+        if required_role == "admin" and role != "admin":
+            return JSONResponse(status_code=403, content={"detail": "Administrator credential required"})
+        return await call_next(request)
+
     app.include_router(health.router, tags=["Health"])
     app.include_router(context.router, prefix="/api/v1/context", tags=["Context Integrity"])
     app.include_router(gateway.router, prefix="/api/v1/gateway", tags=["Execution Gateway"])
@@ -72,11 +102,8 @@ def create_app() -> FastAPI:
     app.include_router(identity.router, prefix="/api/v1/identity", tags=["Agent Identity (ASI03)"])
     app.include_router(skills.router, prefix="/api/v1/skills", tags=["Skill Vetting (ASI04)"])
     app.include_router(memory.router, prefix="/api/v1/memory", tags=["Memory Defender (ASI06)"])
-
-    # WebSocket routes
     app.include_router(actions.router, tags=["WebSocket — Actions"])
     app.include_router(alerts.router, tags=["WebSocket — Alerts"])
-
     return app
 
 
