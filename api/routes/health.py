@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
+from api.security import credentials_are_distinct
 from core.config import get_config
 from core.models import ModuleHealth, ModuleStatus, SystemHealth
 
@@ -61,7 +62,9 @@ async def readiness_check() -> dict:
     from api.routes.gateway import get_gateway
 
     credentials_ready = bool(
-        os.getenv("AUCTARYN_API_KEY") and os.getenv("AUCTARYN_ADMIN_API_KEY")
+        os.getenv("AUCTARYN_API_KEY")
+        and os.getenv("AUCTARYN_ADMIN_API_KEY")
+        and credentials_are_distinct()
     )
     identity_ready = get_gateway().identity_manager is not None
     # OpenShell integration is not yet wired to a real connectivity probe.
