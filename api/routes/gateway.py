@@ -282,6 +282,7 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
     except IncidentResponseBlocked as exc:
         raise HTTPException(status_code=423, detail="Execution blocked by incident-response controls") from exc
     except RuntimeAdapterFailure as exc:
+        await _publish_runtime_failure_alert(tc.agent_id, fingerprint, type(exc).__name__)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     evidence_status = "complete"
     try:
@@ -361,6 +362,9 @@ async def execute_approved_decision(decision_id: str) -> dict:
     except IncidentResponseBlocked as exc:
         raise HTTPException(status_code=423, detail="Execution blocked by incident-response controls") from exc
     except RuntimeAdapterFailure as exc:
+        await _publish_runtime_failure_alert(
+            decision.tool_call.agent_id, fingerprint, type(exc).__name__, decision.id
+        )
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     evidence_status = "complete"
     try:
