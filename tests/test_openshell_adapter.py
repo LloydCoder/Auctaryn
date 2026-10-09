@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from core.models import ToolCall
-from modules.execution_gateway.openshell_adapter import BOUNDED_EXEC_WRAPPER, MAX_OUTPUT_CHARS, OpenShellRuntimeAdapter, create_openshell_adapter_from_environment
+from modules.execution_gateway.openshell_adapter import BOUNDED_EXEC_WRAPPER, OpenShellRuntimeAdapter, create_openshell_adapter_from_environment
 from modules.execution_gateway.runtime_adapter import DuplicateExecution, RuntimeAdapterFailure, RuntimeAdapterUnavailable
 
 
