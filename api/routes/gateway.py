@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from api.security import configured_for, extract_bearer, token_role
 
-from core.models import ToolCall, ActionClassification, GatewayDecision
+from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision
 from modules.execution_gateway.gateway import ExecutionGateway
 from modules.threatfade_oracle.oracle import ThreatFadeOracle
 from modules.agent_identity.identity import AgentIdentityManager
