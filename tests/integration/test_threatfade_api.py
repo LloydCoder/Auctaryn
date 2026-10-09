@@ -107,9 +107,12 @@ class TestParliamentEscalation:
     def _register_scope(client, agent_id, tool_name):
         client.post("/api/v1/identity/register", json={"agent_id": agent_id, "owner": "test"})
         client.post("/api/v1/identity/grant", json={"agent_id": agent_id, "scope": tool_name})
+        token = client.post("/api/v1/identity/token", json={"agent_id": agent_id})
+        assert token.status_code == 200
+        return token.json()["token_id"]
 
     def test_full_intercept_escalates_on_critical_oracle_verdict(self, client):
-        self._register_scope(client, "oracle-send-agent", "send_email")
+        token_id = self._register_scope(client, "oracle-send-agent", "send_email")
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = SAMPLE_CRITICAL
@@ -117,7 +120,7 @@ class TestParliamentEscalation:
         with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=mock_response)):
             r = client.post("/api/v1/gateway/intercept/full", json={
                 "tool_name": "send_email", "action": "bulk",
-                "parameters": {"recipients": list(range(50))}, "agent_id": "oracle-send-agent"
+                "parameters": {"recipients": list(range(50))}, "agent_id": "oracle-send-agent", "identity_token": token_id
             })
         assert r.status_code == 200
         d = r.json()
@@ -126,7 +129,7 @@ class TestParliamentEscalation:
         assert "ESCALATED" in d["reason"]
 
     def test_full_intercept_does_not_escalate_on_benign_oracle_verdict(self, client):
-        self._register_scope(client, "oracle-delete-agent", "delete_emails")
+        token_id = self._register_scope(client, "oracle-delete-agent", "delete_emails")
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = SAMPLE_BENIGN
@@ -134,7 +137,7 @@ class TestParliamentEscalation:
         with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=mock_response)):
             r = client.post("/api/v1/gateway/intercept/full", json={
                 "tool_name": "delete_emails", "action": "bulk",
-                "parameters": {"count": 200}, "agent_id": "oracle-delete-agent"
+                "parameters": {"count": 200}, "agent_id": "oracle-delete-agent", "identity_token": token_id
             })
         assert r.status_code == 200
         d = r.json()
@@ -143,10 +146,10 @@ class TestParliamentEscalation:
 
     def test_safe_actions_skip_oracle_entirely(self, client):
         """Safe actions shouldn't trigger an Oracle call at all — saves latency."""
-        self._register_scope(client, "oracle-reader", "read_file")
+        token_id = self._register_scope(client, "oracle-reader", "read_file")
         with patch("httpx.AsyncClient.post") as mock_post:
             r = client.post("/api/v1/gateway/intercept/full", json={
-                "tool_name": "read_file", "action": "read", "parameters": {}, "agent_id": "oracle-reader"
+                "tool_name": "read_file", "action": "read", "parameters": {}, "agent_id": "oracle-reader", "identity_token": token_id
             })
             assert r.status_code == 200
             assert r.json()["decision"] == "approved"
@@ -154,12 +157,12 @@ class TestParliamentEscalation:
 
     def test_oracle_failure_does_not_crash_gateway(self, client):
         """If FusionOps is down mid-request, gateway retains a pending decision."""
-        self._register_scope(client, "oracle-delete-file-agent", "delete_file")
+        token_id = self._register_scope(client, "oracle-delete-file-agent", "delete_file")
         import httpx
         with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=httpx.ConnectError("refused"))):
             r = client.post("/api/v1/gateway/intercept/full", json={
                 "tool_name": "delete_file", "action": "delete",
-                "parameters": {"path": "/tmp/x"}, "agent_id": "oracle-delete-file-agent"
+                "parameters": {"path": "/tmp/x"}, "agent_id": "oracle-delete-file-agent", "identity_token": token_id
             })
         assert r.status_code == 200
         # Falls back to pattern-only verdict (PENDING for destructive), doesn't 500
