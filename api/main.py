@@ -152,7 +152,11 @@ def _requires_admin(path: str) -> bool:
         "/api/v1/context/instructions",
     }:
         return True
-    return path.startswith("/api/v1/context/instructions/") or path.startswith("/api/v1/context/sessions/")
+    return (
+        path == "/api/v1/context/instructions"
+        or path.startswith("/api/v1/context/instructions/")
+        or path.startswith("/api/v1/context/sessions/")
+    )
 
 
 def create_app() -> FastAPI:
