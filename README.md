@@ -161,6 +161,7 @@ The template is not a guarantee every variable is consumed in every deployment m
 | [Database recovery](docs/DATABASE_RECOVERY.md) | Local SQLite backup and restore |
 | [Deployment rollback](docs/DEPLOYMENT_ROLLBACK.md) | Deployment and rollback gates |
 | [Production release acceptance](docs/PRODUCTION_RELEASE_ACCEPTANCE.md) | Release acceptance evidence |
+| [Maintenance checklist](docs/MAINTENANCE_CHECKLIST.md) | Routine repository and release maintenance |
 | [Standards traceability](docs/STANDARDS_TRACEABILITY.md) | Security-control mapping |
 | [Local demo script](docs/DEMO_SCRIPT.md) | Synthetic-data walkthrough |
 | [Audit index](audits/README.md) | Canonical audit report map |
