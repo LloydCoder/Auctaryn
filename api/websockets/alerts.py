@@ -7,6 +7,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from api.security import origin_allowed, token_role
 from core.logging import get_logger
+from modules.evidence_audit.store import EvidenceStoreError, record_evidence
+from modules.incident_response.manager import get_incident_response_manager
 
 router = APIRouter()
 logger = get_logger("websocket.alerts")
@@ -36,7 +38,8 @@ async def alerts_websocket(websocket: WebSocket):
     try:
         raw = await asyncio.wait_for(websocket.receive_text(), timeout=10)
         message = json.loads(raw)
-        if message.get("type") != "authenticate" or token_role(message.get("token")) is None:
+        role = token_role(message.get("token"))
+        if message.get("type") != "authenticate" or role is None:
             await websocket.close(code=4401, reason="Valid authentication frame required")
             return
 
@@ -55,12 +58,46 @@ async def alerts_websocket(websocket: WebSocket):
                 await websocket.send_json({"type": "error", "message": "Invalid JSON"})
                 continue
             if msg.get("type") == "acknowledge":
-                # Acknowledgement is intentionally not reported as complete until
-                # durable alert state exists; this API does not persist acknowledgements.
+                if role != "admin":
+                    await websocket.send_json({"type": "error", "message": "Administrator credential required"})
+                    continue
+                alert_id = msg.get("alert_id")
+                if not isinstance(alert_id, str) or not alert_id or len(alert_id) > 128:
+                    await websocket.send_json({"type": "error", "message": "Invalid alert identifier"})
+                    continue
+                try:
+                    await record_evidence(
+                        "incident.alert.transition_requested",
+                        correlation_id=alert_id,
+                        actor_id="authenticated_operator",
+                        outcome="acknowledge",
+                        details={"decision": "acknowledge"},
+                    )
+                    alert = get_incident_response_manager().transition_alert(
+                        alert_id, "acknowledge", "authenticated_operator"
+                    )
+                except KeyError:
+                    await websocket.send_json({"type": "error", "message": "Alert not found"})
+                    continue
+                except (ValueError, EvidenceStoreError):
+                    await websocket.send_json({"type": "error", "message": "Alert acknowledgement failed"})
+                    continue
+                evidence_status = "complete"
+                try:
+                    await record_evidence(
+                        "incident.alert.transitioned",
+                        correlation_id=alert_id,
+                        actor_id="authenticated_operator",
+                        outcome=alert["status"],
+                        details={"decision": "acknowledge"},
+                    )
+                except (ValueError, EvidenceStoreError):
+                    evidence_status = "terminal_record_failed"
                 await websocket.send_json({
-                    "type": "ack_not_supported",
-                    "alert_id": msg.get("alert_id"),
-                    "message": "Alert acknowledgements are not persisted by this service.",
+                    "type": "alert_acknowledged",
+                    "alert_id": alert_id,
+                    "status": alert["status"],
+                    "evidence_status": evidence_status,
                 })
     except asyncio.TimeoutError:
         await websocket.close(code=4408, reason="Authentication timed out")
