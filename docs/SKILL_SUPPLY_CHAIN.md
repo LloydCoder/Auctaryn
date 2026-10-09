@@ -36,6 +36,7 @@ Permission scanning rejects critical capabilities and high-risk private-data/net
 
 - `POST /api/v1/skills/trust-publisher`: administrator only; body includes `publisher` and base64 raw Ed25519 `public_key`.
 - `POST /api/v1/skills/vet`: requires a signed manifest and base64 `artifact_b64`; returns a vetting verdict, never an execution authorization.
+- `POST /api/v1/skills/registry/known-skill`: administrator-only registration of canonical skill names used for typo-squat comparison.
 - `GET /api/v1/skills/history`: bounded verdict history; history is process-local.
 
 ## Remaining production gates
