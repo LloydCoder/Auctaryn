@@ -46,7 +46,7 @@ class ExecutionGateway:
                 )
 
         if self.identity_manager is not None:
-            if not agent_id or not self.identity_manager.is_authorized(agent_id, tool_call.tool_name):
+            if not agent_id or not self.identity_manager.is_authorized(agent_id, tool_call.tool_name, token_id=tool_call.identity_token, require_token=True):
                 return GatewayDecision(
                     id=uuid.uuid4().hex[:12],
                     tool_call=tool_call,
