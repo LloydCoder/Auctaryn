@@ -186,3 +186,32 @@ async def test_runtime_failure_emits_durable_alert():
     alerts = get_incident_response_manager().list_alerts(status="open")
     assert any(item["category"] == "runtime_failure" and item["decision_id"] == "decision-runtime-1"
                for item in alerts)
+
+
+@pytest.mark.asyncio
+async def test_alert_broadcast_is_not_disclosed_to_service_websocket_clients():
+    from api.websockets import alerts as alerts_ws
+
+    class FakeSocket:
+        def __init__(self):
+            self.messages = []
+
+        async def send_text(self, message):
+            self.messages.append(message)
+
+    operator = FakeSocket()
+    service = FakeSocket()
+    previous = dict(alerts_ws._alert_clients)
+    try:
+        alerts_ws._alert_clients.clear()
+        alerts_ws._alert_clients[operator] = "admin"
+        alerts_ws._alert_clients[service] = "api"
+        await alerts_ws.broadcast_alert({
+            "type": "incident_alert",
+            "alert": {"alert_id": "sensitive-alert", "summary": "Restricted incident metadata"},
+        })
+        assert len(operator.messages) == 1
+        assert service.messages == []
+    finally:
+        alerts_ws._alert_clients.clear()
+        alerts_ws._alert_clients.update(previous)
