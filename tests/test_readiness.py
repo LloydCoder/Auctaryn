@@ -8,7 +8,7 @@ import pytest
 
 def _set_strong_credentials(monkeypatch):
     monkeypatch.setenv("AUCTARYN_API_KEY", "test-service-key-0123456789abcdef")
-    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-key-0123456789abcdef")
+    monkeypatch.setenv("AUCTARYN_ADMIN_API_KEY", "test-admin-key-0123456789abcdef0")
 
 
 def test_readiness_explains_missing_runtime_adapter(client, monkeypatch):
