@@ -102,6 +102,16 @@ def _evidence_check(path: Path, allow_unverified_hmac: bool) -> dict[str, Any]:
             "hmac_verified": hmac_verified, "integrity_mode": "sha256-chain+hmac-sha256" if key else "sha256-chain-only",
             "reason": reason}
 
+def _fsync_directory(path: Path) -> None:
+    """Persist directory-entry changes after atomic publication on POSIX hosts."""
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -147,12 +157,15 @@ def backup(source: Path, destination: Path, allow_unverified_hmac: bool = False)
             dst.close()
             src.close()
         os.chmod(temp, 0o600)
+        with temp.open("rb") as stream:
+            os.fsync(stream.fileno())
         report = verify(temp, allow_unverified_hmac)
         # Hard-link creation is atomic and fails if another process created the
         # destination after our initial existence check (no accidental overwrite).
         os.link(temp, destination)
         temp.unlink()
         os.chmod(destination, 0o600)
+        _fsync_directory(destination.parent)
         return {**report, "database": str(destination), "source": str(source), "operation": "backup"}
     finally:
         if temp.exists():
@@ -195,6 +208,9 @@ def restore(source: Path, destination: Path, overwrite: bool = False,
             os.link(temp, destination)
             temp.unlink()
         os.chmod(destination, 0o600)
+        with destination.open("rb") as stream:
+            os.fsync(stream.fileno())
+        _fsync_directory(destination.parent)
         return {**report, "database": str(destination), "source": str(source), "operation": "restore"}
     finally:
         if temp.exists():
