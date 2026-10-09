@@ -20,6 +20,7 @@ from core.logging import get_logger
 logger = get_logger("context_integrity")
 
 MAX_TRACKED_CONTEXT_SESSIONS = 10000
+MAX_PROTECTED_INSTRUCTIONS = 1000
 MAX_CONTEXT_HISTORY = 5000
 MAX_COMPACTION_HISTORY = 5000
 
@@ -116,6 +117,8 @@ class InstructionRegistry:
         if not isinstance(content, str) or not content.strip() or len(content) > 32768:
             raise ValueError("Instruction content must be 1–32768 non-whitespace characters")
         tag = tag.strip()
+        if tag not in self._instructions and len(self._instructions) >= MAX_PROTECTED_INSTRUCTIONS:
+            raise ValueError("protected instruction registry capacity reached")
         instruction = ProtectedInstruction(
             tag=tag, content=content, hash=hash_instruction(content),
             registered_at=datetime.now(timezone.utc),
