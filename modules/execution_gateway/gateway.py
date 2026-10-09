@@ -4,7 +4,7 @@ Evaluates agent actions and records enforceable decisions before execution.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from core.models import (
     ToolCall, GatewayDecision, ActionDecision, ActionClassification,
@@ -19,7 +19,11 @@ logger = get_logger("execution_gateway")
 
 class ExecutionGateway:
     def __init__(self, auto_approve_safe: bool = True, oracle=None,
-                 identity_manager=None, circuit_breaker=None):
+                 identity_manager=None, circuit_breaker=None,
+                 pending_ttl_seconds: int = 900):
+        if pending_ttl_seconds < 1:
+            raise ValueError("pending_ttl_seconds must be positive")
+        self.pending_ttl_seconds = pending_ttl_seconds
         self.classifier = RiskClassifier()
         self.veto_engine = VetoEngine(auto_approve_safe=auto_approve_safe)
         self.history: list[GatewayDecision] = []
@@ -164,11 +168,44 @@ class ExecutionGateway:
             return escalated
         return decision
 
+    @staticmethod
+    def _as_utc(value: datetime) -> datetime:
+        """Normalize legacy naive timestamps to UTC for safe age comparisons."""
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    def _expire_pending(self, now: datetime | None = None) -> None:
+        """Expire unapproved actions without executing them and update decision history."""
+        current_time = now or datetime.now(timezone.utc)
+        expiry = timedelta(seconds=self.pending_ttl_seconds)
+        for decision_id, pending in list(self._pending.items()):
+            created_at = self._as_utc(pending.timestamp)
+            if current_time - created_at < expiry:
+                continue
+
+            self._pending.pop(decision_id, None)
+            timed_out = GatewayDecision(
+                id=pending.id,
+                timestamp=current_time,
+                tool_call=pending.tool_call,
+                risk_level=pending.risk_level,
+                decision=ActionDecision.TIMEOUT,
+                reason="Approval window expired; action was not approved or executed.",
+                decided_by="approval_timeout",
+            )
+            for index, history_item in enumerate(self.history):
+                if history_item.id == decision_id:
+                    self.history[index] = timed_out
+                    break
+
     def get_pending(self) -> list[GatewayDecision]:
+        self._expire_pending()
         return list(self._pending.values())
 
     def resolve_pending(self, decision_id: str, approved: bool,
                         reason: str = "", operator: str = "operator") -> GatewayDecision:
+        self._expire_pending()
         if decision_id not in self._pending:
             raise KeyError(f"No pending decision with id {decision_id}")
 
