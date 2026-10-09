@@ -117,3 +117,10 @@ def test_invalid_scenario_does_not_trip_upstream_circuit_breaker(monkeypatch):
     with pytest.raises(ValueError, match="Invalid ThreatFade scenario"):
         asyncio.run(oracle.run_scenario("not-a-real-scenario"))
     assert oracle.circuit_breaker._failures == 0
+
+
+
+def test_external_threatfade_endpoint_requires_service_token(monkeypatch):
+    monkeypatch.delenv("THREATFADE_SERVICE_TOKEN", raising=False)
+    with pytest.raises(ValueError, match="required for external HTTPS"):
+        FusionOpsClient(base_url="https://threatfade.example")
