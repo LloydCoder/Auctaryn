@@ -89,7 +89,7 @@ def load_and_validate_baseline(path: str | Path) -> tuple[dict[str, Any], str]:
     try:
         policy = yaml.load(source, Loader=_UniqueKeyLoader)
     except (yaml.YAMLError, ValueError) as exc:
-        raise PolicyValidationError("OpenShell baseline policy is invalid or contains duplicate keys") from exc
+        raise PolicyValidationError("OpenShell baseline policy is not valid YAML or contains duplicate keys") from exc
 
     errors = validate_baseline_policy(policy)
     if errors:
