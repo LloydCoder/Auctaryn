@@ -16,6 +16,8 @@ from core.logging import setup_logging
 from api.security import configured_for, extract_bearer, token_role
 from api.routes import health, context, gateway, threatfade, identity, skills, memory
 from api.websockets import actions, alerts
+from modules.execution_gateway.openshell_adapter import create_openshell_adapter_from_environment
+from modules.execution_gateway.runtime_adapter import RuntimeAdapterUnavailable
 
 
 startup_time: float = 0.0
