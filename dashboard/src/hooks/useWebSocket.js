@@ -10,6 +10,7 @@ export function useWebSocket(path, { maxMessages = 100, token = '' } = {}) {
   const [connected, setConnected] = useState(false)
   const [messages, setMessages] = useState([])
   const wsRef = useRef(null)
+  const previousToken = useRef(token)
   const reconnectTimer = useRef(null)
 
   const connect = useCallback(() => {
@@ -41,12 +42,18 @@ export function useWebSocket(path, { maxMessages = 100, token = '' } = {}) {
   }, [path, maxMessages, token])
 
   useEffect(() => {
+    if (previousToken.current !== token) {
+      previousToken.current = token
+      setConnected(false)
+      setMessages([])
+    }
+  }, [token])
+
+  useEffect(() => {
     connect()
     return () => {
       clearTimeout(reconnectTimer.current)
       wsRef.current?.close()
-      setConnected(false)
-      setMessages([])
     }
   }, [connect])
 
