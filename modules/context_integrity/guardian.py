@@ -226,6 +226,7 @@ class ContextIntegrityGuardian:
         self._last_protected_context_hash: str = ""
         self._session_results: dict[str, IntegrityCheckResult] = {}
         self._blocked_sessions: dict[str, str] = {}
+        self._consumed_checks: dict[str, str] = {}
 
     def register_instruction(self, tag: str, content: str) -> ProtectedInstruction:
         return self.registry.register(tag, content)
@@ -247,8 +248,35 @@ class ContextIntegrityGuardian:
     def clear_session(self, session_id: str) -> bool:
         """Clear quarantine but require a new clean check before the session can act."""
         was_blocked = self._blocked_sessions.pop(session_id, None) is not None
-        self._session_results.pop(session_id, None)
+        previous_result = self._session_results.pop(session_id, None)
+        if previous_result is not None:
+            self._consumed_checks.pop(previous_result.id, None)
         return was_blocked
+
+    def authorize_session_action(
+        self, session_id: str, check_id: str, action_id: str
+    ) -> str | None:
+        """Validate and consume a clean check for one server-identified gateway action."""
+        if self.registry.count() == 0:
+            return None
+        if not session_id:
+            return "Session ID is required while protected context instructions are configured."
+        if not check_id or not action_id:
+            return "A current context-check ID and server action ID are required."
+        if self.is_session_blocked(session_id):
+            return "Session is quarantined after a context-integrity violation; administrator clearance is required."
+        result = self._session_results.get(session_id)
+        if result is None:
+            return "No session-bound context-integrity check exists; action denied."
+        if result.id != check_id:
+            return "Context-check ID is stale or does not belong to this session."
+        if result.blocked or result.status != IntegrityStatus.INTACT:
+            return "Latest context-integrity check is not intact; action denied."
+        consumed_by = self._consumed_checks.get(check_id)
+        if consumed_by is not None and consumed_by != action_id:
+            return "Context-check ID has already been consumed by another action."
+        self._consumed_checks[check_id] = action_id
+        return None
 
     def check(self, current_context: str, session_id: str | None = None) -> IntegrityCheckResult:
         result = verify_integrity(
