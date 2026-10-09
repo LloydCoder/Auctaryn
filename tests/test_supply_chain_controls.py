@@ -81,6 +81,12 @@ def test_supply_chain_workflow_has_required_controls() -> None:
     dockerfile = (ROOT / "Dockerfile").read_text()
     assert "FROM python:3.12.15-alpine3.24@sha256:7a63cb93468d7ce5f24b1332a8f7a27f444b3221b0a3d6b5573036b78d937c78" in dockerfile
     assert "zlib=1.3.2-r1" in dockerfile
+    requirements = (ROOT / "requirements.txt").read_text()
+    lock = (ROOT / "requirements.lock").read_text()
+    assert "httpx2==2.13.1" in requirements
+    assert "httpx2==2.13.1" in lock
+    assert "httpcore2==2.13.1" in lock
+    assert "truststore==0.10.4" in lock
     assert "apt-get install -y --no-install-recommends" not in dockerfile
     assert "curl" not in dockerfile
     assert "fail-build: true" in supply
