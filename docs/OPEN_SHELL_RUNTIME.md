@@ -31,6 +31,12 @@ Production requires the four OpenShell OIDC service-credential settings consumed
 
 The adapter supports only `tool_name=openshell_exec`, `action=exec`, and a bounded `parameters.argv` string array. It does not accept a caller-selected sandbox or a shell command string. A supervisor runs inside the sandbox to bound command lifetime and stdout/stderr volume. Receipts include hashes and explicit truncation flags, never raw output.
 
+## Live readiness probe
+
+The OpenShell adapter exposes an asynchronous health probe that calls the active authenticated gateway's health endpoint with a five-second timeout. The readiness endpoint reports OpenShell as connected only when this probe succeeds and returns a non-empty version string. Adapter construction alone is not evidence of connectivity. Probe exceptions, missing versions, and timeouts leave readiness false; /health remains a liveness-only endpoint.
+
+CI tests the probe contract with fake clients. It does not prove connectivity to a live deployment. Before production, run the acceptance checks below against the intended OpenShell gateway and sandbox.
+
 ## Sensitive data and secrets
 
 Auctaryn's `SensitiveDataGuard` runs before identity/risk processing and before execution. It blocks obvious raw credentials in sensitive parameter fields, common token/key formats, and URLs containing embedded user credentials. Error responses report field paths only, never the detected value.
