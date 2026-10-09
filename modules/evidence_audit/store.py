@@ -163,3 +163,34 @@ class EvidenceStore:
     async def list_records(self, limit: int = 100) -> list[dict[str, Any]]:
         await self.initialize()
         return await asyncio.to_thread(self._list_sync, limit)
+
+    def _verify_sync(self) -> dict[str, Any]:
+        try:
+            with self._connect() as db:
+                rows = db.execute("SELECT * FROM evidence_records ORDER BY sequence ASC").fetchall()
+            previous_hash = ZERO_HASH
+            checked = 0
+            hmac_verified = bool(self.key)
+            for row in rows:
+                digest = hashlib.sha256(
+                    previous_hash.encode("ascii") + b"\\n" + row["payload_json"].encode("utf-8")
+                ).hexdigest()
+                if row["previous_hash"] != previous_hash or not hmac.compare_digest(digest, row["record_hash"]):
+                    return {"valid": False, "records_checked": checked, "failed_sequence": row["sequence"],
+                            "reason": "hash_chain_mismatch", "integrity_mode": self.integrity_mode}
+                if self.key and not hmac.compare_digest(self._signature(digest), row["hmac_signature"]):
+                    return {"valid": False, "records_checked": checked, "failed_sequence": row["sequence"],
+                            "reason": "hmac_mismatch", "integrity_mode": self.integrity_mode}
+                if not self.key and row["hmac_signature"]:
+                    hmac_verified = False
+                previous_hash = digest
+                checked += 1
+            return {"valid": True, "records_checked": checked, "head_hash": previous_hash,
+                    "hmac_verified": hmac_verified, "integrity_mode": self.integrity_mode,
+                    "reason": "ok" if hmac_verified else "key_unavailable"}
+        except (sqlite3.Error, OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise EvidenceStoreError("Evidence verification failed") from exc
+
+    async def verify(self) -> dict[str, Any]:
+        await self.initialize()
+        return await asyncio.to_thread(self._verify_sync)
