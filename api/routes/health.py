@@ -1,7 +1,6 @@
 """Health and readiness endpoints for Auctaryn."""
 import asyncio
 import inspect
-import os
 import time
 from datetime import datetime, timezone
 
