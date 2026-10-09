@@ -168,6 +168,20 @@ async def approve_action(request: ApprovalRequest) -> dict:
         resolved = get_gateway().resolve_pending(
             request.decision_id, request.approved, request.reason, operator="authenticated_operator"
         )
+        try:
+            await record_evidence(
+                "approval.resolved",
+                correlation_id=resolved.id,
+                actor_id=resolved.tool_call.agent_id,
+                decision_id=resolved.id,
+                outcome=resolved.decision.value,
+                details={
+                    "decision": resolved.decision.value,
+                    "action_fingerprint": action_intent_fingerprint(resolved.tool_call),
+                },
+            )
+        except EvidenceStoreError as exc:
+            raise HTTPException(status_code=503, detail="Evidence recording unavailable") from exc
         await _broadcast_decision(resolved)
         return {"decision_id": resolved.id, "result": resolved.decision.value,
                 "timestamp": datetime.now(timezone.utc).isoformat()}
