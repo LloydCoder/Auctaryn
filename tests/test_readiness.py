@@ -1,6 +1,9 @@
 """Readiness reports configured and live runtime controls separately."""
 
+import logging
 from types import SimpleNamespace
+
+import pytest
 
 
 def test_readiness_explains_missing_runtime_adapter(client):
@@ -94,3 +97,32 @@ def test_detailed_health_does_not_claim_probe_is_unimplemented(client):
     runtime = next(module for module in body["modules"] if module["name"] == "openshell_runtime")
     assert runtime["status"] == "degraded"
     assert "not configured" in runtime["error_message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_startup_keeps_unhealthy_runtime_adapter_disabled(monkeypatch, tmp_path):
+    from fastapi import FastAPI
+    from api.main import lifespan
+
+    class UnhealthyAdapter:
+        closed = False
+
+        async def health_check(self):
+            return False
+
+        def close(self):
+            self.closed = True
+
+    adapter = UnhealthyAdapter()
+    configured = []
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("api.main.create_openshell_adapter_from_environment", lambda: adapter)
+    monkeypatch.setattr("api.main.setup_logging", lambda **kwargs: logging.getLogger("startup-test"))
+    monkeypatch.setattr(
+        "api.main.gateway.configure_runtime_adapter",
+        lambda value: configured.append(value),
+    )
+
+    async with lifespan(FastAPI()):
+        assert configured and all(value is None for value in configured)
+        assert adapter.closed is True
