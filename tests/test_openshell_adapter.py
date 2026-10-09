@@ -185,6 +185,14 @@ def test_enabled_adapter_requires_sandbox_name(monkeypatch):
     with pytest.raises(RuntimeAdapterUnavailable, match="OPENSHELL_SANDBOX_NAME is required"):
         create_openshell_adapter_from_environment()
 
+def test_enabled_adapter_rejects_invalid_sandbox_name_before_connecting(monkeypatch):
+    monkeypatch.setenv("AUCTARYN_RUNTIME_ADAPTER", "openshell")
+    monkeypatch.setenv("OPENSHELL_SANDBOX_NAME", "--help")
+
+    with pytest.raises(RuntimeAdapterUnavailable, match="unsupported characters"):
+        create_openshell_adapter_from_environment()
+
+
 def test_enabled_adapter_rejects_invalid_timeout_before_connecting(monkeypatch):
     monkeypatch.setenv("AUCTARYN_RUNTIME_ADAPTER", "openshell")
     monkeypatch.setenv("OPENSHELL_SANDBOX_NAME", "sandbox")
