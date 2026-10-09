@@ -1,5 +1,5 @@
 """
-TwinGuard — Context Integrity API Routes
+Auctaryn — Context Integrity API Routes
 """
 
 from datetime import datetime, timezone
