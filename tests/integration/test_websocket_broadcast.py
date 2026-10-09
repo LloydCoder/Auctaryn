@@ -13,7 +13,7 @@ class TestGatewayBroadcast:
     def _register_scope(client, agent_id, scope):
         client.post("/api/v1/identity/register", json={"agent_id": agent_id, "owner": "test"})
         client.post("/api/v1/identity/grant", json={"agent_id": agent_id, "scope": scope})
-        token = client.post("/api/v1/identity/token", json={"agent_id": agent_id})
+        token = client.post("/api/v1/identity/token", json={"agent_id": agent_id, "scopes": [tool_name if "tool_name" in locals() else scope]})
         assert token.status_code == 200
         return token.json()["token_id"]
 
