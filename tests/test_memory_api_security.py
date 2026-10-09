@@ -185,3 +185,12 @@ def test_memory_content_endpoint_never_returns_tampered_content(client):
     assert response.status_code == 200
     assert response.json()["content"] == "original"
     assert response.json()["integrity_ok"] is True
+
+
+
+def test_memory_session_is_bound_to_exact_token(client):
+    first_token = _agent_token(client, "memory-token-binding")
+    session_id = _session(client, first_token)
+    second_token = _agent_token(client, "memory-token-binding")
+    response = _store(client, second_token, session_id)
+    assert response.status_code == 404
