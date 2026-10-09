@@ -109,6 +109,7 @@ def hash_instruction(content: str) -> str:
 class InstructionRegistry:
     def __init__(self):
         self._instructions: dict[str, ProtectedInstruction] = {}
+        self._lock = threading.RLock()
 
     def register(self, tag: str, content: str) -> ProtectedInstruction:
         """Register bounded, non-empty policy text and preserve its content hash."""
@@ -117,38 +118,44 @@ class InstructionRegistry:
         if not isinstance(content, str) or not content.strip() or len(content) > 32768:
             raise ValueError("Instruction content must be 1–32768 non-whitespace characters")
         tag = tag.strip()
-        if tag not in self._instructions and len(self._instructions) >= MAX_PROTECTED_INSTRUCTIONS:
-            raise ValueError("protected instruction registry capacity reached")
-        instruction = ProtectedInstruction(
-            tag=tag, content=content, hash=hash_instruction(content),
-            registered_at=datetime.now(timezone.utc),
-        )
-        self._instructions[tag] = instruction
-        return instruction
+        with self._lock:
+            if tag not in self._instructions and len(self._instructions) >= MAX_PROTECTED_INSTRUCTIONS:
+                raise ValueError("protected instruction registry capacity reached")
+            instruction = ProtectedInstruction(
+                tag=tag, content=content, hash=hash_instruction(content),
+                registered_at=datetime.now(timezone.utc),
+            )
+            self._instructions[tag] = instruction
+            return instruction
 
     def get(self, tag: str) -> Optional[ProtectedInstruction]:
-        return self._instructions.get(tag)
+        with self._lock:
+            return self._instructions.get(tag)
 
     def get_all(self) -> list[ProtectedInstruction]:
-        return list(self._instructions.values())
+        with self._lock:
+            return list(self._instructions.values())
 
     def remove(self, tag: str) -> bool:
-        if tag in self._instructions:
-            del self._instructions[tag]
-            return True
-        return False
+        with self._lock:
+            if tag in self._instructions:
+                del self._instructions[tag]
+                return True
+            return False
 
     def count(self) -> int:
-        return len(self._instructions)
+        with self._lock:
+            return len(self._instructions)
 
     def combined_hash(self) -> str:
-        if not self._instructions:
-            return hash_instruction("")
-        combined = "|".join(
-            f"{tag}:{inst.hash}"
-            for tag, inst in sorted(self._instructions.items())
-        )
-        return hash_instruction(combined)
+        with self._lock:
+            if not self._instructions:
+                return hash_instruction("")
+            combined = "|".join(
+                f"{tag}:{inst.hash}"
+                for tag, inst in sorted(self._instructions.items())
+            )
+            return hash_instruction(combined)
 
 
 def verify_integrity(
@@ -320,6 +327,12 @@ class ContextIntegrityGuardian:
             return was_blocked or previous is not None
 
     def check(self, current_context: str, session_id: str | None = None) -> IntegrityCheckResult:
+        # Serialize context evaluation with gateway preflight so a concurrent
+        # compromised check cannot race past an older intact result.
+        with self._session_lock:
+            return self._check_impl(current_context, session_id)
+
+    def _check_impl(self, current_context: str, session_id: str | None = None) -> IntegrityCheckResult:
         result = verify_integrity(
             self.registry, current_context,
             degradation_threshold=self.degradation_threshold,
