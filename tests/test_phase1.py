@@ -17,6 +17,11 @@ class TestHealthEndpoints:
         d = r.json()
         names = {m["name"] for m in d["modules"]}
         assert names == {"context_integrity", "execution_gateway", "threatfade_oracle", "openshell_runtime"}
+        assert d["overall_status"] == "degraded"
+        assert all(
+            module["status"] != "healthy"
+            for module in d["modules"]
+        )
 
     def test_readiness(self, client):
         r = client.get("/health/ready")
