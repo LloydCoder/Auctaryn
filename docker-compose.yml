@@ -1,8 +1,7 @@
 # Auctaryn — Docker Compose
-# Orchestrates API, Dashboard, and ThreatFade Oracle
+# API credentials are required; the ThreatFade service is internal-only.
 
 services:
-  # Auctaryn API Backend
   api:
     build:
       context: .
@@ -26,25 +25,18 @@ services:
     networks:
       - auctaryn
 
-        - AUCTARYN_ALLOW_INSECURE_THREATFADE_HTTP=false
-
-  # ThreatFade Oracle Service
   threatfade:
     build:
       context: ./modules/threatfade_oracle
       dockerfile: Dockerfile
-    # Internal-only service: do not publish the unauthenticated Oracle port to the host.
+    # Internal-only: do not publish the unauthenticated Oracle port to the host.
     volumes:
       - ./data/pcaps:/app/pcaps
       - ./data/reports:/app/reports
     restart: unless-stopped
     networks:
-      - twinguard
+      - auctaryn
 
-  # React Dashboard
-  # Dev-only: live-reloading Vite dev server. Production deployments
-  # (scripts/deploy.sh) build static assets and serve them directly via
-  # Nginx instead — this service is for local `docker-compose up` work.
   dashboard:
     build:
       context: ./dashboard
@@ -58,7 +50,7 @@ services:
       - api
     restart: unless-stopped
     networks:
-      - twinguard
+      - auctaryn
 
 networks:
   auctaryn:
