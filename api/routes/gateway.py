@@ -197,6 +197,17 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
                   target=request.target, agent_id=request.agent_id, session_id=request.session_id,
                   context_check_id=request.context_check_id,
                   identity_token=request.identity_token)
+    fingerprint = action_intent_fingerprint(tc)
+    try:
+        await record_evidence(
+            "execution.requested",
+            correlation_id=fingerprint,
+            actor_id=tc.agent_id,
+            outcome="requested",
+            details={"action_fingerprint": fingerprint},
+        )
+    except (EvidenceStoreError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="Evidence recording unavailable; execution not started") from exc
     try:
         decision, receipt = await get_execution_service().execute_tool_call(tc)
     except RuntimeAdapterUnavailable as exc:
@@ -207,9 +218,39 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
         raise HTTPException(status_code=409, detail="Action intent integrity check failed; execution refused") from exc
     except RuntimeAdapterFailure as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    evidence_status = "complete"
+    try:
+        await record_evidence(
+            "execution.decision",
+            correlation_id=fingerprint,
+            actor_id=tc.agent_id,
+            decision_id=decision.id,
+            outcome=decision.decision.value,
+            details={"decision": decision.decision.value, "action_fingerprint": fingerprint},
+        )
+        if receipt is not None:
+            await record_evidence(
+                "execution.receipt",
+                correlation_id=fingerprint,
+                actor_id=tc.agent_id,
+                decision_id=decision.id,
+                execution_id=receipt.execution_id,
+                outcome=receipt.status,
+                details={
+                    "runtime_adapter": receipt.adapter,
+                    "receipt_hash": receipt.stdout_sha256,
+                    "action_fingerprint": fingerprint,
+                },
+            )
+    except (EvidenceStoreError, ValueError):
+        # Do not return an ambiguous failure that may cause a caller to replay an
+        # already executed action. The prior execution.requested record remains
+        # as a detectable incomplete chain event for operator investigation.
+        evidence_status = "terminal_record_failed"
     return {
         "decision": decision.model_dump(mode="json"),
         "execution": receipt.model_dump(mode="json") if receipt is not None else None,
+        "evidence_status": evidence_status,
     }
 
 
