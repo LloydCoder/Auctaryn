@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8400:8400"
+      - "127.0.0.1:8400:8400"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - AUCTARYN_API_KEY=${AUCTARYN_API_KEY:?Set AUCTARYN_API_KEY in your environment}
