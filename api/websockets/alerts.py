@@ -12,20 +12,24 @@ from modules.incident_response.manager import get_incident_response_manager
 
 router = APIRouter()
 logger = get_logger("websocket.alerts")
-_alert_clients: list[WebSocket] = []
+_alert_clients: dict[WebSocket, str] = {}
 
 
 async def broadcast_alert(data: dict) -> None:
     message = json.dumps(data, default=str)
     disconnected = []
-    for client in list(_alert_clients):
+    # Incident alerts contain sensitive operational metadata. Only operator
+    # sessions may subscribe; service credentials can call ordinary API routes
+    # but must not receive the incident stream.
+    for client, role in list(_alert_clients.items()):
+        if role != "admin":
+            continue
         try:
             await client.send_text(message)
         except Exception:
             disconnected.append(client)
     for client in disconnected:
-        if client in _alert_clients:
-            _alert_clients.remove(client)
+        _alert_clients.pop(client, None)
 
 
 @router.websocket("/ws/alerts")
@@ -43,7 +47,7 @@ async def alerts_websocket(websocket: WebSocket):
             await websocket.close(code=4401, reason="Valid authentication frame required")
             return
 
-        _alert_clients.append(websocket)
+        _alert_clients[websocket] = role
         await websocket.send_json({
             "type": "authenticated",
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -110,6 +114,5 @@ async def alerts_websocket(websocket: WebSocket):
         except Exception:
             pass
     finally:
-        if websocket in _alert_clients:
-            _alert_clients.remove(websocket)
+        _alert_clients.pop(websocket, None)
         logger.info("Alert WebSocket disconnected", extra={"event": "ws_disconnect"})
