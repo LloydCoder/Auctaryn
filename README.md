@@ -30,12 +30,15 @@ chmod +x scripts/setup.sh
 
 # Run
 cp .env.example .env
-# Edit .env and replace AUCTARYN_API_KEY and AUCTARYN_ADMIN_API_KEY
-# with independent, high-entropy secrets. Do not commit .env.
-docker compose --env-file .env up -d --build
+# Edit .env: set two independent high-entropy API keys and a reachable HTTPS
+# THREATFADE_SERVICE_URL. Do not commit .env.
+docker compose --env-file .env up -d --build api
 
-# Dashboard (local dev)
-open http://localhost:3000
+# Dashboard (local dev; run in another terminal)
+cd dashboard
+npm install
+npm run dev -- --host 0.0.0.0
+# Open the Vite URL shown in the terminal (normally http://localhost:5173).
 ```
 
 ## Production
@@ -55,7 +58,7 @@ The dashboard requires an administrator API key at sign-in. REST API clients use
 - All `/api/v1/*` HTTP endpoints require a Bearer credential. Identity management, approval, pending-decision, and decision-history endpoints require the administrator credential.
 - Before intercepting actions, an administrator registers an agent, grants exact tool scopes, and issues a short-lived token via `POST /api/v1/identity/token`. Gateway interception requests must include both `agent_id` and `identity_token`. Tokens expire within one hour maximum; scope revocation invalidates matching issued and delegated capabilities.
 - WebSocket clients must send `{"type":"authenticate","token":"..."}` as their first frame. The dashboard prompts for the administrator key and keeps it in memory rather than local storage.
-- The ThreatFade service is not published on the host by Compose. Use HTTPS for external ThreatFade endpoints; plain HTTP is accepted only for local/Docker service names unless the explicit insecure override is set for isolated testing.
+- The ThreatFade service implementation is not bundled in this repository; Compose requires a reachable `THREATFADE_SERVICE_URL`. Use HTTPS for external ThreatFade endpoints; plain HTTP is accepted only for local/Docker service names unless the explicit insecure override is set for isolated testing. The dashboard is run with Vite in development and served as static assets by the deployment script; this repository does not define a dashboard Dockerfile.
 - `/health` is a liveness endpoint, not evidence that OpenShell is connected or that all security controls are ready.
 - This release does not yet prove that every external agent tool execution is forcibly mediated by Auctaryn. Do not treat an API decision alone as an execution sandbox.
 
