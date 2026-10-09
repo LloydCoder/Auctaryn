@@ -275,6 +275,7 @@ class ContextIntegrityGuardian:
                     )
                     break
 
+        result.session_id = session_id or ""
         self.history.append(result)
         self.check_count += 1
 
