@@ -19,6 +19,10 @@ from modules.execution_gateway.data_guard import SensitiveDataGuard
 logger = get_logger("execution_gateway")
 
 
+class ApprovalIntentIntegrityError(RuntimeError):
+    """Raised when a pending approval no longer matches its evaluated action intent."""
+
+
 class ExecutionGateway:
     def __init__(self, auto_approve_safe: bool = True, oracle=None,
                  identity_manager=None, circuit_breaker=None,
@@ -242,7 +246,7 @@ class ExecutionGateway:
                     self.history[index] = rejected
                     break
             self.total_vetoed += 1
-            raise KeyError("Pending action intent changed; approval rejected")
+            raise ApprovalIntentIntegrityError("Pending action intent changed; approval rejected")
 
         self._pending.pop(decision_id, None)
         new_decision = ActionDecision.APPROVED if approved else ActionDecision.DENIED
