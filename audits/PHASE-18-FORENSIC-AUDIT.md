@@ -28,4 +28,4 @@
 
 ## CI evidence
 
-Exact-head and post-merge CI passed for the implementation commit. The final roadmap/audit documentation commit must also pass CI before Phase 18 is closed. This audit is not a certification.
+Exact-head and post-merge CI passed for the implementation commit. The audit and roadmap were reconciled after the successful implementation and post-merge runs. The current final documentation commit is subject to the same full CI gate; passing it closes the repository phase, not the external production acceptance gates. This audit is not a certification.
