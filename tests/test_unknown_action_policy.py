@@ -49,3 +49,17 @@ def test_known_safe_read_action_remains_recognized():
     assert classification.risk_level == RiskLevel.SAFE
     assert classification.confidence > 0.9
     assert classification.matched_pattern != "unrecognized"
+
+def test_read_tool_name_does_not_make_write_action_safe():
+    call = ToolCall(
+        tool_name="read_file",
+        action="write",
+        parameters={"path": "/sensitive/config.yaml", "content": "changed"},
+        agent_id="test-agent",
+    )
+
+    classification = RiskClassifier().classify(call)
+    decision = VetoEngine(auto_approve_safe=True).decide(classification)
+
+    assert classification.risk_level != RiskLevel.SAFE
+    assert decision.decision == ActionDecision.PENDING
