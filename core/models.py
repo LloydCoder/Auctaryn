@@ -3,7 +3,7 @@ TwinGuard — Shared Data Models
 Pydantic schemas used across all modules.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import hashlib
 import json
@@ -56,14 +56,14 @@ class ProtectedInstruction(BaseModel):
     tag: str
     content: str
     hash: str
-    registered_at: datetime = Field(default_factory=datetime.utcnow)
+    registered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class IntegrityCheckResult(BaseModel):
     id: str = ""
     session_id: str = Field(default="", max_length=128)
     baseline_hash: str = Field(default="", max_length=64)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     status: IntegrityStatus
     instructions_total: int
     instructions_intact: int
@@ -75,7 +75,7 @@ class IntegrityCheckResult(BaseModel):
 
 class CompactionEvent(BaseModel):
     id: str = ""
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     before_hash: str
     after_hash: str
     integrity_preserved: bool
@@ -87,7 +87,7 @@ class CompactionEvent(BaseModel):
 
 class ToolCall(BaseModel):
     id: str = ""
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     tool_name: str
     action: str
     parameters: dict[str, Any] = {}
@@ -131,7 +131,7 @@ class ActionClassification(BaseModel):
 
 class GatewayDecision(BaseModel):
     id: str = ""
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     tool_call: ToolCall
     risk_level: RiskLevel
     decision: ActionDecision
@@ -146,7 +146,7 @@ class GatewayDecision(BaseModel):
 
 class ThreatFadeResult(BaseModel):
     id: str = ""
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     score: float
     z_score: float = 0.0
     entropy: float = 0.0
@@ -170,14 +170,14 @@ class ParliamentVote(BaseModel):
 class ModuleHealth(BaseModel):
     name: str
     status: ModuleStatus
-    last_check: datetime = Field(default_factory=datetime.utcnow)
+    last_check: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     uptime_seconds: float = 0.0
     error_message: str = ""
     metrics: dict[str, Any] = {}
 
 
 class SystemHealth(BaseModel):
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     version: str = "0.1.0-alpha"
     modules: list[ModuleHealth] = []
     openshell_connected: bool = False
@@ -188,7 +188,7 @@ class SystemHealth(BaseModel):
 
 class Alert(BaseModel):
     id: str = ""
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     severity: Severity
     module: str
     title: str
