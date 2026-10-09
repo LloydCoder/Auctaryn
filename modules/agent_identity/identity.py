@@ -24,6 +24,11 @@ from core.logging import get_logger
 
 logger = get_logger("agent_identity")
 
+MAX_AGENT_IDENTITIES = 100_000
+MAX_AGENT_TOKENS = 250_000
+MAX_SCOPES_PER_IDENTITY = 256
+MAX_SCOPES_PER_TOKEN = 100
+
 
 @dataclass
 class AgentIdentity:
@@ -63,6 +68,10 @@ class AgentIdentityManager:
 
     def register(self, agent_id: str, owner: str) -> AgentIdentity:
         """Register a new agent with its own managed identity. Idempotent."""
+        if not isinstance(agent_id, str) or not agent_id.strip() or len(agent_id) > 128:
+            raise PolicyViolation("invalid_agent_id", "Agent ID must contain 1–128 characters")
+        if not isinstance(owner, str) or not owner.strip() or len(owner) > 256:
+            raise PolicyViolation("invalid_agent_owner", "Agent owner must contain 1–256 characters")
         if agent_id in self._identities:
             existing = self._identities[agent_id]
             if existing.owner != owner:
@@ -75,6 +84,9 @@ class AgentIdentityManager:
                 )
                 raise PolicyViolation("identity_owner_conflict", agent_id)
             return existing
+
+        if len(self._identities) >= MAX_AGENT_IDENTITIES:
+            raise PolicyViolation("identity_capacity_exhausted", "Agent identity capacity reached")
 
         identity = AgentIdentity(
             agent_id=agent_id,
@@ -95,6 +107,10 @@ class AgentIdentityManager:
         identity = self._identities.get(agent_id)
         if identity is None:
             raise PolicyViolation("unknown_agent", agent_id)
+        if not isinstance(scope, str) or not scope.strip() or len(scope) > 256:
+            raise PolicyViolation("invalid_scope", "Scope must contain 1–256 characters")
+        if scope not in identity.scopes and len(identity.scopes) >= MAX_SCOPES_PER_IDENTITY:
+            raise PolicyViolation("scope_capacity_exhausted", "Agent scope capacity reached")
         if scope not in identity.scopes:
             identity.scopes.add(scope)
             identity.permissions_version += 1
@@ -149,18 +165,33 @@ class AgentIdentityManager:
 
         return any(fnmatch.fnmatch(tool_name, scope) for scope in identity.scopes)
 
+    def _prune_tokens(self, now: datetime | None = None) -> None:
+        """Discard expired/revoked token records before allocating more bounded state."""
+        current = now or datetime.now(timezone.utc)
+        for token_id, token in list(self._tokens.items()):
+            if token.revoked or current >= token.expires_at:
+                self._tokens.pop(token_id, None)
+
     # --- Time-scoped tokens ---
 
     def issue_token(self, agent_id: str, ttl_seconds: int = 300, scopes: list[str] | None = None) -> ScopedToken:
+        self._prune_tokens()
         identity = self._identities.get(agent_id)
         if identity is None:
             raise PolicyViolation("unknown_agent", agent_id)
         if not 1 <= ttl_seconds <= 3600:
             raise PolicyViolation("invalid_token_ttl", str(ttl_seconds))
 
-        requested_scopes = set(identity.scopes if scopes is None else scopes)
+        raw_scopes = identity.scopes if scopes is None else scopes
+        if not isinstance(raw_scopes, (set, list, tuple)) or len(raw_scopes) > MAX_SCOPES_PER_TOKEN:
+            raise PolicyViolation("invalid_token_scopes", "Token scopes exceed the supported bound")
+        if any(not isinstance(scope, str) or not scope.strip() or len(scope) > 256 for scope in raw_scopes):
+            raise PolicyViolation("invalid_token_scopes", "Each token scope must contain 1–256 characters")
+        requested_scopes = set(raw_scopes)
         if not requested_scopes:
             raise PolicyViolation("empty_token_scopes", agent_id)
+        if len(self._tokens) >= MAX_AGENT_TOKENS:
+            raise PolicyViolation("token_capacity_exhausted", "Agent token capacity reached")
         not_held = requested_scopes - identity.scopes
         if not_held:
             raise PolicyViolation(f"agent_lacks_scope:{','.join(sorted(not_held))}", agent_id)
@@ -225,6 +256,14 @@ class AgentIdentityManager:
         direct fix for OWASP's confused-deputy example: "Manager delegates
         task, full admin access persists."
         """
+        self._prune_tokens()
+        if not isinstance(scopes, list) or not 1 <= len(scopes) <= MAX_SCOPES_PER_TOKEN:
+            raise PolicyViolation("invalid_delegation_scopes", "Delegation must contain 1–100 scopes")
+        if any(not isinstance(scope, str) or not scope.strip() or len(scope) > 256 for scope in scopes):
+            raise PolicyViolation("invalid_delegation_scopes", "Each delegated scope must contain 1–256 characters")
+        if len(self._tokens) >= MAX_AGENT_TOKENS:
+            raise PolicyViolation("token_capacity_exhausted", "Agent token capacity reached")
+
         delegator = self._identities.get(delegator_agent_id)
         delegate_identity = self._identities.get(delegate_agent_id)
 
