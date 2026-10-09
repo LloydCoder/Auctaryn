@@ -12,7 +12,7 @@ A phase is complete only when its implementation and documentation are reconcile
 
 | Phase | Scope | Acceptance evidence | Status |
 |---|---|---|---|
-| 1 | API authentication, administrator authorization, approval and identity-administration protection | Negative authorization tests; service/admin credential separation; CI green | Complete on main; CI verified |
+| 1 | API authentication, administrator authorization, approval and identity-administration protection | Negative authorization tests; service/admin credential separation; strong-key enforcement; CI green | Complete on main with Phase 24 final-audit hardening on the release branch: distinct 32+ character non-placeholder keys are required by default and readiness, production Compose forces enforcement. Exact-head CI pending. |
 | 2 | Agent identity ownership, scoped token lifecycle and delegation boundaries | Ownership-conflict audit test; scope and delegation regressions; bounded identity/token/scope state; expired/revoked-token pruning; CI green | Complete on main with Phase 24 final-audit hardening on the release branch: identity/token/scope collections now have explicit caps and fail closed; exact-head CI pending. Durable Platform-backed identity remains a production gate. |
 | 3 | Versioned advisory risk contract for Tinlance Agent Platform | Schema/version tests; secret-safe response; no authorization grant in advisory response | Complete on main; CI verified |
 | 4 | Centralized authentication/authorization dependencies | Shared security module; route-level regression coverage; CI green | Complete on main; CI verified |
