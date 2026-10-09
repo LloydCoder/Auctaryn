@@ -269,6 +269,7 @@ class ContextIntegrityGuardian:
                 hijack = detect_goal_hijack(inst.content, current_context)
                 if hijack.hijack_detected:
                     result.blocked = True
+                    result.status = IntegrityStatus.COMPROMISED
                     result.details.append({
                         "tag": inst.tag, "status": "hijack_detected",
                         "reason": hijack.reason,
