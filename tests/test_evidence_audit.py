@@ -69,3 +69,15 @@ async def test_evidence_details_reject_unapproved_fields(tmp_path):
     store = EvidenceStore(tmp_path / "evidence.sqlite3")
     with pytest.raises(ValueError):
         await store.append("decision.created", details={"raw_parameters": "must-not-be-stored"})
+
+
+@pytest.mark.asyncio
+async def test_signing_key_can_be_loaded_from_mounted_file(tmp_path, monkeypatch):
+    key_file = tmp_path / "evidence.key"
+    key_file.write_text("z" * 32, encoding="utf-8")
+    monkeypatch.setenv("AUCTARYN_EVIDENCE_HMAC_KEY_FILE", str(key_file))
+    monkeypatch.delenv("AUCTARYN_EVIDENCE_HMAC_KEY", raising=False)
+    store = EvidenceStore(tmp_path / "evidence.sqlite3")
+    assert store.integrity_mode == "sha256-chain+hmac-sha256"
+    await store.append("decision.created", outcome="pending")
+    assert (await store.verify())["hmac_verified"] is True
