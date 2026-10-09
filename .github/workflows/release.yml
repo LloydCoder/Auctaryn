@@ -1,0 +1,114 @@
+name: Gated production release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-gate-contract:
+    name: Validate release evidence and exact-head provenance
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - name: Validate evidence schema
+        run: python scripts/verify_release_evidence.py release/release-evidence.json
+      - name: Require signed-off evidence on version tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/verify_release_evidence.py release/release-evidence.json --require-passed
+          TESTED_COMMIT="$(jq -r '.tested_commit' release/release-evidence.json)"
+          git merge-base --is-ancestor "$TESTED_COMMIT" "$GITHUB_SHA"
+          git diff --quiet "$TESTED_COMMIT" "$GITHUB_SHA" -- . ':!release/release-evidence.json'
+          for NAME in ci codeql supply_chain; do
+            RUN_ID="$(jq -r --arg name "$NAME" '.workflow_runs[$name].run_id' release/release-evidence.json)"
+            RUN_SHA="$(gh run view "$RUN_ID" --json headSha --jq '.headSha')"
+            RUN_RESULT="$(gh run view "$RUN_ID" --json conclusion --jq '.conclusion')"
+            test "$RUN_SHA" = "$TESTED_COMMIT"
+            test "$RUN_RESULT" = "success"
+          done
+
+  publish-release:
+    name: Publish immutable OCI release and attest it
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release-gate-contract
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - name: Derive lowercase OCI image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - name: Login to GitHub Container Registry
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Build and push versioned image
+        id: build
+        run: |
+          docker buildx build --pull --platform linux/amd64 --push             --provenance=true --sbom=true             --tag "$IMAGE:$GITHUB_REF_NAME"             --metadata-file build-metadata.json .
+          DIGEST="$(jq -r '."containerimage.digest"' build-metadata.json)"
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+      - name: Generate source SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: auctaryn-source.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Generate image SBOM for the exact pushed digest
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: ${{ steps.build.outputs.image }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: auctaryn-container.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Attest source SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: auctaryn-source.spdx.json
+      - name: Attest OCI image provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: ${{ steps.build.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Attest image SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: ${{ steps.build.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: auctaryn-container.spdx.json
+          push-to-registry: true
+      - name: Verify registry digest and attestation
+        run: |
+          OBSERVED="$(docker buildx imagetools inspect "$IMAGE:$GITHUB_REF_NAME" --format '{{.Manifest.Digest}}')"
+          test "$OBSERVED" = "${{ steps.build.outputs.digest }}"
+          gh attestation verify "oci://$IMAGE:$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY"
+      - name: Create GitHub release with SBOMs
+        run: gh release create "$GITHUB_REF_NAME" auctaryn-source.spdx.json auctaryn-container.spdx.json --generate-notes
