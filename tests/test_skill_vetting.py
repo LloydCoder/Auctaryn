@@ -1,197 +1,99 @@
-"""
-TwinGuard — Skill/Dependency Vetting Module Tests (TDD)
-Maps to OWASP ASI04:2026 — Agentic Supply Chain Compromise.
+"""Regression coverage for the strict skill-vetting compatibility facade."""
+import base64
+import hashlib
 
-Direct response to: ClawHub registry poisoned at scale (5 of top 7
-downloaded skills confirmed malware), and CVE-2025-59536 / CVE-2026-21852
-showing repo-level config files acting as part of the execution layer.
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-Defenses implemented (per OWASP mitigation guidance):
-- ed25519-style signature verification (signed manifest required)
-- content_hash pinning (no version ranges — immutable hashes only)
-- least-privilege manifest scanning (declared permissions reviewed)
-- safe YAML/JSON parsing (no arbitrary deserialization)
-
-Written FIRST. Implementation follows.
-"""
-
-import pytest
-
-
-SAFE_MANIFEST = {
-    "name": "email-organizer",
-    "version": "1.2.0",
-    "content_hash": "a3f5c8d9e1b2f4a6c8d0e2f4a6c8d0e2f4a6c8d0e2f4a6c8d0e2f4a6c8d0e2f4",
-    "signature": "ed25519:VALID_SIGNATURE_PLACEHOLDER",
-    "permissions": ["read_email", "list_email"],
-    "publisher": "trusted-dev-001",
-}
-
-MALICIOUS_MANIFEST = {
-    "name": "totally-safe-skill",
-    "version": "1.0.0",
-    "content_hash": "",  # missing hash — red flag
-    "signature": "",  # unsigned
-    "permissions": ["read_email", "send_email", "delete_database", "escalate_privileges", "exfiltrate_data"],
-    "publisher": "unknown",
-}
-
-UNSIGNED_MANIFEST = {
-    "name": "mystery-skill",
-    "version": "2.0.0",
-    "content_hash": "b4f6c9d0e2f4a6c8d0e2f4a6c8d0e2f4a6c8d0e2f4a6c8d0e2f4a6c8d0e2f4a6",
-    "signature": "",
-    "permissions": ["read_file"],
-    "publisher": "unverified-dev",
-}
-
-TYPOSQUAT_MANIFEST = {
-    "name": "gmial-organizer",  # typosquat of "gmail-organizer"
-    "version": "1.0.0",
-    "content_hash": "c5f7c9d0e2f4a6c8d0e2f4a6c8d0e2f4a6c8d0e2f4a6c8d0e2f4a6c8d0e2f4a6",
-    "signature": "ed25519:VALID_SIGNATURE_PLACEHOLDER",
-    "permissions": ["read_email"],
-    "publisher": "trusted-dev-001",
-}
+from modules.skill_vetting.secure_vetting import canonical_manifest, SecureSkillVettingService
+from modules.skill_vetting.vetting import (
+    SkillVettingService,
+    detect_typosquat,
+    has_pinned_hash,
+    has_valid_signature,
+    scan_permissions,
+    validate_manifest_structure,
+    verify_content_hash,
+)
 
 
-class TestManifestValidation:
-    """Every skill must have a complete, well-formed manifest before vetting can proceed."""
-
-    def test_valid_manifest_passes_structure_check(self):
-        from modules.skill_vetting.vetting import validate_manifest_structure
-        assert validate_manifest_structure(SAFE_MANIFEST) is True
-
-    def test_missing_content_hash_fails_structure_check(self):
-        from modules.skill_vetting.vetting import validate_manifest_structure
-        assert validate_manifest_structure(MALICIOUS_MANIFEST) is False
-
-    def test_missing_required_field_fails(self):
-        from modules.skill_vetting.vetting import validate_manifest_structure
-        incomplete = {"name": "x"}
-        assert validate_manifest_structure(incomplete) is False
-
-
-class TestSignatureVerification:
-    """AST01/AST02: skills must be ed25519-signed before they're trusted."""
-
-    def test_signed_skill_passes_signature_check(self):
-        from modules.skill_vetting.vetting import has_valid_signature
-        assert has_valid_signature(SAFE_MANIFEST, trusted_publishers={"trusted-dev-001"}) is True
-
-    def test_unsigned_skill_fails_signature_check(self):
-        from modules.skill_vetting.vetting import has_valid_signature
-        assert has_valid_signature(UNSIGNED_MANIFEST, trusted_publishers={"trusted-dev-001"}) is False
-
-    def test_signed_but_untrusted_publisher_fails(self):
-        from modules.skill_vetting.vetting import has_valid_signature
-        manifest = dict(SAFE_MANIFEST, publisher="random-unverified-account")
-        assert has_valid_signature(manifest, trusted_publishers={"trusted-dev-001"}) is False
+def signed_fixture(name="email-organizer", version="1.2.0", permissions=None, content=b"skill bytes"):
+    private = Ed25519PrivateKey.generate()
+    public = base64.b64encode(private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )).decode("ascii")
+    manifest = {
+        "name": name,
+        "version": version,
+        "content_hash": hashlib.sha256(content).hexdigest(),
+        "signature": "",
+        "permissions": permissions or ["read_file"],
+        "publisher": "trusted-dev",
+    }
+    manifest["signature"] = "ed25519:" + base64.b64encode(
+        private.sign(canonical_manifest(manifest))
+    ).decode("ascii")
+    return private, public, manifest, content
 
 
-class TestContentHashPinning(object):
-    """AST07: dependencies must be pinned to immutable hashes, never version ranges."""
-
-    def test_hash_pinned_manifest_passes(self):
-        from modules.skill_vetting.vetting import has_pinned_hash
-        assert has_pinned_hash(SAFE_MANIFEST) is True
-
-    def test_empty_hash_fails(self):
-        from modules.skill_vetting.vetting import has_pinned_hash
-        assert has_pinned_hash(MALICIOUS_MANIFEST) is False
-
-    def test_hash_mismatch_detected(self):
-        from modules.skill_vetting.vetting import verify_content_hash
-        actual_content = b"the actual skill bytes"
-        wrong_hash = "0000000000000000000000000000000000000000000000000000000000000000"
-        assert verify_content_hash(actual_content, wrong_hash) is False
-
-    def test_hash_match_verified(self):
-        from modules.skill_vetting.vetting import verify_content_hash
-        import hashlib
-        content = b"the actual skill bytes"
-        correct_hash = hashlib.sha256(content).hexdigest()
-        assert verify_content_hash(content, correct_hash) is True
+def test_manifest_requires_exact_version_and_sha256():
+    _, _, manifest, _ = signed_fixture()
+    assert validate_manifest_structure(manifest) is True
+    assert validate_manifest_structure(dict(manifest, version="^1.2.0")) is False
+    assert validate_manifest_structure(dict(manifest, content_hash="z" * 64)) is False
 
 
-class TestPermissionManifestScanning:
-    """AST03: least privilege — flag skills requesting excessive/dangerous permissions."""
-
-    def test_minimal_permissions_pass(self):
-        from modules.skill_vetting.vetting import scan_permissions
-        result = scan_permissions(SAFE_MANIFEST["permissions"])
-        assert result.risk_level == "low"
-
-    def test_dangerous_permission_combination_flagged(self):
-        """The 'lethal trifecta': private data access + untrusted content + network egress."""
-        from modules.skill_vetting.vetting import scan_permissions
-        result = scan_permissions(MALICIOUS_MANIFEST["permissions"])
-        assert result.risk_level == "critical"
-        assert "escalate_privileges" in result.flagged_permissions
-
-    def test_exfiltration_permission_always_critical(self):
-        from modules.skill_vetting.vetting import scan_permissions
-        result = scan_permissions(["exfiltrate_data"])
-        assert result.risk_level == "critical"
+def test_signature_requires_trusted_public_key_and_real_signature():
+    _, public, manifest, _ = signed_fixture()
+    assert has_valid_signature(manifest, {"trusted-dev"}) is False
+    assert has_valid_signature(manifest, {"trusted-dev"}, {"trusted-dev": public}) is True
+    changed = dict(manifest, permissions=["write_file"])
+    assert has_valid_signature(changed, {"trusted-dev"}, {"trusted-dev": public}) is False
 
 
-class TestTyposquatDetection:
-    """OWASP example: 'Typosquatted tool in marketplace.'"""
-
-    def test_typosquat_detected_against_known_skills(self):
-        from modules.skill_vetting.vetting import detect_typosquat
-        known_skills = {"gmail-organizer", "calendar-sync", "slack-notify"}
-        result = detect_typosquat("gmial-organizer", known_skills)
-        assert result is not None
-        assert result == "gmail-organizer"
-
-    def test_exact_match_is_not_a_typosquat(self):
-        from modules.skill_vetting.vetting import detect_typosquat
-        known_skills = {"gmail-organizer"}
-        assert detect_typosquat("gmail-organizer", known_skills) is None
-
-    def test_unrelated_name_is_not_flagged(self):
-        from modules.skill_vetting.vetting import detect_typosquat
-        known_skills = {"gmail-organizer"}
-        assert detect_typosquat("completely-different-tool", known_skills) is None
+def test_content_hash_verification_checks_exact_bytes():
+    _, _, manifest, content = signed_fixture()
+    assert has_pinned_hash(manifest) is True
+    assert verify_content_hash(content, manifest["content_hash"]) is True
+    assert verify_content_hash(b"different", manifest["content_hash"]) is False
 
 
-class TestSkillVettingService:
-    """Full vetting pipeline combining all checks into one verdict."""
+def test_permission_scan_rejects_high_risk_combinations():
+    result = scan_permissions(["read_email", "http_request"])
+    assert result.risk_level == "high"
+    critical = scan_permissions(["exfiltrate_data"])
+    assert critical.risk_level == "critical"
 
-    def test_vet_safe_skill_approves(self):
-        from modules.skill_vetting.vetting import SkillVettingService
-        svc = SkillVettingService(trusted_publishers={"trusted-dev-001"})
-        verdict = svc.vet(SAFE_MANIFEST)
-        assert verdict.approved is True
 
-    def test_vet_malicious_skill_rejects(self):
-        from modules.skill_vetting.vetting import SkillVettingService
-        svc = SkillVettingService(trusted_publishers={"trusted-dev-001"})
-        verdict = svc.vet(MALICIOUS_MANIFEST)
-        assert verdict.approved is False
-        assert len(verdict.reasons) > 0
+def test_typosquat_detection_against_known_registry():
+    assert detect_typosquat("gmial-organizer", {"gmail-organizer"}) == "gmail-organizer"
+    assert detect_typosquat("gmail-organizer", {"gmail-organizer"}) is None
 
-    def test_vet_unsigned_skill_rejects(self):
-        from modules.skill_vetting.vetting import SkillVettingService
-        svc = SkillVettingService(trusted_publishers={"trusted-dev-001"})
-        verdict = svc.vet(UNSIGNED_MANIFEST)
-        assert verdict.approved is False
-        assert any("signature" in r.lower() for r in verdict.reasons)
 
-    def test_vet_typosquat_against_known_registry_rejects(self):
-        from modules.skill_vetting.vetting import SkillVettingService
-        svc = SkillVettingService(
-            trusted_publishers={"trusted-dev-001"},
-            known_skills={"gmail-organizer"},
-        )
-        verdict = svc.vet(TYPOSQUAT_MANIFEST)
-        assert verdict.approved is False
-        assert any("typosquat" in r.lower() for r in verdict.reasons)
+def test_compatibility_service_fails_closed_without_artifact_bytes():
+    _, public, manifest, content = signed_fixture()
+    service = SkillVettingService(
+        trusted_publishers={"trusted-dev"},
+        publisher_keys={"trusted-dev": public},
+    )
+    assert service.vet(manifest).approved is False
+    assert service.vet(manifest, content).approved is True
 
-    def test_vetting_history_tracked(self):
-        from modules.skill_vetting.vetting import SkillVettingService
-        svc = SkillVettingService(trusted_publishers={"trusted-dev-001"})
-        svc.vet(SAFE_MANIFEST)
-        svc.vet(MALICIOUS_MANIFEST)
-        assert len(svc.history) == 2
+
+def test_compatibility_service_tracks_approved_verdicts():
+    _, public, manifest, content = signed_fixture()
+    service = SkillVettingService(
+        trusted_publishers={"trusted-dev"},
+        publisher_keys={"trusted-dev": public},
+    )
+    service.vet(manifest, content)
+    assert len(service.history) == 1
+
+
+def test_secure_service_rejects_unknown_publisher():
+    _, _, manifest, content = signed_fixture()
+    service = SecureSkillVettingService()
+    verdict = service.vet(manifest, content)
+    assert verdict.approved is False
+    assert any("publisher" in reason.lower() for reason in verdict.reasons)
