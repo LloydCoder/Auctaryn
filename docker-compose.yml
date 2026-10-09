@@ -16,8 +16,8 @@ services:
       - THREATFADE_SERVICE_URL=${THREATFADE_SERVICE_URL:?Set THREATFADE_SERVICE_URL to your ThreatFade service}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - auctaryn-data:/app/data
+      - auctaryn-logs:/app/logs
       - ./config:/app/config:ro
       - ./policies:/app/policies:ro
     restart: unless-stopped
@@ -30,3 +30,4 @@ networks:
 
 volumes:
   auctaryn-data:
+  auctaryn-logs:
