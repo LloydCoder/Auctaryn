@@ -23,6 +23,13 @@ This audit does not represent external gates as completed. No independent penetr
 - `.github/workflows/ci.yml`
 - `.github/workflows/codeql.yml`
 - `.github/workflows/supply-chain.yml`
+- `scripts/deploy.sh` and `scripts/rollback.sh`
+- `docker-compose.yml` and `docker-compose.production.yml`
+- `.env.example`
+- `README.md`, `site/index.html`, `site/about.html`, `site/docs.html`, `site/pricing.html`, `site/js/partials.js`
+- `integrations/olvrix_widgets/twinguard_bridge_patch.py`
+- `docs/DEMO_SCRIPT.md` and `docs/DEPLOYMENT_ROLLBACK.md`
+- `LICENSE`
 
 ## Findings and remediation
 
@@ -62,6 +69,30 @@ This audit does not represent external gates as completed. No independent penetr
 
 **Remediation:** request ingress is bounded (2 MiB for ordinary API requests and a separate bounded PCAP allowance); gateway history is capped at 5,000 records, pending approvals at 1,000 with new pending actions denied at saturation, identity records at 100,000, token records at 250,000 with expired/revoked token pruning, per-identity scopes at 256, token/delegation scopes at 100, and execution/runtime idempotency records at 100,000. Capacity exhaustion denies or refuses further work rather than evicting replay guards. These in-process caps prevent unbounded growth but do not provide durable or multi-replica correctness.
 
+### P24-07 — Public product pages overstated coverage and production validation
+
+**Risk:** the static site advertised universal interception, a zero-percent production false-positive rate, stale test counts, live FusionOps metrics, and unapproved paid tiers/SLA claims. Those statements were not supported by the repository's current implementation or independent evidence.
+
+**Remediation:** public pages now describe supported-path enforcement, label demo data as synthetic, distinguish mapped OWASP categories from certification, remove unverified production metrics and prices, and point to the canonical LloydCoder/Auctaryn repository. The reported February 2026 incident is described as a reported account with a source link and a qualification that it was not independently verified.
+
+### P24-08 — Legacy Olvrix bridge was fail-open and hard-coded an endpoint
+
+**Risk:** the reference patch used a hard-coded HTTP IP and allowed responses through when Auctaryn was unavailable. It also routed ordinary chat messages through an action-decision endpoint without a verified identity/context contract.
+
+**Remediation:** replaced it with a draft action-only integration contract that requires HTTPS for remote endpoints, separate service and scoped-agent credentials, session-bound context-check evidence, and an exact `approved` decision. Any missing configuration, non-approved response or service error returns a blocked result. It is explicitly not represented as a tested live integration.
+
+### P24-09 — Declared license file was missing
+
+**Risk:** README and public pages described Apache-2.0 licensing, but the repository lacked a root license file.
+
+**Remediation:** added the Apache License 2.0 text with Tinlance Limited copyright notice and added a regression test for the license file.
+
+### P24-10 — Production deploy could bypass the release evidence chain
+
+**Risk:** the previous helper built from a moving branch and used a mutable image reference; rollback attempted to retag a local image ID rather than restore a previously attested immutable digest.
+
+**Remediation:** production deployment now requires a version tag, an exact GHCR digest, a verified release manifest, OCI provenance and SPDX SBOM attestations, HTTPS OpenShell gateway metadata, service-to-service OIDC credentials, and a mounted evidence HMAC key. The production Compose override pins the image digest. Rollback verifies the prior release and restores its immutable digest; deployment refuses missing/mismatched evidence and waits for readiness before exposing Nginx/TLS.
+
 ## Security and failure-mode coverage
 
 The Phase 24 tests cover:
@@ -78,7 +109,11 @@ The Phase 24 tests cover:
 - release workflow is version-tag-gated and verifies workflow identity and artifact attestations;
 - API and PCAP ingress reject over-limit bodies before parsing;
 - gateway history and approval queues remain bounded and pending actions are denied at queue saturation;
-- identity, token, scope, execution-deduplication and runtime idempotency state have explicit fail-closed capacity guards.
+- identity, token, scope, execution-deduplication and runtime idempotency state have explicit fail-closed capacity guards;
+- public pages avoid unsupported universal-mediation, production-metric and pricing claims;
+- the Olvrix reference integration fails closed and does not use a hard-coded endpoint;
+- production deployment and rollback require immutable digest and attestation verification;
+- the repository contains the declared Apache-2.0 license.
 
 The workflow-level checks remain authoritative for querying live GitHub run metadata. Unit tests cannot substitute for observing the required Actions jobs on the exact PR head.
 
