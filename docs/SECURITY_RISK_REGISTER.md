@@ -1,0 +1,25 @@
+# Auctaryn security risk register
+
+**Owner:** Tinlance Limited — Security Engineering  
+**Review cadence:** every release candidate and after each confirmed incident, dependency alert, runtime integration change or external assessment.
+**Policy:** a CI pass does not close an integration, operational or independent-assurance risk. “Release blocker” means the release pipeline must not promote a production release until the named evidence is attached and reviewed by an accountable human.
+
+| ID | Severity | Risk | Current evidence | Treatment / closure evidence | Status |
+|---|---|---|---|---|---|
+| AUC-R001 | Critical | A consequential action may bypass the supported Auctaryn gateway path or execute through an unverified external agent path. | Local gateway and adapter tests; no universal mediation proof. | Live end-to-end tests for allow, pending, deny, expired approval, replay and bypass attempts; signed deployment evidence. | Open — release blocker |
+| AUC-R002 | High | Platform identity, tenant binding, key lifecycle and revocation are not proven against the live authoritative Tinlance Agent Platform service. | Versioned advisory contract and local contract tests. | Platform integration conformance tests for tenant isolation, key rotation/revocation, denial and failure modes. | Open — release blocker |
+| AUC-R003 | High | Process-local identity, approval, inbox, replay, breaker and context state may diverge across restarts or replicas. | Local persistence exists for selected evidence/incident paths; several controls remain in-memory. | Durable-store implementation or explicit single-replica restriction, plus restart/concurrency/multi-replica tests. | Open — release blocker |
+| AUC-R004 | High | Step-up challenge freshness is not evidence of a real IdP/MFA assertion bound to every privileged action. | Local single-use/freshness regression tests. | Live IdP/MFA assertion validation, nonce/action binding, replay tests and approval-to-runtime trace. | Open — release blocker |
+| AUC-R005 | High | No independent penetration test or third-party security assessment has been supplied. | Internal unit/integration/red-team tests only. | Independent tester report tied to exact commit and environment; finding severity, remediation and retest evidence. | Open — external release blocker |
+| AUC-R006 | High | The CI image archive is attested, but production registry publication and deployed-image digest verification are not implemented. | Main-branch SBOM and artifact attestations. | Immutable OCI digest publication, provenance/SBOM verification at deployment, recorded deployed digest and rollback drill. | Open — Phase 24 gate |
+| AUC-R007 | High | OpenShell policy and filesystem/network isolation are not verified against a live production-like gateway. | Fake-client adapter and policy-contract tests. | Live test proves gateway identity, effective policy hash, workspace/filesystem boundaries, denied egress, process limits and no unauthorized path. | Open — release blocker |
+| AUC-R008 | High | Goal-hijack and memory-poisoning detection is heuristic and can produce false negatives. | Deterministic ASI01/ASI06 tests. | Independent adversarial corpus, measured false-positive/false-negative rates, multilingual and indirect-injection tests, documented thresholds. | Open — residual risk |
+| AUC-R009 | Medium | Remaining datetime.utcnow deprecation warnings reduce test-signal clarity and may hide future compatibility failures. | 501 tests pass; 279 warnings remain after the Starlette TestClient warning was removed. | Identify sources, replace naive UTC calls with timezone-aware UTC, add targeted warning-as-error tests and avoid global suppression. | Open — Phase 23 hygiene |
+| AUC-R010 | Medium | Vulnerability databases and upstream image/package metadata evolve after a successful scan. | Exact-head pip/npm audit and Grype inventory; zero high/critical findings at Phase 22 audit time. | Scheduled scans, release-time rescan, immutable base digest review and explicit expiry for any exception. | Open — continuous monitoring |
+
+## Risk acceptance rules
+
+1. Critical and high release blockers require a closure record and human sign-off; a code change alone is not closure.
+2. No risk may be accepted without an accountable owner, rationale, compensating control, expiry date and review date.
+3. “Not reproduced” is not equivalent to “not exploitable.” Keep unresolved findings open until evidence supports closure.
+4. Phase 24 must verify that all release-blocking risks have evidence or that the release remains blocked.
