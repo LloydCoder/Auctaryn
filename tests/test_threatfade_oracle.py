@@ -472,6 +472,26 @@ class TestThreatFadeOracleService:
         assert oracle.raw_results == []
 
     @pytest.mark.asyncio
+    async def test_oracle_circuit_breaker_opens_after_repeated_failures(self):
+        from modules.threatfade_oracle.oracle import ThreatFadeOracle
+        from core.exceptions import ThreatFadeConnectionError
+        from core.models import ToolCall
+
+        oracle = ThreatFadeOracle()
+        oracle.oracle_failure_threshold = 2
+        oracle.client.detect_json = AsyncMock(
+            side_effect=ThreatFadeConnectionError("simulated service error")
+        )
+        call = ToolCall(tool_name="read_file", action="read", parameters={})
+
+        await oracle.analyze(call)
+        await oracle.analyze(call)
+        assert oracle._oracle_breaker_state() == "open"
+        await oracle.analyze(call)
+        assert oracle.client.detect_json.await_count == 2
+        assert oracle.history[-1].severity == Severity.INFO
+
+    @pytest.mark.asyncio
     async def test_oracle_tracks_history(self):
         from modules.threatfade_oracle.oracle import ThreatFadeOracle
         from core.models import ToolCall
