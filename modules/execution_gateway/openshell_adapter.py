@@ -9,6 +9,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -108,8 +109,10 @@ class OpenShellRuntimeAdapter:
         close_callback: Callable[[], None] | None = None,
         baseline_policy_sha256: str | None = None,
     ):
-        if not sandbox_name.strip() or not workspace.strip():
-            raise ValueError("sandbox_name and workspace must be non-empty")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", sandbox_name):
+            raise ValueError("sandbox_name contains unsupported characters")
+        if not workspace.strip() or len(workspace) > 128:
+            raise ValueError("workspace must be non-empty and at most 128 characters")
         if not 1 <= timeout_seconds <= 3600:
             raise ValueError("timeout_seconds must be between 1 and 3600")
         self.client = client
@@ -244,9 +247,9 @@ def create_openshell_adapter_from_environment() -> OpenShellRuntimeAdapter | Non
 
     sandbox_name = os.getenv("OPENSHELL_SANDBOX_NAME", "").strip()
     workspace = os.getenv("OPENSHELL_WORKSPACE", "default").strip()
-    if not sandbox_name:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", sandbox_name):
         raise RuntimeAdapterUnavailable(
-            "OPENSHELL_SANDBOX_NAME is required when AUCTARYN_RUNTIME_ADAPTER=openshell."
+            "OPENSHELL_SANDBOX_NAME is required and must use only letters, digits, dot, underscore or hyphen."
         )
     try:
         timeout_seconds = int(os.getenv("OPENSHELL_EXECUTION_TIMEOUT_SECONDS", "60"))
