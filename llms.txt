@@ -1,0 +1,46 @@
+# Auctaryn
+
+> Auctaryn adds context-integrity checks and advisory risk assessments to supported autonomous-agent paths. Tinlance Agent Platform remains authoritative for identity, tenant binding, policy, approvals, governed execution, secrets, and audit.
+
+Auctaryn is defense-in-depth software, not a universal agent-action interceptor or a replacement for a trusted runtime.
+
+## Start here
+
+- [README](README.md): overview, safe local evaluation, configuration, boundaries.
+- [Implementation roadmap](docs/IMPLEMENTATION_ROADMAP.md): phase sequence and acceptance gates.
+- [Security model](docs/SECURITY_MODEL.md): trust boundaries and threat model.
+- [Security risk register](docs/SECURITY_RISK_REGISTER.md): known risks and mitigations.
+- [Platform integration contract](docs/integration/TINLANCE_AGENT_PLATFORM.md): advisory contract and authority separation.
+
+## Technical references
+
+- [API authorization matrix](docs/API_AUTHORIZATION_MATRIX.md)
+- [Approval lifecycle](docs/APPROVAL_LIFECYCLE.md)
+- [Context integrity](docs/CONTEXT_INTEGRITY.md)
+- [OpenShell runtime acceptance](docs/OPEN_SHELL_RUNTIME.md)
+- [ThreatFade Oracle contract](docs/THREATFADE_ORACLE.md)
+- [Skill supply chain](docs/SKILL_SUPPLY_CHAIN.md)
+- [Inter-agent security](docs/INTER_AGENT_SECURITY.md)
+- [Database recovery](docs/DATABASE_RECOVERY.md)
+- [Incident response](docs/INCIDENT_RESPONSE.md)
+- [Deployment rollback](docs/DEPLOYMENT_ROLLBACK.md)
+- [Production release acceptance](docs/PRODUCTION_RELEASE_ACCEPTANCE.md)
+- [Standards traceability](docs/STANDARDS_TRACEABILITY.md)
+- [Local demo script](docs/DEMO_SCRIPT.md)
+
+## Governance
+
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security reporting](SECURITY.md)
+- [Support](SUPPORT.md)
+- [Changelog](CHANGELOG.md)
+- [Audit index](audits/README.md)
+
+## Limitations
+
+- Risk assessment is advisory; it does not grant permission, approve actions, or execute tools.
+- `runtime_observed: false` must remain explicit when the classifier only has caller-supplied metadata.
+- Local evidence storage is not the Tinlance Agent Platform audit system of record.
+- A verified trusted runtime integration and Platform-side conformance tests are required before production-integration claims.
+- CI success alone is not a security certification.

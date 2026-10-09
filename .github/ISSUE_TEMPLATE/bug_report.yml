@@ -1,0 +1,78 @@
+name: Bug report
+description: Report a reproducible defect in Auctaryn.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: "Do not report vulnerabilities publicly. Follow SECURITY.md."
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      description: Include the commit SHA or release tag.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - API
+        - Context integrity
+        - Execution gateway
+        - Identity and session binding
+        - Evidence and incident response
+        - ThreatFade integration
+        - OpenShell runtime integration
+        - Dashboard
+        - Docker / deployment
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python/Node/Docker versions, deployment mode, and sanitized configuration.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Use synthetic or non-sensitive data.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs or screenshots
+      description: Remove credentials, customer data, and personal information.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and documentation.
+          required: true
+        - label: I removed secrets and sensitive data.
+          required: true
+        - label: This is not a security vulnerability report.
+          required: true
