@@ -124,3 +124,18 @@ def test_external_threatfade_endpoint_requires_service_token(monkeypatch):
     monkeypatch.delenv("THREATFADE_SERVICE_TOKEN", raising=False)
     with pytest.raises(ValueError, match="required for external ThreatFade"):
         FusionOpsClient(base_url="https://threatfade.example")
+
+
+
+def test_cancelled_half_open_probe_releases_circuit_breaker(monkeypatch):
+    import asyncio
+
+    oracle = ThreatFadeOracle()
+    oracle.circuit_breaker = OracleCircuitBreaker(failure_threshold=1, cooldown_seconds=60)
+    oracle.circuit_breaker.record_failure()
+    oracle.circuit_breaker._opened_at = 0.0
+    oracle.client.detect_scenario = AsyncMock(side_effect=asyncio.CancelledError())
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(oracle.run_scenario("mixed"))
+    assert oracle.circuit_breaker._probe_in_flight is False
+    assert oracle.circuit_breaker._failures == 2
