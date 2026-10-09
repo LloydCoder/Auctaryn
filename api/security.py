@@ -48,3 +48,11 @@ def extract_bearer(authorization: str | None) -> str | None:
     if not separator or scheme.lower() != "bearer" or not credential.strip():
         return None
     return credential.strip()
+
+
+def origin_allowed(origin: str | None) -> bool:
+    """Reject browser WebSocket origins outside the configured CORS allowlist."""
+    if not origin:
+        return True  # non-browser clients must still authenticate with a key
+    from core.config import get_config
+    return origin in get_config().server.cors_origins
