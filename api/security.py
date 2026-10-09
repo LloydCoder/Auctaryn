@@ -25,9 +25,33 @@ def credentials_are_distinct() -> bool:
     return not service_key or not admin_key or not hmac.compare_digest(service_key, admin_key)
 
 
+def credentials_are_strong() -> bool:
+    """Require distinct, non-placeholder API keys of at least 32 characters."""
+    service_key = os.getenv("AUCTARYN_API_KEY")
+    admin_key = os.getenv("AUCTARYN_ADMIN_API_KEY")
+    if not service_key or not admin_key or hmac.compare_digest(service_key, admin_key):
+        return False
+    placeholders = ("replace-with", "change-me", "changeme", "password", "example")
+    return all(
+        len(key) >= 32 and not any(marker in key.lower() for marker in placeholders)
+        for key in (service_key, admin_key)
+    )
+
+
+def _strong_keys_required() -> bool:
+    return os.getenv("AUCTARYN_REQUIRE_STRONG_API_KEYS", "true").strip().lower() not in {
+        "0", "false", "no", "off",
+    }
+
+
 def token_role(token: str | None) -> str | None:
-    """Return 'admin', 'api', or None; reject misconfigured identical keys."""
-    if not isinstance(token, str) or not token or not credentials_are_distinct():
+    """Return 'admin', 'api', or None; reject weak or identical configured keys."""
+    if (
+        not isinstance(token, str)
+        or not token
+        or not credentials_are_distinct()
+        or (_strong_keys_required() and not credentials_are_strong())
+    ):
         return None
     if _matches(token, os.getenv("AUCTARYN_ADMIN_API_KEY")):
         return "admin"
@@ -37,10 +61,12 @@ def token_role(token: str | None) -> str | None:
 
 
 def configured_for(role: str) -> bool:
-    """Fail closed when requested credentials are missing or misconfigured."""
+    """Fail closed when requested credentials are missing, weak or misconfigured."""
+    if not credentials_are_distinct() or (_strong_keys_required() and not credentials_are_strong()):
+        return False
     if role == "admin":
-        return bool(os.getenv("AUCTARYN_ADMIN_API_KEY")) and credentials_are_distinct()
-    return bool(os.getenv("AUCTARYN_API_KEY") or os.getenv("AUCTARYN_ADMIN_API_KEY")) and credentials_are_distinct()
+        return bool(os.getenv("AUCTARYN_ADMIN_API_KEY"))
+    return bool(os.getenv("AUCTARYN_API_KEY") or os.getenv("AUCTARYN_ADMIN_API_KEY"))
 
 
 def extract_bearer(authorization: str | None) -> str | None:
