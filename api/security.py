@@ -12,7 +12,10 @@ from fastapi import Header, HTTPException, status
 def _matches(candidate: object, configured: str | None) -> bool:
     return (
         isinstance(candidate, str)
+        and candidate.isascii()
         and bool(candidate)
+        and isinstance(configured, str)
+        and configured.isascii()
         and bool(configured)
         and hmac.compare_digest(candidate, configured)
     )
@@ -22,14 +25,20 @@ def credentials_are_distinct() -> bool:
     """Prevent a service credential from accidentally becoming an admin credential."""
     service_key = os.getenv("AUCTARYN_API_KEY")
     admin_key = os.getenv("AUCTARYN_ADMIN_API_KEY")
-    return not service_key or not admin_key or not hmac.compare_digest(service_key, admin_key)
+    if not service_key or not admin_key:
+        return True
+    if not service_key.isascii() or not admin_key.isascii():
+        return False
+    return not hmac.compare_digest(service_key, admin_key)
 
 
 def credentials_are_strong() -> bool:
     """Require distinct, non-placeholder API keys of at least 32 characters."""
     service_key = os.getenv("AUCTARYN_API_KEY")
     admin_key = os.getenv("AUCTARYN_ADMIN_API_KEY")
-    if not service_key or not admin_key or hmac.compare_digest(service_key, admin_key):
+    if not service_key or not admin_key or not service_key.isascii() or not admin_key.isascii():
+        return False
+    if hmac.compare_digest(service_key, admin_key):
         return False
     placeholders = ("replace-with", "change-me", "changeme", "password", "example")
     return all(
