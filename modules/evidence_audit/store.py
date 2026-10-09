@@ -14,6 +14,7 @@ from uuid import uuid4
 
 ZERO_HASH = "0" * 64
 MAX_PAGE_SIZE = 500
+ALLOWED_DETAIL_KEYS = {"decision", "action_fingerprint", "confidence", "risk_level", "receipt_hash", "runtime_adapter"}
 
 
 class EvidenceStoreError(RuntimeError):
@@ -97,14 +98,22 @@ class EvidenceStore:
         safe_details: dict[str, Any] = {}
         for key, value in details.items():
             safe_key = self._text(key, 64)
-            if not safe_key or not isinstance(value, (str, int, float, bool, type(None))):
-                raise ValueError("details must contain scalar values")
-            if isinstance(value, str):
-                safe_details[safe_key] = self._text(value, 512)
-            elif isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
-                raise ValueError("non-finite detail values are not allowed")
+            if safe_key not in ALLOWED_DETAIL_KEYS:
+                raise ValueError("detail key is not in the evidence allowlist")
+            if safe_key in {"action_fingerprint", "receipt_hash"}:
+                if not isinstance(value, str) or len(value) != 64 or any(ch not in "0123456789abcdef" for ch in value.lower()):
+                    raise ValueError("fingerprint details must be 64 hexadecimal characters")
+                safe_details[safe_key] = value.lower()
+            elif safe_key in {"decision", "risk_level", "runtime_adapter"}:
+                if not isinstance(value, str) or len(value) > 128 or any(ord(ch) < 32 for ch in value):
+                    raise ValueError("classification details must be short printable strings")
+                safe_details[safe_key] = self._text(value, 128)
+            elif safe_key == "confidence":
+                if not isinstance(value, (int, float)) or isinstance(value, bool) or not 0.0 <= float(value) <= 1.0:
+                    raise ValueError("confidence must be between zero and one")
+                safe_details[safe_key] = float(value)
             else:
-                safe_details[safe_key] = value
+                raise ValueError("unsupported evidence detail")
         occurred_at = datetime.now(timezone.utc).isoformat()
         payload = {
             "schema": "auctaryn.evidence-record.v1", "record_id": uuid4().hex,
