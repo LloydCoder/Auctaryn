@@ -7,7 +7,7 @@ const SITE_LINKS = {
   docs: '/docs.html',
   about: '/about.html',
   dashboard: '/docs.html#quickstart',
-  apiDocs: 'http://localhost:8400/docs',
+  apiDocs: 'https://github.com/LloydCoder/Auctaryn',
   github: 'https://github.com/LloydCoder/Auctaryn',
   tinlance: 'https://tinlance.com',
   contact: 'mailto:hello@tinlance.com',
