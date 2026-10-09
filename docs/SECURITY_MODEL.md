@@ -59,7 +59,7 @@ The Oracle circuit breaker opens after repeated upstream failures and permits on
 
 ## Memory integrity and poisoning boundary
 
-- Memory API operations require a valid short-lived agent identity token with `memory:write` or `memory:read` scope and a server-issued session bound to that agent. A caller-supplied session ID is not accepted as proof of ownership.
+- Memory API operations require a valid short-lived agent identity token with `memory:write` or `memory:read` scope and a server-issued session bound to that agent and the exact scoped token, with a maximum one-hour TTL. A caller-supplied session ID is not accepted as proof of ownership.
 - Public API submissions cannot assert trusted provenance. The API prefixes source labels with `api:`, which always routes entries to quarantine pending review. Only a separately trusted internal ingestion path may use the module's trusted provenance labels.
 - Memory entries use unique opaque IDs, bounded content/source/session/agent fields, and a bounded in-process store. The SHA-256 integrity digest binds content, source, session, agent, quarantine state, key and creation timestamp.
 - Integrity verification compares the live entry with a separately held last-known-good snapshot. API metadata reads detect tampering and attempt rollback before returning the result; memory content is not returned by the metadata endpoint.
