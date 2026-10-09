@@ -4,6 +4,7 @@ Evaluates agent actions and records enforceable decisions before execution.
 """
 
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone, timedelta
 
 from core.models import (
@@ -21,7 +22,8 @@ logger = get_logger("execution_gateway")
 class ExecutionGateway:
     def __init__(self, auto_approve_safe: bool = True, oracle=None,
                  identity_manager=None, circuit_breaker=None,
-                 pending_ttl_seconds: int = 900):
+                 pending_ttl_seconds: int = 900,
+                 context_integrity_guard: Callable[[ToolCall], str | None] | None = None):
         if pending_ttl_seconds < 1:
             raise ValueError("pending_ttl_seconds must be positive")
         self.pending_ttl_seconds = pending_ttl_seconds
@@ -35,10 +37,26 @@ class ExecutionGateway:
         self.oracle = oracle
         self.identity_manager = identity_manager
         self.circuit_breaker = circuit_breaker
+        self.context_integrity_guard = context_integrity_guard
 
     def _check_identity_and_breaker(self, tool_call: ToolCall) -> GatewayDecision | None:
-        """Return a terminal denial if the caller lacks identity/scope or is isolated."""
+        """Return a terminal denial when context, identity, or isolation preflight fails."""
         agent_id = tool_call.agent_id
+
+        if self.context_integrity_guard is not None:
+            try:
+                context_denial = self.context_integrity_guard(tool_call)
+            except Exception:
+                context_denial = "Context integrity preflight unavailable; action denied."
+            if context_denial:
+                return GatewayDecision(
+                    id=uuid.uuid4().hex,
+                    tool_call=tool_call,
+                    risk_level=RiskLevel.CRITICAL,
+                    decision=ActionDecision.DENIED,
+                    reason=context_denial,
+                    decided_by="context_integrity_guard",
+                )
 
         if self.circuit_breaker is not None:
             if not agent_id or self.circuit_breaker.is_open(agent_id):
