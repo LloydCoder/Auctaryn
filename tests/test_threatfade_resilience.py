@@ -122,5 +122,5 @@ def test_invalid_scenario_does_not_trip_upstream_circuit_breaker(monkeypatch):
 
 def test_external_threatfade_endpoint_requires_service_token(monkeypatch):
     monkeypatch.delenv("THREATFADE_SERVICE_TOKEN", raising=False)
-    with pytest.raises(ValueError, match="required for external HTTPS"):
+    with pytest.raises(ValueError, match="required for external ThreatFade"):
         FusionOpsClient(base_url="https://threatfade.example")
