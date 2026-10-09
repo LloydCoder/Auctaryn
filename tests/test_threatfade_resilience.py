@@ -140,3 +140,10 @@ def test_cancelled_half_open_probe_releases_circuit_breaker(monkeypatch):
         asyncio.run(oracle.run_scenario("mixed"))
     assert oracle.circuit_breaker._probe_in_flight is False
     assert oracle.circuit_breaker._failures == 2
+
+
+
+def test_pcap_client_rejects_unrecognized_file_header():
+    client = FusionOpsClient()
+    with pytest.raises(ValueError, match="recognized PCAP"):
+        asyncio.run(client.detect_pcap(b"not-a-pcap", "capture.pcap"))
