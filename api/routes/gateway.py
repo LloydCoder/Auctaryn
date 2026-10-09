@@ -192,7 +192,7 @@ async def execute_approved_decision(decision_id: str) -> dict:
     decision = next((item for item in get_gateway().history if item.id == decision_id), None)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
-    if decision.decision != ActionDecision.APPROVED or decision.decided_by == "auto":
+    if decision.decision != ActionDecision.APPROVED or decision.decided_by != "authenticated_operator":
         raise HTTPException(status_code=409, detail="Decision has not been explicitly approved by an operator")
     try:
         receipt = await service.execute_approved_decision(decision)
