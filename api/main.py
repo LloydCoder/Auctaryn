@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from core.config import get_config
 from core.logging import setup_logging
 from api.security import configured_for, extract_bearer, token_role
-from api.routes import health, context, gateway, threatfade, identity, skills, memory, risk, evidence
+from api.routes import health, context, gateway, threatfade, identity, skills, memory, risk, evidence, incident
 from api.websockets import actions, alerts
 from modules.execution_gateway.openshell_adapter import create_openshell_adapter_from_environment
 from modules.execution_gateway.runtime_adapter import RuntimeAdapterUnavailable
@@ -225,6 +225,7 @@ def create_app() -> FastAPI:
     app.include_router(memory.router, prefix="/api/v1/memory", tags=["Memory Defender (ASI06)"])
     app.include_router(risk.router, prefix="/api/v1/risk", tags=["Advisory Risk Assessment"])
     app.include_router(evidence.router, prefix="/api/v1/evidence", tags=["Evidence Audit"])
+    app.include_router(incident.router, prefix="/api/v1/incident", tags=["Incident Response"])
     app.include_router(actions.router, tags=["WebSocket — Actions"])
     app.include_router(alerts.router, tags=["WebSocket — Alerts"])
     return app
