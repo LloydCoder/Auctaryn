@@ -3,7 +3,7 @@ TwinGuard — ThreatFade Oracle Tests (TDD Red-Green-Refactor)
 Tests the FusionOps HTTP client and Parliament adapter.
 Written FIRST. Implementation follows.
 
-FusionOps API contract (v0.3.0, live at 13.50.16.19):
+FusionOps API contract (v0.3.0, endpoint configured via environment):
 - GET  /health
 - GET  /events?limit=N
 - POST /detect/json   {timestamps, values, source_label}
@@ -111,13 +111,13 @@ class TestFusionOpsClient:
 
     def test_client_initialization(self):
         from modules.threatfade_oracle.client import FusionOpsClient
-        client = FusionOpsClient(base_url="http://13.50.16.19")
-        assert client.base_url == "http://13.50.16.19"
+        client = FusionOpsClient(base_url="https://fusionops.example.test")
+        assert client.base_url == "https://fusionops.example.test"
 
     def test_client_default_url(self):
         from modules.threatfade_oracle.client import FusionOpsClient
         client = FusionOpsClient()
-        assert "13.50.16.19" in client.base_url
+        assert client.base_url == "http://threatfade:8401"
 
     @pytest.mark.asyncio
     async def test_health_check_success(self):
