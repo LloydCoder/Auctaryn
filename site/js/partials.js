@@ -70,7 +70,7 @@ function renderFooter() {
             <h4>Product</h4>
             <a href="${SITE_LINKS.home}#product">Overview</a>
             <a href="${SITE_LINKS.pricing}">Pricing</a>
-            <a href="${SITE_LINKS.dashboard}" target="_blank">Live Demo</a>
+            <a href="${SITE_LINKS.dashboard}" target="_blank">Demo setup</a>
             <a href="${SITE_LINKS.docs}">Documentation</a>
           </div>
           <div class="footer-col">
