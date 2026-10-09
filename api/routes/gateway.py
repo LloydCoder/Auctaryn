@@ -6,7 +6,7 @@ Wired to ExecutionGateway + ThreatFade Oracle (Parliament integration)
 
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.models import ToolCall, ActionClassification, GatewayDecision
 from modules.execution_gateway.gateway import ExecutionGateway
