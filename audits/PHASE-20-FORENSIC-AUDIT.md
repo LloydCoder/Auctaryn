@@ -1,6 +1,6 @@
 # Phase 20 forensic audit — reliability, scale and disaster recovery
 
-**Status:** Phase 20 implementation, forensic review, merge, and post-merge CI completed. Merged main commit: `64394df2adfc58964987d36ad010a0705f07c707`.  
+**Status:** Phase 20 implementation and follow-up concurrency hardening are merged and verified. Initial post-merge run exposed a race when independent `EvidenceStore` instances initialized and wrote concurrently; PR #30 fixed it. Current verified main commit: `90416b8d4806e980e33686f96ceef6d6d6eb0b18`.  
 **Scope:** Safe local SQLite backup/verification/restore and concurrency regressions for the evidence and incident-control database.
 
 ## Threats and invariants reviewed
@@ -23,10 +23,12 @@
 ## CI acceptance evidence
 
 - PR-head workflow: [Auctaryn CI run 37957625483](https://github.com/LloydCoder/Auctaryn/actions/runs/37957625483) on `9132b146f560dc1c4bc673eb24035e9f8b19e341`.
-- Post-merge main workflow: [Auctaryn CI run 37957858071](https://github.com/LloydCoder/Auctaryn/actions/runs/37957858071) on `64394df2adfc58964987d36ad010a0705f07c707`.
+- Initial post-merge main workflow: [Auctaryn CI run 37957858071](https://github.com/LloydCoder/Auctaryn/actions/runs/37957858071) on `64394df2adfc58964987d36ad010a0705f07c707` exposed a concurrent initialization race in the stress test.
+- Follow-up fix: [PR #30](https://github.com/LloydCoder/Auctaryn/pull/30) serializes same-process initialization and append operations by canonical database path.
+- Final verified main workflow: [Auctaryn CI run 37959881631](https://github.com/LloydCoder/Auctaryn/actions/runs/37959881631) on `90416b8d4806e980e33686f96ceef6d6d6eb0b18`; all three jobs passed.
 
-- [x] Python 3.11: 487 tests passed; Ruff passed.
-- [x] Python 3.12: 487 tests passed; Ruff passed; `pip-audit` reported no known vulnerabilities.
+- [x] Phase 20 PR-head Python 3.11/3.12: 487 tests passed; Ruff passed.
+- [x] Final main after PR #30 Python 3.11/3.12 tests, Ruff and dependency audit passed; the concurrent evidence-store stress test passed with the process-local initialization/write lock.
 - [x] Dashboard production build and dependency audit passed.
 - [x] Deployment-script syntax, Compose validation, container build and API liveness passed.
 - [x] Merge completed and every required post-merge check passed.
