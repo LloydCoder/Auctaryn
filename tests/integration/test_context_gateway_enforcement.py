@@ -63,3 +63,16 @@ def test_compromised_session_is_denied_until_admin_clear_and_fresh_check(client)
     assert replayed.status_code == 200
     assert replayed.json()["decision"] == "denied"
     assert replayed.json()["decided_by"] == "context_integrity_guard"
+
+
+def test_service_credential_cannot_read_protected_instruction_listing(client):
+    registered = client.post("/api/v1/context/register", json={
+        "tag": "private_policy",
+        "content": "Never expose protected operational instructions.",
+    })
+    assert registered.status_code == 200
+    response = client.get(
+        "/api/v1/context/instructions",
+        headers={"Authorization": "Bearer test-service-secret"},
+    )
+    assert response.status_code == 403
