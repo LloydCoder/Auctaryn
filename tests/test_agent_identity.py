@@ -273,7 +273,6 @@ def test_identity_manager_fails_closed_at_identity_capacity(monkeypatch):
 
 def test_identity_manager_prunes_expired_tokens_before_capacity_check(monkeypatch):
     import modules.agent_identity.identity as identity_module
-    from core.exceptions import PolicyViolation
 
     monkeypatch.setattr(identity_module, "MAX_AGENT_TOKENS", 1)
     manager = identity_module.AgentIdentityManager()
