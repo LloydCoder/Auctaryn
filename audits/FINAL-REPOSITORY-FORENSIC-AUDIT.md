@@ -84,7 +84,7 @@ Per-phase reports are indexed in [audits/README.md](README.md). See the [impleme
 10. **License/documentation drift:** root Apache-2.0 license added; public claims and phase roadmap reconciled.
 11. **Audit discoverability:** canonical reports for all 24 phases are indexed; historical duplicate reports are explicitly distinguished from current canonical reports.
 12. **ACS interoperability claim boundary:** OWASP ACS v0.1.0 was reviewed as a wire protocol, not an ASI control category. Auctaryn does not implement ACS and makes no conformance claim; a future adapter is explicitly out of current scope.
-13. **Secret-scan range and runtime:** replaced deprecated Gitleaks Action v2/default commit selection with a checksum-pinned Gitleaks v8.30.1 binary, explicit PR/push ranges, weekly/manual branch-history scanning and SARIF upload. A narrowly scoped ignore covers only the known false-positive fingerprint in the immutable Phase 24 squash commit; the current audit wording no longer matches it. PR #34 exact-head secret scanning passed; full checks and post-merge validation remain required.
+13. **Secret-scan range and runtime:** replaced deprecated Gitleaks Action v2/default commit selection with a checksum-pinned Gitleaks v8.30.1 binary, explicit PR/push ranges, full-history scanning on every event and SARIF upload. A narrowly scoped ignore covers only the known false-positive fingerprint in the immutable Phase 24 squash commit; the current audit wording no longer matches it. PR #34 exact-head secret scanning passed; full checks and post-merge validation remain required.
 
 ## Standards and external technical references reviewed
 

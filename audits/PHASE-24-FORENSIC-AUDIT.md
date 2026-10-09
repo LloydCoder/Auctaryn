@@ -127,7 +127,7 @@ This audit does not represent external gates as completed. No independent penetr
 
 **Risk:** the prior Gitleaks Action v2 workflow ran on the deprecated Node 20 action runtime and its default commit selection did not reliably cover the complete squash-merge change set. A post-merge scan exposed a generic-api-key false positive in a prose row of the final audit, demonstrating that PR-only checks had not caught the same line.
 
-**Remediation:** the workflow now installs checksum-pinned Gitleaks v8.30.1, scans the explicit `base..head` range for pull requests and `before..after` for pushes, scans all ancestors of the selected ref on weekly/manual runs, and uploads SARIF even on failure. The final audit wording was corrected. A single `.gitleaksignore` fingerprint is scoped to the immutable historical commit/line that contained the false positive; it does not ignore the rule, path or any future line. The exact-head scan on PR #34 reported no leaks. Full CI and post-merge verification remain required.
+**Remediation:** the workflow now installs checksum-pinned Gitleaks v8.30.1, scans the explicit `base..head` range for pull requests and `before..after` for pushes, scans all ancestors of the selected ref on every event (including weekly/manual runs), and uploads SARIF even on failure. The final audit wording was corrected. A single `.gitleaksignore` fingerprint is scoped to the immutable historical commit/line that contained the false positive; it does not ignore the rule, path or any future line. The exact-head scan on PR #34 reported no leaks. Full CI and post-merge verification remain required.
 
 ## External standards review — OWASP Agent Control Standard
 
