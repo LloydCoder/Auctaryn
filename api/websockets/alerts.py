@@ -1,64 +1,75 @@
-"""
-TwinGuard — Alerts WebSocket
-Real-time stream of security alerts across all modules.
-"""
-
+"""Authenticated WebSocket stream for Auctaryn security alerts."""
+import asyncio
 import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from api.security import token_role
 from core.logging import get_logger
 
 router = APIRouter()
 logger = get_logger("websocket.alerts")
-
 _alert_clients: list[WebSocket] = []
 
 
 async def broadcast_alert(data: dict) -> None:
-    """Broadcast an alert to all connected clients."""
     message = json.dumps(data, default=str)
     disconnected = []
-
-    for client in _alert_clients:
+    for client in list(_alert_clients):
         try:
             await client.send_text(message)
         except Exception:
             disconnected.append(client)
-
     for client in disconnected:
-        _alert_clients.remove(client)
+        if client in _alert_clients:
+            _alert_clients.remove(client)
 
 
 @router.websocket("/ws/alerts")
 async def alerts_websocket(websocket: WebSocket):
-    """WebSocket endpoint for real-time security alerts."""
+    """Require a valid API credential in the first WebSocket frame."""
     await websocket.accept()
-    _alert_clients.append(websocket)
-    logger.info("Alert WebSocket client connected", extra={"event": "ws_connect"})
-
     try:
+        raw = await asyncio.wait_for(websocket.receive_text(), timeout=10)
+        message = json.loads(raw)
+        if message.get("type") != "authenticate" or token_role(message.get("token")) is None:
+            await websocket.close(code=4401, reason="Valid authentication frame required")
+            return
+
+        _alert_clients.append(websocket)
         await websocket.send_json({
-            "type": "connected",
+            "type": "authenticated",
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "message": "Connected to TwinGuard alert stream",
         })
+        logger.info("Alert WebSocket authenticated", extra={"event": "ws_authenticated"})
 
         while True:
-            data = await websocket.receive_text()
+            raw = await websocket.receive_text()
             try:
-                msg = json.loads(data)
-                if msg.get("type") == "acknowledge":
-                    # TODO: Mark alert as acknowledged (Phase 4)
-                    await websocket.send_json({
-                        "type": "ack_confirmed",
-                        "alert_id": msg.get("alert_id"),
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    })
+                msg = json.loads(raw)
             except json.JSONDecodeError:
-                pass
-
+                await websocket.send_json({"type": "error", "message": "Invalid JSON"})
+                continue
+            if msg.get("type") == "acknowledge":
+                # Acknowledgement is intentionally not reported as complete until
+                # durable alert state exists; this API does not persist acknowledgements.
+                await websocket.send_json({
+                    "type": "ack_not_supported",
+                    "alert_id": msg.get("alert_id"),
+                    "message": "Alert acknowledgements are not persisted by this service.",
+                })
+    except asyncio.TimeoutError:
+        await websocket.close(code=4408, reason="Authentication timed out")
     except WebSocketDisconnect:
-        _alert_clients.remove(websocket)
-        logger.info("Alert WebSocket client disconnected", extra={"event": "ws_disconnect"})
+        pass
+    except Exception:
+        logger.exception("Alert WebSocket failed", extra={"event": "ws_error"})
+        try:
+            await websocket.close(code=1011, reason="WebSocket processing error")
+        except Exception:
+            pass
+    finally:
+        if websocket in _alert_clients:
+            _alert_clients.remove(websocket)
+        logger.info("Alert WebSocket disconnected", extra={"event": "ws_disconnect"})
