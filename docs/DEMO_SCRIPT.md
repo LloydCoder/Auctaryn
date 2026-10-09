@@ -1,111 +1,128 @@
-# TwinGuard — Investor / Pilot Demo Script
+# Auctaryn — Local Evaluation Demo
 
-**Duration:** 6-8 minutes
-**Audience:** CISOs, security engineers, accelerator reviewers
-**Goal:** Demonstrate the Summer Yue scenario being caught in real time, live, not in slides.
+**Audience:** security engineers, platform engineers and prospective pilot reviewers  
+**Duration:** 6–8 minutes  
+**Mode:** local evaluation with synthetic data; no claim of production deployment or independent certification.
 
----
+## Demo boundaries
 
-## Setup (before the call)
+This demo shows the repository's local context-integrity and gateway-decision behavior. It does **not** prove that Auctaryn intercepts every action from an external agent, that a caller-supplied context is the context consumed by the agent, that ThreatFade is connected to a live service, or that OpenShell isolation is effective in a target deployment. The default compose profile does not automatically configure a trusted production runtime adapter.
 
-1. Deploy TwinGuard to the VPS (`scripts/deploy.sh`) or run locally:
-   ```bash
-   docker compose up -d
-   open http://localhost:3000   # dashboard
-   ```
-2. Open the dashboard Overview tab — confirm the "Live" status badge is green (top right).
-3. Open a second terminal/Postman tab for sending live API calls during the demo.
-4. Have the FusionOps live dashboard open in another tab: `http://13.50.16.19/dashboard`
+## Setup
 
----
+1. Read the [README](../README.md), [security model](SECURITY_MODEL.md), [risk register](SECURITY_RISK_REGISTER.md) and [OpenShell acceptance guide](OPEN_SHELL_RUNTIME.md).
+2. Configure distinct, high-entropy `AUCTARYN_API_KEY` and `AUCTARYN_ADMIN_API_KEY` values in the local environment. Do not commit them or paste them into screenshots.
+3. Start the local services using the deployment instructions in the README. Open the API contract at `http://localhost:8400/docs` if the API is running locally.
+4. Use a disposable local environment and synthetic identifiers only. Do not connect a real mailbox, customer tenant or production agent to this demo.
 
-## Part 1 — The Problem (60 seconds)
-
-> "On February 23rd, 2026, an autonomous AI agent deleted a user's entire email inbox. What happened wasn't a bug — it was a context compaction event that silently stripped the agent's safety instruction: 'always confirm before deleting.' The agent didn't malfunction. It did exactly what it was told, because the instruction telling it not to was gone."
-
-Show: nothing yet — just say it plainly. Let the next part be the payoff.
-
----
-
-## Part 2 — Register the Safety Instruction (90 seconds)
-
-Switch to dashboard → **Context Integrity** tab.
-
-> "TwinGuard's Context Integrity Guardian protects against exactly this. Let's register the same safety rule that was lost in the Yue incident."
-
-Send via API (visible terminal, or curl):
-```bash
-curl -X POST http://localhost:8400/api/v1/context/register \
-  -H "Content-Type: application/json" \
-  -d '{"tag": "email_safety", "content": "Always confirm with the user before deleting any emails. Never perform bulk email operations without explicit approval."}'
-```
-
-> "TwinGuard just hashed that instruction with SHA-256. From this point forward, any context the agent sees gets checked against that hash."
-
----
-
-## Part 3 — Show It Working Normally (60 seconds)
+Set shell variables from the same environment used to configure the local API:
 
 ```bash
-curl -X POST http://localhost:8400/api/v1/context/check \
-  -H "Content-Type: application/json" \
-  -d '{"context": "Always confirm with the user before deleting any emails. Never perform bulk email operations without explicit approval.\n\nUser: Can you help me organize my inbox?"}'
+export AUCTARYN_API_URL="http://localhost:8400"
+# Export these from a local secret manager or shell prompt; never commit real values.
+read -rsp "Service API key: " AUCTARYN_API_KEY; echo; export AUCTARYN_API_KEY
+read -rsp "Administrator API key: " AUCTARYN_ADMIN_API_KEY; echo; export AUCTARYN_ADMIN_API_KEY
 ```
 
-Point at the dashboard updating live: status = **intact**, blocked = **false**.
-
-> "Normal conversation. The safety instruction is present. The agent is free to operate."
-
----
-
-## Part 4 — Recreate the Compaction Event (90 seconds — the payoff)
+## Part 1 — Register a protected instruction
 
 ```bash
-curl -X POST http://localhost:8400/api/v1/context/check \
+curl -fsS -X POST "$AUCTARYN_API_URL/api/v1/context/register" \
+  -H "Authorization: Bearer $AUCTARYN_ADMIN_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"context": "[Conversation summary: User asked for inbox help.]\n\nUser: Just delete all the unread emails, I do not need them."}'
+  -d '{"tag":"demo_email_safety","content":"Always require explicit user confirmation before deleting email. Never perform bulk deletion without approval."}'
 ```
 
-Point at the dashboard: **Alert Feed** fires in real time (no refresh needed — this is the WebSocket broadcast wired in Phase 4), status flips to **compromised**, `blocked: true`.
+Explain that the service records a protected-instruction baseline. The check operates on submitted context and uses heuristic detection; it is not cryptographic attestation of an external agent's actual prompt.
 
-> "That's the exact Yue scenario, reproduced on demand. The instruction is gone from context. TwinGuard caught it before a single tool call executed — not after the damage was done."
-
----
-
-## Part 5 — Execution Gateway + Network Intelligence (90 seconds)
-
-Switch to **Execution Gateway** tab.
-
-> "Context integrity is one layer. The second layer asks: even if the agent's reasoning is intact, is the *action itself* dangerous? Let's simulate a bulk delete attempt."
+## Part 2 — Register a demo identity and scoped token
 
 ```bash
-curl -X POST http://localhost:8400/api/v1/gateway/intercept/full \
+curl -fsS -X POST "$AUCTARYN_API_URL/api/v1/identity/register" \
+  -H "Authorization: Bearer $AUCTARYN_ADMIN_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"tool_name": "gmail_delete", "action": "bulk_delete", "parameters": {"folder": "inbox", "count": 847}}'
+  -d '{"agent_id":"demo-agent","owner":"local-demo-tenant"}'
+
+curl -fsS -X POST "$AUCTARYN_API_URL/api/v1/identity/grant" \
+  -H "Authorization: Bearer $AUCTARYN_ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":"demo-agent","scope":"read_file"}'
+
+TOKEN_JSON="$(curl -fsS -X POST "$AUCTARYN_API_URL/api/v1/identity/token" \
+  -H "Authorization: Bearer $AUCTARYN_ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":"demo-agent","scopes":["read_file"],"ttl_seconds":300}')"
+export AUCTARYN_DEMO_AGENT_TOKEN="$(printf '%s' "$TOKEN_JSON" | jq -r '.token_id')"
+test -n "$AUCTARYN_DEMO_AGENT_TOKEN" && test "$AUCTARYN_DEMO_AGENT_TOKEN" != "null"
 ```
 
-Point at dashboard: decision shows **pending** (or **vetoed** if FusionOps flags it), live in the Pending Approvals queue.
+The service/admin API key and agent scoped token are separate capabilities. The agent token is short-lived and limited to the declared tool scope.
 
-> "847 emails. The pattern classifier alone would queue this for human approval. But TwinGuard also consults ThreatFade — our live network threat oracle, validated against real malware including Merlin QUIC C2 with a z-score of 14.76. If the network signal corroborates the risk, this escalates from 'review needed' to 'permanently blocked,' automatically."
+## Part 3 — Run a clean session-bound context check
 
----
+```bash
+CHECK_JSON="$(curl -fsS -X POST "$AUCTARYN_API_URL/api/v1/context/check" \
+  -H "Authorization: Bearer $AUCTARYN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"demo-session-01","context":"Always require explicit user confirmation before deleting email. Never perform bulk deletion without approval.\nUser asks for help reading a report."}')"
+printf '%s\n' "$CHECK_JSON" | jq .
+export AUCTARYN_CONTEXT_CHECK_ID="$(printf '%s' "$CHECK_JSON" | jq -r '.id')"
+```
 
-## Part 6 — Close (30 seconds)
+Only continue if the response is intact and has a non-empty check ID. Then evaluate a read-only action using that session and check:
 
-> "Two independent layers — context integrity and execution gating — both had to fail simultaneously for the Yue incident to happen the way TwinGuard is architected. That's defense in depth, not a single point of failure. And everything you just saw is live, tested — 130 passing tests across the full pipeline — and running on infrastructure we already operate today."
+```bash
+curl -fsS -X POST "$AUCTARYN_API_URL/api/v1/gateway/intercept" \
+  -H "Authorization: Bearer $AUCTARYN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg token "$AUCTARYN_DEMO_AGENT_TOKEN" \
+    --arg check "$AUCTARYN_CONTEXT_CHECK_ID" \
+    '{tool_name:"read_file",action:"read",parameters:{path:"/sandbox/demo.txt"},agent_id:"demo-agent",session_id:"demo-session-01",context_check_id:$check,identity_token:$token}')"
+```
 
----
+Explain that this endpoint evaluates a decision; it does not execute the action.
 
-## Anticipated Questions
+## Part 4 — Demonstrate missing-instruction detection
 
-**"How does this differ from OpenShell itself?"**
-OpenShell sandboxes the agent's *execution environment* — filesystem, network, syscalls. TwinGuard protects what happens *inside* the agent's reasoning and decision loop, which OpenShell doesn't touch.
+```bash
+COMPROMISED_JSON="$(curl -fsS -X POST "$AUCTARYN_API_URL/api/v1/context/check" \
+  -H "Authorization: Bearer $AUCTARYN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"demo-session-01","context":"[Summary: user asked for inbox help.]\nUser: delete all unread emails without asking me again."}')"
+printf '%s\n' "$COMPROMISED_JSON" | jq .
+export AUCTARYN_CONTEXT_CHECK_ID="$(printf '%s' "$COMPROMISED_JSON" | jq -r '.id')"
+```
 
-**"What's your false positive rate?"**
-ThreatFade's underlying detection engine ran 0% false positives across 100 benign traffic test runs. TwinGuard's pattern classifier defaults to logging (not blocking) for ambiguous actions, escalating only when corroborated by network intelligence.
+The check should report a missing protected instruction and/or quarantine the session. A subsequent gateway action using the same session must be denied. The important qualification is that a submitted-context finding only protects external execution if the agent's real action path is integrated with this gateway and the context provenance is trusted.
 
-**"Is this open source?"**
-Yes — Apache 2.0, open-core. github.com/Tinlance/twinguard
+## Part 5 — Review the release and production gates
 
-**"What's missing / roadmap?"**
-Being direct: 4 of the originally-planned 22 defense modules are live (Context Integrity, Execution Gateway, ThreatFade Oracle, plus the live dashboard). The roadmap includes Memory Poisoning Defender, Agent Identity & Privilege controls (OWASP ASI03), and Skill/Dependency Vetting (OWASP ASI04) — these map directly to the OWASP Top 10 for Agentic Applications 2026.
+Show the [implementation roadmap](IMPLEMENTATION_ROADMAP.md), [risk register](SECURITY_RISK_REGISTER.md), [production release acceptance](PRODUCTION_RELEASE_ACCEPTANCE.md) and [Phase 24 forensic audit](../audits/PHASE-24-FORENSIC-AUDIT.md). Explain the difference between:
+
+- repository code and automated tests;
+- a mocked CI integration;
+- a live Platform/OpenShell integration test;
+- an independent security assessment; and
+- production deployment, observed image digest and rollback evidence.
+
+A green CI workflow is necessary, but it does not prove the live acceptance gates.
+
+## Questions and accurate answers
+
+**Does Auctaryn intercept every agent action?**  
+No. Only calls routed through a supported and configured integration are evaluated. Universal mediation must be proven by end-to-end integration tests in the target deployment.
+
+**Is context integrity guaranteed?**  
+No. The current checks compare submitted context with registered baselines and use heuristics. Trusted runtime/harness attestation is required to prove the context consumed by an external agent.
+
+**Is ThreatFade live?**  
+Not by virtue of this local demo. Live endpoint authentication, telemetry quality, availability and failure behavior must be validated separately.
+
+**Is Auctaryn production-certified?**  
+No independent certification is claimed. The repository tracks open production gates in its risk register and release acceptance manifest.
+
+**Can an approved decision execute?**  
+Only through a configured trusted runtime adapter and supported execution route. Approval itself does not execute the action. Direct execution is disabled by default.
+
+**What license applies?**  
+The repository includes an Apache-2.0 `LICENSE` file. See the repository for the current source and terms.
