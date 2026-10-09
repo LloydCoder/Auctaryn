@@ -68,17 +68,29 @@ def detect_goal_hijack(registered_instruction: str, new_content: str) -> GoalHij
         term for term in re.findall(r"\b\w{5,}\b", registered_instruction.lower())
         if term not in stop_words
     }
-    new_terms = {
-        term for term in re.findall(r"\b\w{5,}\b", lowered_new)
-        if term not in stop_words
-    }
-    overlap = registered_terms & new_terms
-
-    if overlap:
-        return GoalHijackResult(
-            hijack_detected=True,
-            reason=f"Override language detected targeting protected instruction terms: {overlap}",
-        )
+    # Compare only the sentence containing the override phrase. Comparing the
+    # whole context would always overlap with a protected instruction that is
+    # still present, producing false positives for unrelated quoted content.
+    for match in re.finditer("|".join(f"(?:{pattern})" for pattern in HIJACK_OVERRIDE_PATTERNS), lowered_new):
+        left_candidates = [lowered_new.rfind(mark, 0, match.start()) for mark in (".", "!", "?", "\\n")]
+        start = max(left_candidates) + 1
+        right_candidates = [
+            position for mark in (".", "!", "?", "\\n")
+            if (position := lowered_new.find(mark, match.end())) >= 0
+        ]
+        end = min(right_candidates) if right_candidates else len(lowered_new)
+        candidate = lowered_new[start:end]
+        candidate_terms = {
+            term for term in re.findall(r"\b\w{5,}\b", candidate)
+            if term not in stop_words
+        }
+        overlap = registered_terms & candidate_terms
+        if overlap:
+            return GoalHijackResult(
+                hijack_detected=True,
+                reason="Override language targets protected instruction terms: "
+                + ", ".join(sorted(overlap)),
+            )
 
     return GoalHijackResult(hijack_detected=False)
 
