@@ -47,6 +47,23 @@ Auctaryn's `SensitiveDataGuard` runs before identity/risk processing and before 
 
 Values such as `vault://...` and `secret://...` are accepted as opaque references; Auctaryn does not resolve them or inject the underlying secret. A production integration must resolve such references through Tinlance Agent Platform's governed secret mechanism or an OpenShell provider profile, with endpoint-bound access. Never place a raw credential in a tool-call payload, command-line argument, log, or sandbox policy. The guard is defense in depth, not a substitute for a secret broker or DLP system.
 
+## Effective-policy pin verification
+
+After independently reviewing the active policy, capture the effective policy from the intended authenticated gateway:
+
+```bash
+openshell sandbox get "$OPENSHELL_SANDBOX_NAME" --policy-only > effective-policy.yaml
+sha256sum effective-policy.yaml
+```
+
+Review the policy content and digest through the normal change-approval process; do not trust a digest calculated from an unreviewed current policy. Set `AUCTARYN_EXPECTED_EFFECTIVE_POLICY_SHA256` to the approved 64-character digest and run:
+
+```bash
+python scripts/verify_openshell_policy.py
+```
+
+The verifier calls the documented OpenShell CLI with an argv list, a 10-second timeout and `shell=False`; it fails if the CLI fails or the effective-policy digest differs. Run it in the same authenticated CLI context as the gateway used by Auctaryn's SDK. This is an operator-run drift check, not a live check performed by every API request, and CI cannot run it without an actual gateway.
+
 ## Required production acceptance
 
 The repository's CI verifies the adapter contract with a fake client and executes the bounded supervisor wrapper in the CI runner. This is not proof that a live OpenShell gateway, sandbox image, credentials, and effective policy are correctly configured. Before production, run a live integration test against the intended gateway and verify:
