@@ -45,9 +45,9 @@ No architecture duplication or claim of universal runtime mediation was introduc
 |---:|---|---|---|
 | 1 | API authentication and administrator boundaries | Implemented; strong distinct 32+ character credentials, placeholder rejection and readiness checks; final audit covered | Real IdP/admin identity integration is not implied by local API-key tests |
 | 2 | Agent identity, scopes and delegation | Implemented locally with ownership-conflict checks, version invalidation, token pruning and bounded state | Platform-backed durable identity/key lifecycle remains open |
-| 3 | Versioned advisory risk contract | Implemented and schema-tested | Live consumer contract conformance remains an integration task |
-| 4 | Centralized authentication/authorization | Implemented and route-tested | Does not prove every external execution path is intercepted |
-| 5 | Sensitive-data guard | Implemented with redaction and secret-safe response tests | Not a complete DLP system |
+| 3 | Versioned advisory risk contract for Tinlance Agent Platform | Implemented and schema-tested; advisory findings remain non-authoritative | Live Platform consumer contract conformance remains an integration task |
+| 4 | Centralized authentication/authorization dependencies | Shared security module and route-level regression coverage implemented | Does not prove every external execution path is intercepted |
+| 5 | Sensitive-data guard across classification, interception, Oracle and execution ingress | Redaction and secret-safe response tests implemented | Not a complete DLP system |
 | 6 | Health/readiness semantics | Liveness and readiness separated; current detailed-health behavior reconciled | Live runtime availability must be tested against a real gateway |
 | 7 | Bounded OpenShell health probe | Same bounded asynchronous probe used by readiness and detailed health; sync probes fail closed | Fake-client CI does not prove live connectivity or effective policy |
 | 8 | Session-bound context integrity | Action intent bound to session/check; runtime-boundary revalidation; quarantine clearance restricted | Submitted context is not cryptographic proof of what an external model consumed; state remains local |
@@ -57,8 +57,8 @@ No architecture duplication or claim of universal runtime mediation was introduc
 | 12 | Memory integrity and poisoning defense | Provenance/integrity checks, quarantine, rollback and regression tests | Durable state and trusted quarantine-promotion integration remain open |
 | 13 | Skill/tool/MCP supply-chain defense | Signature and artifact-digest verification, immutable pins and change detection | Publisher trust persistence and runtime behavior integrity remain open |
 | 14 | Inter-agent security | HMAC envelope integrity, scoped messaging, expiry/replay defense, queue bounds and cascade containment | Durable key service, transport security and multi-replica replay state remain open |
-| 15 | Runtime/API integration hardening | Contract and fail-closed integration paths implemented | Real external integration acceptance remains required |
-| 16 | Memory and identity integrity | Local integrity and authority-boundary controls implemented | Durable Platform authority and independent validation remain required |
+| 15 | Unified explainable risk findings | Deterministic bounded findings with provenance, confidence, rationale, rule/control and evidence references; versioned additive schema | Live consumer conformance remains required; advisory output never grants authorization |
+| 16 | Evidence, audit and forensic investigation | Canonical chained records, optional HMAC authentication, decision/approval/execution correlation, bounded admin verification API and tamper/access-control tests | Local SQLite is defense-in-depth, not the Platform audit of record; off-host durability remains required |
 | 17 | Detection and incident response | Detection and incident workflow implemented and audited | Live telemetry and response-operational evidence remain required |
 | 18 | Adversarial benchmark | Repeatable ASI/ATLAS-oriented benchmark and regression tests | Internal benchmark is not independent assurance; false-positive/negative rates need external measurement |
 | 19 | Tenancy/admin boundaries | Route authorization and direct-execution restrictions implemented | Platform-side tenant binding and IdP/MFA assertions remain open |
