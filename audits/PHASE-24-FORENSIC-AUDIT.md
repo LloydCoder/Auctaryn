@@ -1,0 +1,99 @@
+# Phase 24 forensic audit — production release and ecosystem acceptance
+
+**Repository:** `LloydCoder/Auctaryn`  
+**Phase:** 24 of 24  
+**Review date:** 2026-10-09  
+**Scope:** release-evidence schema and validator, version-tag release workflow, OCI publication/attestation steps, tests, release runbook, supply-chain documentation, and roadmap reconciliation.
+
+## Executive result
+
+The repository implementation for Phase 24 is designed to fail closed. A valid pending manifest permits normal CI but does **not** authorize a release. Version-tag publication requires successful exact-commit CI, CodeQL and supply-chain runs, signed-off external evidence for independent security assessment, live Tinlance Agent Platform conformance, live OpenShell acceptance, and security-owner risk review. Post-deployment acceptance separately requires observed-vs-expected OCI digest equality and rollback-drill evidence.
+
+This audit does not represent external gates as completed. No independent penetration-test report, live Platform conformance evidence, live OpenShell acceptance evidence, production deployment digest, or production rollback drill is fabricated or inferred from CI. The checked-in manifest intentionally remains pending, and release publication must remain blocked.
+
+## Files reviewed
+
+- `.github/workflows/release.yml`
+- `scripts/verify_release_evidence.py`
+- `tests/test_release_evidence.py`
+- `release/release-evidence.json`
+- `docs/PRODUCTION_RELEASE_ACCEPTANCE.md`
+- `docs/SUPPLY_CHAIN.md`
+- `docs/IMPLEMENTATION_ROADMAP.md`
+- `.github/workflows/ci.yml`
+- `.github/workflows/codeql.yml`
+- `.github/workflows/supply-chain.yml`
+
+## Findings and remediation
+
+### P24-01 — Workflow evidence could refer to the wrong successful run
+
+**Risk:** a manifest could name a successful run for the same commit but not the required CI, CodeQL or supply-chain workflow. Run URL and run ID were not cryptographically or logically tied in the validator.
+
+**Remediation:** the tag gate now checks each recorded run's database ID, exact workflow name, `main` branch, `push` event, exact tested commit, successful conclusion and exact recorded URL. The evidence validator rejects reused run IDs and URLs that do not identify their recorded run ID.
+
+### P24-02 — Boolean finding counts could be treated as zero
+
+**Risk:** in Python, `False == 0`; a malformed assessment could therefore pass the zero-findings comparison.
+
+**Remediation:** assessment finding counts must be non-negative integers and explicitly cannot be booleans. A passed independent assessment must report zero unresolved critical and high findings and include a SHA-256 report digest.
+
+### P24-03 — Review timestamps lacked a machine-validated timezone
+
+**Risk:** ambiguous local timestamps could be accepted as release evidence.
+
+**Remediation:** every passed gate requires an ISO-8601 review timestamp with an explicit timezone.
+
+### P24-04 — Acceptance evidence did not require per-artifact integrity digests
+
+**Risk:** a passed gate could reference an artifact without recording its expected content digest.
+
+**Remediation:** each pre-release and post-deployment gate now requires an `evidence_sha256` digest when marked passed. This binds the reviewed evidence reference to an expected artifact hash; the reviewer/operator must still verify that the supplied artifact matches that hash.
+
+### P24-05 — Published SBOM attestations were not all explicitly verified
+
+**Risk:** verifying only the default OCI provenance did not explicitly verify the SPDX SBOM predicate or the local source-SBOM and release-manifest attestations.
+
+**Remediation:** the release workflow verifies OCI provenance, the OCI image's SPDX SBOM predicate, the source SBOM attestation and the release-manifest attestation. It also checks that the registry's observed version-tag digest equals the digest returned by the image build.
+
+## Security and failure-mode coverage
+
+The Phase 24 tests cover:
+
+- pending template is schema-valid but cannot authorize promotion;
+- valid pre-release evidence can pass schema/policy validation;
+- unresolved high findings block production acceptance;
+- mismatched deployed and expected digests block production acceptance;
+- post-deployment digest verification and rollback evidence are mandatory for production acceptance;
+- workflow evidence cannot reuse run IDs or mismatch its URL;
+- boolean finding counts are rejected;
+- passed gates require timezone-aware review timestamps;
+- passed gates require evidence SHA-256 hashes;
+- release workflow is version-tag-gated and verifies workflow identity and artifact attestations.
+
+The workflow-level checks remain authoritative for querying live GitHub run metadata. Unit tests cannot substitute for observing the required Actions jobs on the exact PR head.
+
+## External production gates — still open by design
+
+1. Independent security assessment report, independently reviewed and hashed, with zero unresolved critical/high findings.
+2. Live Tinlance Agent Platform conformance evidence covering identity, tenant isolation, authorization, key rotation/revocation and deny behavior.
+3. Live OpenShell acceptance proving effective policy, filesystem/workspace boundaries, egress restrictions, process limits and non-execution of denied actions.
+4. Security-owner review of the current residual-risk register.
+5. After an authorized deployment: expected and observed OCI digests must match, and a production rollback drill must be completed and evidenced.
+
+These require real systems, authorized reviewers and operational evidence. GitHub-hosted CI cannot prove them. Do not populate the pending manifest with invented run IDs, test results, reviewers or evidence references.
+
+## Required completion check
+
+Before merging, verify all required jobs on the exact final PR head: Python 3.11 and 3.12 tests/Ruff, dependency audit, dashboard/container workflow, CodeQL, and secure-supply-chain workflow. A skipped release-publication job is expected on a pull request because publication is restricted to version tags; it is not evidence that a release was published. After merge, verify the post-merge workflows on the exact main commit.
+
+## Standards references used
+
+- [GitHub artifact attestations](https://docs.github.com/en/actions/concepts/security/artifact-attestations) — attestations provide provenance/integrity claims but do not by themselves certify the artifact as secure.
+- [Generating and verifying artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations) — required permissions and verification of OCI and SPDX attestations.
+- [GitHub CLI `gh run view`](https://cli.github.com/manual/gh_run_view) — supported run metadata fields used to verify workflow name, branch, event, head SHA, conclusion, database ID and URL.
+
+## Verdict
+
+**Phase 24 implementation review: remediations applied; exact-head CI is the merge gate.**  
+**Production release acceptance: NOT PASSED.** External evidence remains pending, so the release pipeline must refuse publication until real acceptance evidence is supplied. This is the intended safe state, not a reason to weaken the gate.
