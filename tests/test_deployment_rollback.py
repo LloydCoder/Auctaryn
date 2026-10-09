@@ -38,9 +38,9 @@ def test_rollback_restores_recorded_immutable_image(tmp_path):
     repo = tmp_path / "repo"
     state = repo / ".deploy-state"
     state.mkdir(parents=True)
-    (repo / ".env").write_text("AUCTARYN_API_KEY=test\\n", encoding="utf-8")
+    (repo / ".env").write_text("AUCTARYN_API_KEY=test\n", encoding="utf-8")
     previous = "sha256:" + "b" * 64
-    (state / "previous-image-id").write_text(previous + "\\n", encoding="utf-8")
+    (state / "previous-image-id").write_text(previous + "\n", encoding="utf-8")
     bin_dir, log = _fake_commands(tmp_path)
     env = os.environ | {
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
