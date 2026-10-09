@@ -7,7 +7,7 @@ const SITE_LINKS = {
   docs: '/docs.html',
   about: '/about.html',
   dashboard: '/docs.html#quickstart',
-  apiDocs: 'https://github.com/LloydCoder/Auctaryn',
+  apiDocs: '/docs.html#api',
   github: 'https://github.com/LloydCoder/Auctaryn',
   tinlance: 'https://tinlance.com',
   contact: 'mailto:hello@tinlance.com',
@@ -35,7 +35,7 @@ function renderNav(active) {
       <div class="nav-inner">
         <a href="${SITE_LINKS.home}" class="logo">
           <div class="logo-icon">🛡</div>
-          <span class="logo-text">Twin<span>Guard</span></span>
+          <span class="logo-text">Auc<span>taryn</span></span>
         </a>
         <div class="nav-links">${linksHtml}</div>
         <div class="nav-cta">
@@ -62,7 +62,7 @@ function renderFooter() {
           <div class="footer-brand">
             <a href="${SITE_LINKS.home}" class="logo">
               <div class="logo-icon" style="width:28px;height:28px;font-size:13px">🛡</div>
-              <span class="logo-text" style="font-size:15px">Twin<span>Guard</span></span>
+              <span class="logo-text" style="font-size:15px">Auc<span>taryn</span></span>
             </a>
             <p>Supported-path AI-agent governance controls built around a configured OpenShell runtime. Universal mediation and production readiness are not claimed.</p>
           </div>
@@ -91,7 +91,7 @@ function renderFooter() {
           <span class="footer-copy">© 2026 Tinlance Limited · RC: 7962164</span>
           <div class="footer-badges">
             <span class="footer-badge">Apache 2.0</span>
-            <span class="footer-badge">Built on OpenShell</span>
+            <span class="footer-badge">OpenShell integration pending</span>
             <span class="footer-badge">Release acceptance pending</span>
           </div>
         </div>
