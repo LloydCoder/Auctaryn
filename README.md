@@ -16,6 +16,7 @@ On February 23, 2026, an OpenClaw agent deleted a user's entire email inbox afte
 2. **Execution Gateway** — Evaluates submitted tool calls and applies risk-based decisions; direct tool execution must still be connected to a trusted runtime adapter
 3. **ThreatFade Oracle** — Network threat intelligence via [ThreatFade](https://github.com/LloydCoder/tinlance-threatfade)
 4. **React Dashboard** — Real-time visibility into agent behavior
+5. **Skill Supply-Chain Vetting** — Ed25519 publisher verification, artifact digest validation, exact version pins, and tool-change detection
 
 ## Quick Start
 
@@ -48,6 +49,10 @@ Auctaryn follows a serial 24-phase security and enterprise-readiness roadmap wit
 ## Tinlance Agent Platform integration
 
 Auctaryn exposes the versioned advisory risk contract `POST /api/v1/risk/assess` (`auctaryn-risk-assessment.v1`). It returns risk signals only; it does not grant permission, approve an action, or execute tools. Tinlance Agent Platform remains authoritative for identity, tenant binding, policy, approvals, governed execution, secrets, and audit. A live Platform-side adapter and conformance tests are still required before claiming production integration. See [the integration boundary](docs/integration/TINLANCE_AGENT_PLATFORM.md).
+
+## Skill supply-chain security
+
+Skill vetting requires a trusted publisher's Ed25519 signature and the actual artifact bytes matching the signed SHA-256 digest. Publisher trust mutation requires the administrator credential. Version and manifest pins currently remain process-local; see [the supply-chain security contract](docs/SKILL_SUPPLY_CHAIN.md) before deployment.
 
 ## Context-integrity trust boundary
 

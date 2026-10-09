@@ -27,6 +27,14 @@ def reset_singletons(monkeypatch):
     gw_oracle.raw_results.clear()
     gw_oracle.circuit_breaker.reset()
 
+    from api.routes.skills import get_vetting_service
+    skill_service = get_vetting_service()
+    skill_service.trusted_keys.clear()
+    skill_service.known_skills.clear()
+    skill_service.history.clear()
+    skill_service._pins.clear()
+    skill_service._latest.clear()
+
     from api.routes.threatfade import _oracle as tf_oracle
     tf_oracle.history.clear()
     tf_oracle.raw_results.clear()
