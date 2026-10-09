@@ -2,6 +2,12 @@
 
 **Scope:** persistent emergency stop, per-agent quarantine, agent-wide capability revocation, durable alert lifecycle, alert WebSocket acknowledgement, evidence correlation and operational runbook.
 
+## CI evidence
+
+**Exact-head CI:** PR head `857c894cd51b49edc7f3ebffc1bcec6fe706eeb9` passed [workflow 37953459782](https://github.com/LloydCoder/Auctaryn/actions/runs/37953459782), including Python 3.11/3.12 tests, Ruff, Python dependency audit, dashboard build, deployment-script syntax, Compose validation, container build and liveness.  
+**Post-merge CI:** merge commit `9497a2ee508bf6088b93d2dbf953274b2d6d3d2e` passed [workflow 37953690514](https://github.com/LloydCoder/Auctaryn/actions/runs/37953690514) with the same required jobs green.
+
+
 ## Implemented controls
 
 - Global emergency stop and per-agent quarantine are persisted in SQLite and checked by the execution service immediately before runtime invocation, including the approved-decision path.
