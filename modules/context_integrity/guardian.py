@@ -238,19 +238,22 @@ def generate_alert(result: IntegrityCheckResult) -> Optional[Alert]:
     else:
         severity = Severity.MEDIUM
 
-    missing_tags = [d["tag"] for d in result.details if d.get("status") == "missing"]
+    affected_tags = sorted({
+        d["tag"] for d in result.details
+        if d.get("status") in {"missing", "baseline_tampered", "hijack_detected"}
+    })
     return Alert(
         id=_gen_id(), severity=severity, module="context_integrity",
         title="Context Integrity Violation Detected",
         message=(
             f"{result.instructions_degraded} of {result.instructions_total} protected "
-            f"instructions missing ({result.degradation_percent}% degradation). "
-            f"Missing: {', '.join(missing_tags)}. "
+            f"instructions missing or unverified ({result.degradation_percent}% degraded). "
+            f"Affected tags: {', '.join(affected_tags) or 'none'}. "
             f"Agent {'BLOCKED' if result.blocked else 'warned'}."
         ),
         data={"check_id": result.id, "status": result.status.value,
               "degradation_percent": result.degradation_percent,
-              "missing_tags": missing_tags, "blocked": result.blocked},
+              "affected_tags": affected_tags, "blocked": result.blocked},
     )
 
 
