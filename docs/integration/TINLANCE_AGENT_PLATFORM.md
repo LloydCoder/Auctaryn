@@ -13,6 +13,7 @@ The Tinlance Agent Platform remains authoritative for agent identity, tenant bin
 - Authentication: configured Auctaryn service/admin Bearer credential
 - Output: risk level, confidence, reason, matched pattern, timestamp, assessment ID, and a SHA-256 fingerprint of the request
 - The response deliberately excludes raw parameters and identity tokens.
+- `input_fingerprint` is an unkeyed SHA-256 correlation value, not an authorization proof or confidentiality control; low-entropy inputs may be guessable. The Platform must compute its own authoritative execution-intent binding and must not trust this fingerprint for approval or access decisions.
 - The endpoint does not return an allow/deny/approval decision and does not execute a tool.
 - SensitiveDataGuard rejects recognized raw-secret patterns before classification. This is defense in depth, not a complete DLP guarantee.
 
