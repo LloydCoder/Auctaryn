@@ -50,6 +50,10 @@ Auctaryn follows a serial 24-phase security and enterprise-readiness roadmap wit
 
 Auctaryn exposes the versioned advisory risk contract `POST /api/v1/risk/assess` (`auctaryn-risk-assessment.v1`). It returns risk signals and additive structured findings with confidence, bounded rationale, control references and provenance (`runtime_observed: false` for the current caller-metadata classifier); it does not grant permission, approve an action, or execute tools. The SHA-256 request fingerprint is correlation metadata, not a signature or confidentiality control. Tinlance Agent Platform remains authoritative for identity, tenant binding, policy, approvals, governed execution, secrets, and audit. A live Platform-side adapter and conformance tests are still required before claiming production integration. See [the integration boundary](docs/integration/TINLANCE_AGENT_PLATFORM.md) and [Phase 15 forensic audit](audits/PHASE-15-FORENSIC-AUDIT.md).
 
+## Evidence and forensic audit
+
+Gateway assessments, decisions, approvals, execution requests and safe receipt hashes are recorded in a local SQLite hash chain. Administrator-only inspection endpoints are `GET /api/v1/evidence/records` and `GET /api/v1/evidence/verify`. Set `AUCTARYN_EVIDENCE_DB` for the database path and configure a separately managed value of at least 32 bytes for keyed record authentication using `AUCTARYN_EVIDENCE_HMAC_KEY` or, preferably, a mounted secret file via `AUCTARYN_EVIDENCE_HMAC_KEY_FILE`. Without the key, the service reports hash-chain-only mode. This local store is not the Platform audit of record; production requires external key management, immutable export, retention and restore validation. See [Phase 16 forensic audit](audits/PHASE-16-FORENSIC-AUDIT.md).
+
 ## Skill supply-chain security
 
 Skill vetting requires a trusted publisher's Ed25519 signature and the actual artifact bytes matching the signed SHA-256 digest. Publisher trust mutation requires the administrator credential. Version and manifest pins currently remain process-local; see [the supply-chain security contract](docs/SKILL_SUPPLY_CHAIN.md) before deployment.

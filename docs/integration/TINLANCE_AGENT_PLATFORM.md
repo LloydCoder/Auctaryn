@@ -34,6 +34,10 @@ Each finding contains a stable finding identifier, severity, confidence, bounded
 
 The current Tinlance Agent Platform SDK v1.0 contract exposes Platform API 1.1 through `POST /v1/agent-platform` and lists a fixed set of operations, including `tools.execute` and `approvals.request`. The Auctaryn risk endpoint is **not** one of those SDK operations. A live integration therefore requires a separately versioned Platform-side adapter/extension and executable conformance tests; do not invent an SDK operation or treat this endpoint as part of the stable SDK surface.
 
+## Evidence correlation boundary
+
+Auctaryn's local evidence chain records application events and safe hashes for assessment, decision, approval, execution request and receipt. These records can help correlate incidents, but they are not the Platform's authoritative audit records. The Platform must persist its own identity/policy/approval decision and execution receipt, link the advisory assessment by a correlation identifier, and retain evidence in independently administered durable storage. Local SQLite and optional HMAC are a defense-in-depth mechanism, not a distributed immutable ledger.
+
 ## Production acceptance gates
 
 - Verify service authentication, TLS, tenant isolation, request/response schema validation, timeouts, rate limits, and bounded payload size.

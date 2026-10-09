@@ -12,12 +12,13 @@ from pydantic import BaseModel, Field
 from api.security import require_api_key, require_operator_key
 from api.routes.context import get_guardian
 
-from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision
+from core.models import ToolCall, ActionClassification, GatewayDecision, ActionDecision, action_intent_fingerprint
 from modules.execution_gateway.gateway import ExecutionGateway, ApprovalIntentIntegrityError
 from modules.threatfade_oracle.oracle import ThreatFadeOracle
 from modules.agent_identity.identity import AgentIdentityManager
 from modules.inter_agent.circuit_breaker import AgentCircuitBreaker
 from modules.execution_gateway.execution_service import ExecutionService, ActionIntentIntegrityError
+from modules.evidence_audit.store import record_evidence, EvidenceStoreError
 from modules.execution_gateway.runtime_adapter import (
     DuplicateExecution,
     RuntimeAdapter,
@@ -129,7 +130,22 @@ async def evaluate_tool_call(request: ToolCallRequest) -> ActionClassification:
                   identity_token=request.identity_token)
     get_gateway().data_guard.validate_tool_call(tc)
     from modules.execution_gateway.risk_classifier import RiskClassifier
-    return RiskClassifier().classify(tc)
+    classification = RiskClassifier().classify(tc)
+    try:
+        await record_evidence(
+            "risk.assessed",
+            correlation_id=action_intent_fingerprint(tc),
+            actor_id=tc.agent_id,
+            outcome=classification.risk_level.value,
+            details={
+                "risk_level": classification.risk_level.value,
+                "action_fingerprint": action_intent_fingerprint(tc),
+                "confidence": classification.confidence,
+            },
+        )
+    except EvidenceStoreError as exc:
+        raise HTTPException(status_code=503, detail="Evidence recording unavailable") from exc
+    return classification
 
 @router.get("/decisions")
 async def list_decisions(limit: int = Query(50, ge=1, le=500)) -> list[GatewayDecision]:
@@ -149,11 +165,37 @@ async def list_pending_approvals() -> list[GatewayDecision]:
 @router.post("/approve", dependencies=[Depends(require_operator_key)])
 async def approve_action(request: ApprovalRequest) -> dict:
     try:
+        await record_evidence(
+            "approval.resolution_requested",
+            correlation_id=request.decision_id,
+            decision_id=request.decision_id,
+            outcome="approve_requested" if request.approved else "deny_requested",
+            details={"decision": "approved" if request.approved else "denied"},
+        )
+    except (EvidenceStoreError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="Evidence recording unavailable; approval not changed") from exc
+    try:
         resolved = get_gateway().resolve_pending(
             request.decision_id, request.approved, request.reason, operator="authenticated_operator"
         )
+        evidence_status = "complete"
+        try:
+            await record_evidence(
+                "approval.resolved",
+                correlation_id=resolved.id,
+                actor_id=resolved.tool_call.agent_id,
+                decision_id=resolved.id,
+                outcome=resolved.decision.value,
+                details={
+                    "decision": resolved.decision.value,
+                    "action_fingerprint": action_intent_fingerprint(resolved.tool_call),
+                },
+            )
+        except (EvidenceStoreError, ValueError):
+            evidence_status = "terminal_record_failed"
         await _broadcast_decision(resolved)
         return {"decision_id": resolved.id, "result": resolved.decision.value,
+                "evidence_status": evidence_status,
                 "timestamp": datetime.now(timezone.utc).isoformat()}
     except ApprovalIntentIntegrityError as exc:
         raise HTTPException(status_code=409, detail="Pending action intent changed; approval rejected") from exc
@@ -167,6 +209,17 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
                   target=request.target, agent_id=request.agent_id, session_id=request.session_id,
                   context_check_id=request.context_check_id,
                   identity_token=request.identity_token)
+    fingerprint = action_intent_fingerprint(tc)
+    try:
+        await record_evidence(
+            "execution.requested",
+            correlation_id=fingerprint,
+            actor_id=tc.agent_id,
+            outcome="requested",
+            details={"action_fingerprint": fingerprint},
+        )
+    except (EvidenceStoreError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="Evidence recording unavailable; execution not started") from exc
     try:
         decision, receipt = await get_execution_service().execute_tool_call(tc)
     except RuntimeAdapterUnavailable as exc:
@@ -177,9 +230,39 @@ async def execute_tool_call(request: ToolCallRequest) -> dict:
         raise HTTPException(status_code=409, detail="Action intent integrity check failed; execution refused") from exc
     except RuntimeAdapterFailure as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    evidence_status = "complete"
+    try:
+        await record_evidence(
+            "execution.decision",
+            correlation_id=fingerprint,
+            actor_id=tc.agent_id,
+            decision_id=decision.id,
+            outcome=decision.decision.value,
+            details={"decision": decision.decision.value, "action_fingerprint": fingerprint},
+        )
+        if receipt is not None:
+            await record_evidence(
+                "execution.receipt",
+                correlation_id=fingerprint,
+                actor_id=tc.agent_id,
+                decision_id=decision.id,
+                execution_id=receipt.execution_id,
+                outcome=receipt.status,
+                details={
+                    "runtime_adapter": receipt.adapter,
+                    "receipt_hash": receipt.stdout_sha256,
+                    "action_fingerprint": fingerprint,
+                },
+            )
+    except (EvidenceStoreError, ValueError):
+        # Do not return an ambiguous failure that may cause a caller to replay an
+        # already executed action. The prior execution.requested record remains
+        # as a detectable incomplete chain event for operator investigation.
+        evidence_status = "terminal_record_failed"
     return {
         "decision": decision.model_dump(mode="json"),
         "execution": receipt.model_dump(mode="json") if receipt is not None else None,
+        "evidence_status": evidence_status,
     }
 
 
@@ -200,6 +283,18 @@ async def execute_approved_decision(decision_id: str) -> dict:
     context_denial = _context_integrity_preflight(decision.tool_call)
     if context_denial:
         raise HTTPException(status_code=409, detail=context_denial)
+    fingerprint = action_intent_fingerprint(decision.tool_call)
+    try:
+        await record_evidence(
+            "execution.requested",
+            correlation_id=fingerprint,
+            actor_id=decision.tool_call.agent_id,
+            decision_id=decision.id,
+            outcome="approved_execution_requested",
+            details={"action_fingerprint": fingerprint, "decision": decision.decision.value},
+        )
+    except (EvidenceStoreError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="Evidence recording unavailable; execution not started") from exc
     try:
         receipt = await service.execute_approved_decision(decision)
     except DuplicateExecution as exc:
@@ -208,7 +303,25 @@ async def execute_approved_decision(decision_id: str) -> dict:
         raise HTTPException(status_code=409, detail="Action intent integrity check failed; execution refused") from exc
     except RuntimeAdapterFailure as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return {"decision_id": decision.id, "execution": receipt.model_dump(mode="json")}
+    evidence_status = "complete"
+    try:
+        await record_evidence(
+            "execution.receipt",
+            correlation_id=fingerprint,
+            actor_id=decision.tool_call.agent_id,
+            decision_id=decision.id,
+            execution_id=receipt.execution_id,
+            outcome=receipt.status,
+            details={
+                "runtime_adapter": receipt.adapter,
+                "receipt_hash": receipt.stdout_sha256,
+                "action_fingerprint": fingerprint,
+            },
+        )
+    except (EvidenceStoreError, ValueError):
+        evidence_status = "terminal_record_failed"
+    return {"decision_id": decision.id, "execution": receipt.model_dump(mode="json"),
+            "evidence_status": evidence_status}
 
 
 @router.post("/intercept")
@@ -219,6 +332,18 @@ async def intercept_action(request: ToolCallRequest) -> GatewayDecision:
                   identity_token=request.identity_token)
     get_gateway().data_guard.validate_tool_call(tc)
     decision = get_gateway().evaluate(tc)
+    await record_evidence(
+        "decision.created",
+        correlation_id=decision.id,
+        actor_id=decision.tool_call.agent_id,
+        decision_id=decision.id,
+        outcome=decision.decision.value,
+        details={
+            "decision": decision.decision.value,
+            "risk_level": decision.risk_level.value,
+            "action_fingerprint": action_intent_fingerprint(decision.tool_call),
+        },
+    )
     await _broadcast_decision(decision)
     return decision
 
